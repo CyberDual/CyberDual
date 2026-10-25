@@ -1,0 +1,50 @@
+diff --git a/src/dec/alpha_dec.c b/src/dec/alpha_dec.c
+index 9fb1448..27e2e62 100644
+--- a/src/dec/alpha_dec.c
++++ b/src/dec/alpha_dec.c
+@@ -127,22 +127,20 @@ WEBP_NODISCARD static VP8StatusCode ALPHInit(ALPHDecoder* const dec,
+ }
+ 
+ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+-  const int width = io->width;
+   // Alpha rows are always decoded starting from row 0 (for spatial filtering
+   // and lossless stream dependencies) and decoding stops at io->crop_bottom
+   // (which equals io->height when cropping is not used).
+   const int height = io->crop_bottom;
+   if (dec->alpha_data == NULL) return 0;
+-  // For each non-last macroblock row (16 pixel rows), FinishRow() in
+-  // frame_dec.c holds back up to 8 bottom pixel rows (kFilterExtraRows[] for
+-  // complex filtering) until the next macroblock row is decoded. On the last
+-  // macroblock row, no bottom rows are held back, so FinishRow() requests the 8
+-  // pixel rows held back from the previous macroblock row plus all 16 pixel
+-  // rows of the last macroblock row (24 pixel rows total), while retaining 1
+-  // preceding row (row - 1) for spatial unfiltering and fancy upsampling.
+-  return (dec->alpha_dithering > 0)
+-             ? height
+-             : VP8LGetWindowRows(width, height, /*max_history_rows=*/25);
++  if (dec->alpha_dithering > 0) return height;
++  // Alpha is not an LZ77 stream, so the copy headroom inside
++  // VP8LGetWindowRows() does not apply. FinishRow() keeps one previous row
++  // and emits at most 24 (8 held back by the complex filter + 16). One extra
++  // macroblock of slack covers that.
++  {
++    const int kAlphaRowsInFlight = 24 + 8;
++    return (kAlphaRowsInFlight < height) ? kAlphaRowsInFlight : height;
++  }
+ }
+ 
+ void WebPShiftAlphaWindow(ALPHDecoder* const alph_dec, int current_end_row,
+@@ -263,6 +261,13 @@ WEBP_NODISCARD const uint8_t* VP8DecompressAlphaRows(VP8Decoder* const dec,
+       }
+       if (dec->alpha_dithering > 0) {
+         num_rows = height - row;  // decode everything in one pass
++      } else if (dec->alph_dec->method == ALPHA_NO_COMPRESSION) {
++        // Uncompressed alpha has no predictor to resume across calls. Decode a
++        // wider first strip so later macroblock rows find the plane ready.
++        const int kAlphaStripRows = 48;
++        int want = row + kAlphaStripRows;
++        if (want > height) want = height;
++        if (want - row > num_rows) num_rows = want - row;
+       }
+     }
+ 

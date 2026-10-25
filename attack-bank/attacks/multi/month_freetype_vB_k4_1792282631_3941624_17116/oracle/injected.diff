@@ -1,0 +1,23 @@
+diff --git a/src/truetype/ttvarc.c b/src/truetype/ttvarc.c
+index 50d08bcb9..b8a453571 100644
+--- a/src/truetype/ttvarc.c
++++ b/src/truetype/ttvarc.c
+@@ -77,7 +77,8 @@
+               (FT_Byte*)varc->table + varc->table_size )
+ 
+   /* Stack allocation limits for performance. */
+-#define VARC_STACK_AXIS_COUNT     64
++#define VARC_AXIS_BUFFER_COUNT    64
++#define VARC_STACK_AXIS_COUNT     128
+ #define VARC_STACK_DELTA_COUNT    128
+ #define VARC_STACK_COORD_COUNT    64
+ #define VARC_STACK_INDICES_COUNT  64
+@@ -3007,7 +3008,7 @@
+ 
+     FT_Fixed  stack_new_coords[VARC_STACK_COORD_COUNT];
+     FT_UInt   stack_axis_indices[VARC_STACK_INDICES_COUNT];
+-    FT_Fixed  stack_axis_values[VARC_STACK_AXIS_COUNT];
++    FT_Fixed  stack_axis_values[VARC_AXIS_BUFFER_COUNT];
+ 
+     FT_Matrix  saved_transform_matrix;
+     FT_Vector  saved_transform_delta;

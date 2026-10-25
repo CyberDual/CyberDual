@@ -1,0 +1,22 @@
+diff --git a/src/truetype/ttgxvar.c b/src/truetype/ttgxvar.c
+index 2b25680..10d78a4 100644
+--- a/src/truetype/ttgxvar.c
++++ b/src/truetype/ttgxvar.c
+@@ -2135,7 +2135,16 @@
+ 
+   Exit:
+     if ( error && blend_created )
+-      tt_done_blend( FT_FACE( face ) );
++    {
++      /* only the fields this function itself allocates can be set at  */
++      /* this point; avoid pulling in `tt_done_blend', which also      */
++      /* tears down the unrelated mmvar/avar/hvar/vvar/mvar tables.    */
++      FT_FREE( blend->glyphoffsets );
++      FT_FREE( blend->tuplecoords );
++      FT_FREE( blend->tuplescalars );
++      FT_FREE( blend->normalizedcoords );
++      FT_FREE( blend );
++    }
+ 
+     return error;
+ 

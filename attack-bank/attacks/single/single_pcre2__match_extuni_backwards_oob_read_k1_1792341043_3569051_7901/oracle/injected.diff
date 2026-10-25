@@ -1,0 +1,40 @@
+diff --git a/src/pcre2_match.c b/src/pcre2_match.c
+index a5a8421f7c219dc66b7fbb87afffe148664bda40..95945e073ef8c00a95d57da6b0600b47da62914b 100644
+--- a/src/pcre2_match.c
++++ b/src/pcre2_match.c
+@@ -2895,7 +2895,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+     else
+       {
+       GETCHARINCTEST(fc, Feptr);
+-      Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject, mb->end_subject, utf,
++      Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject, mb->end_subject, utf,
+         NULL);
+       }
+     CHECK_PARTIAL();
+@@ -3246,7 +3246,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+           else
+             {
+             GETCHARINCTEST(fc, Feptr);
+-            Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject,
++            Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject - 1,
+               mb->end_subject, utf, NULL);
+             }
+           CHECK_PARTIAL();
+@@ -4071,7 +4071,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+           else
+             {
+             GETCHARINCTEST(fc, Feptr);
+-            Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject, mb->end_subject,
++            Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject, mb->end_subject,
+               utf, NULL);
+             }
+           CHECK_PARTIAL();
+@@ -4660,7 +4660,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+           else
+             {
+             GETCHARINCTEST(fc, Feptr);
+-            Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject, mb->end_subject,
++            Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject, mb->end_subject,
+               utf, NULL);
+             }
+           CHECK_PARTIAL();

@@ -1,0 +1,22 @@
+diff --git a/src/hb-ot-layout-gsubgpos.hh b/src/hb-ot-layout-gsubgpos.hh
+index 254901c2d301c279e1a43fc4da2aecdf52d6cdb1..a1158c5ac92cf2f751329802ebb5306e6912f8b0 100644
+--- a/src/hb-ot-layout-gsubgpos.hh
++++ b/src/hb-ot-layout-gsubgpos.hh
+@@ -2892,7 +2892,7 @@ static inline void context_depend_lookup (hb_depend_context_t *c,
+     }
+ 
+     /* Positions 1+ (Input array) */
+-    for (unsigned i = 0; i < inputCount - 1; i++)
++    for (unsigned i = 0; i < inputCount; i++)
+     {
+       const hb_set_t *pos_glyphs = depend_position_glyphs (
+ 	c, lookup_context.context_format, lookup_context.intersects_data,
+@@ -4300,7 +4300,7 @@ static inline void chain_context_depend_lookup (hb_depend_context_t *c,
+     }
+ 
+     /* Positions 1+ (Input array) */
+-    for (unsigned i = 0; i < inputCount - 1; i++)
++    for (unsigned i = 0; i + 1 < inputCount; i++)
+     {
+       const hb_set_t *pos_glyphs = depend_position_glyphs (
+ 	c, lookup_context.context_format, lookup_context.intersects_data[1],

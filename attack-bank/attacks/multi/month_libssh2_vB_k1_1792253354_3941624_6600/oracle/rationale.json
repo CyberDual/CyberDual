@@ -1,0 +1,35 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "1d3b3e0759487c4b7784016420b9168ea73ec82a",
+      "edited_message": null,
+      "patch": "--- a/src/knownhost.c\n+++ b/src/knownhost.c\n@@ -666,7 +666,7 @@\n            name to the collection */\n         if(name == host || *(name - 1) == ',') {\n \n-            char hostbuf[256];\n+            char hostbuf[255];\n \n             /* make sure we do not overflow the buffer */\n             if(namelen >= sizeof(hostbuf) - 1)\n"
+    },
+    {
+      "sha": "7860a0dec2025a36297d456dbd8a4d3e816ebc7a",
+      "edited_message": null,
+      "patch": "--- a/src/knownhost.c\n+++ b/src/knownhost.c\n@@ -422,7 +422,7 @@\n static int knownhost_parse_ipv6(const char *src, size_t len,\n                                 unsigned char result[16])\n {\n-    unsigned short words[8];\n+    unsigned short words[9];\n     const char *p = src;\n     const char *end = src + len;\n     size_t count = 0;\n"
+    },
+    {
+      "sha": "169226628d4abb27043ae683342af4813cd1288f",
+      "edited_message": null,
+      "patch": "--- a/src/knownhost.c\n+++ b/src/knownhost.c\n@@ -506,7 +506,7 @@\n     else if(count != 8)\n         return 0;\n \n-    for(i = 0; i < 8; i++) {\n+    for(i = 0; i < sizeof(words) / sizeof(words[0]); i++) {\n         result[i * 2] = (unsigned char)(words[i] >> 8);\n         result[i * 2 + 1] = (unsigned char)words[i];\n     }\n"
+    },
+    {
+      "sha": "bdd0c79f1c9b7fe7ceda275705ae00f787fa817d",
+      "edited_message": null,
+      "patch": "--- a/src/knownhost.c\n+++ b/src/knownhost.c\n@@ -122,6 +122,7 @@\n }\n \n #define KNOWNHOST_MAX_LEN  (1024 * 1024)\n+#define KNOWNHOST_HOSTNAME_MAX  256\n \n static int knownhost_add(LIBSSH2_KNOWNHOSTS *hosts,\n                          const char *host, const char *salt,\n@@ -868,7 +869,7 @@\n             char hostbuf[256];\n \n             /* make sure we do not overflow the buffer */\n-            if(namelen >= sizeof(hostbuf) - 1)\n+            if(namelen >= KNOWNHOST_HOSTNAME_MAX)\n                 return ssh2_err(hosts->session,\n                                 LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,\n                                 \"Failed to parse known_hosts line \"\n"
+    }
+  ],
+  "coupling": "Two independently composed faults share the public known-host path. First, the hostkey commit shrinks hostbuf to 255 bytes while retaining its sizeof-based bound, which is safe and behavior-equivalent alone because that bound already rejects 255-byte names; the later tidy-up commit replaces that bound with a named 256-byte limit, which is also safe alone against the original 256-byte buffer. Together, a 255-byte hostname passes the 256-byte check and the null terminator writes one byte past the 255-byte stack buffer. Second, the IPv6 commit widens words to nine entries while retaining the fixed eight-iteration output loop, which is safe alone; the later host-key tidy-up changes that loop to iterate sizeof(words), which is safe alone with the original eight-entry array. Together, the loop writes eighteen bytes into each 16-byte caller-supplied IPv6 result buffer. The probe first reaches the hostname overflow; if either participating commit in that pair is corrected, it continues to an equivalent-literal IPv6 check that reaches the second overflow. Conversely, correcting either commit in the IPv6 pair still leaves the hostname overflow reachable. Thus reverting or repairing any one edited commit leaves an ASan abort, and a correct fix must restore both buffer/bound and words/result invariants across the commit graph.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "libssh2_knownhost_readline/libssh2_knownhost_checkp",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

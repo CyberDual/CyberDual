@@ -1,0 +1,27 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index bcbeb0b..ae90a86 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -227,6 +227,13 @@ typedef char ICHAR;
+ 
+ #define EXPAT_MIN(a, b) (((a) < (b)) ? (a) : (b))
+ 
++/* Bytes in the parser's input buffer, from the start of its allocation up to
++   the allocated limit, i.e. the same size computation XML_GetBuffer() uses
++   to decide whether it needs to grow the buffer. Kept here for reuse by
++   input-length validation. */
++#define EXPAT_BUFFER_HEADROOM(parser)                                        \
++  EXPAT_SAFE_PTR_DIFF((parser)->m_bufferLim, (parser)->m_buffer)
++
+ #include "internal.h"
+ #include "hash_table.h"
+ #include "xmltok.h"
+@@ -2445,7 +2452,7 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal) {
+     parser->m_parsingStatus.parsing = XML_PARSING;
+   }
+ 
+-  if (len > EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd)) {
++  if ((size_t)len > EXPAT_BUFFER_HEADROOM(parser)) {
+     parser->m_errorCode = XML_ERROR_INVALID_ARGUMENT;
+     return XML_STATUS_ERROR;
+   }

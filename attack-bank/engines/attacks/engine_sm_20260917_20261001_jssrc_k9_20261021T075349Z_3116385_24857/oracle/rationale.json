@@ -1,0 +1,22 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "55af791b65bb094805656a7547cbe7c4272ca896",
+      "patch": "diff --git a/js/src/vm/Modules.cpp b/js/src/vm/Modules.cpp\nindex c5fc673e9ed71..92f264e55e34a 100644\n--- a/js/src/vm/Modules.cpp\n+++ b/js/src/vm/Modules.cpp\n@@ -121,16 +121,19 @@ static ModuleObject* GetEnclosingModule(JSScript* script) {\n // Get the module record from a |referrer| value built by\n // ReferrerValueForScript, or nullptr if the referrer is not a module.\n static ModuleObject* ReferrerModuleOrNull(Handle<Value> referrer) {\n-  if (!referrer.isObject()) {\n-    return nullptr;\n+  if (referrer.get().isDouble()) {\n+    uintptr_t encoded = reinterpret_cast<uintptr_t>(referrer.get().toPrivate());\n+    if ((encoded & 1) != 0) {\n+      return reinterpret_cast<ModuleObject*>(encoded & ~uintptr_t(1));\n+    }\n   }\n \n-  JSObject* object = &referrer.toObject();\n-  if (!object->is<ModuleObject>()) {\n+  if (!referrer.isObject()) {\n     return nullptr;\n   }\n \n-  return &object->as<ModuleObject>();\n+  JSObject* object = &referrer.toObject();\n+  return object->is<ModuleObject>() ? &object->as<ModuleObject>() : nullptr;\n }\n \n // Build the referrer value from |script|, and the returned JS::Value is passed\n@@ -144,7 +147,7 @@ static Value ReferrerValueForScript(JSScript* script) {\n   MOZ_ASSERT(script, \"a dynamic import call always has a running script\");\n \n   if (ModuleObject* module = GetEnclosingModule(script)) {\n-    return ObjectValue(*module);\n+    return PrivateValue(reinterpret_cast<uintptr_t>(module) | 1);\n   }\n \n   return script->sourceObject()->getPrivate();\n"
+    },
+    {
+      "sha": "158c62fcc7b8774fc25a2ab6a2bce150dc9ff14f",
+      "patch": "diff --git a/js/src/shell/ModuleLoader.cpp b/js/src/shell/ModuleLoader.cpp\nindex f12235afeb0f3..6f5a6652e6942 100644\n--- a/js/src/shell/ModuleLoader.cpp\n+++ b/js/src/shell/ModuleLoader.cpp\n@@ -269,10 +269,12 @@ bool ModuleLoader::DynamicImportLoadResolved(JSContext* cx, unsigned argc,\n                                          LoadReactionHostDefinedSlot)\n                .toObject());\n \n-  RootedValue referrer(cx, JS::GetReservedSlot(closure, ClosureReferrerSlot));\n+  JS::Rooted<JS::Value> referrer(\n+      cx, JS::GetReservedSlot(closure, ClosureReferrerSlot));\n   RootedObject moduleRequest(\n       cx, &JS::GetReservedSlot(closure, ClosureModuleRequestSlot).toObject());\n-  RootedValue payload(cx, JS::GetReservedSlot(closure, ClosurePayloadSlot));\n+  JS::Rooted<JS::Value> payload(\n+      cx, JS::GetReservedSlot(closure, ClosurePayloadSlot));\n   RootedObject module(\n       cx, &JS::GetReservedSlot(closure, ClosureModuleSlot).toObject());\n \n"
+    }
+  ],
+  "coupling": "The first commit stores a dynamic-import module referrer as a tagged private value. The second commit switches the js shell’s dynamic-import resolution to a promise reaction that can survive a compacting GC. Only their combination keeps the unrooted module pointer live across GC; either commit alone leaves the probe clean.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "shell": "obj-debug-asan/dist/bin/js",
+      "command": "obj-debug-asan/dist/bin/js pocs/probe.js",
+      "kind": "js"
+    }
+  ]
+}

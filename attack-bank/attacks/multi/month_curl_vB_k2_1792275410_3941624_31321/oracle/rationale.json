@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "2f467985839e00eba441b4e6b938d964d1e2bce9",
+      "edited_message": "escape: use hex-pair lookup and classify unreserved bytes\n\nCopy precomputed uppercase hex pairs instead of looking up each digit separately. Use an explicit RFC 3986 unreserved predicate for emission so decoding and escaping no longer share one classification.\n\nMark exclamation marks as valid non-hex literals in the shared table while preserving the existing stricter public escape output.\n\nAdd coverage for all 256 byte values, checking exact encoded output and round-trip decoding.\n\nCloses #23021",
+      "patch": "diff --git a/lib/escape.c b/lib/escape.c\nindex 64f6e4ab73..bababc4d3d 100644\n--- a/lib/escape.c\n+++ b/lib/escape.c\n@@ -53,7 +53,7 @@ static const unsigned char hextable[256] = {\n   NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, /* 08 */\n   NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, /* 10 */\n   NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, /* 18 */\n-  NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, /* 20 */\n+  NOPE, _OK_, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, /* 20 */\n   NOPE, NOPE, NOPE, NOPE, NOPE, _OK_, _OK_, NOPE, /* 28 */\n   0,    1,    2,    3,    4,    5,    6,    7,    /* 30 */\n   8,    9,    NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, /* 38 */\n@@ -150,6 +150,14 @@ static const char hexpairs[][2] = {\n   {'F', 'C'}, {'F', 'D'}, {'F', 'E'}, {'F', 'F'}\n };\n \n+static bool is_unreserved(unsigned char in)\n+{\n+  return (in >= 'a' && in <= 'z') ||\n+         (in >= 'A' && in <= 'Z') ||\n+         (in >= '0' && in <= '9') ||\n+         in == '-' || in == '.' || in == '_' || in == '~';\n+}\n+\n /* Escapes for URL the given unescaped string of given length.\n  * 'data' is ignored since 7.82.0.\n  */\n@@ -179,7 +187,7 @@ char *curl_easy_escape(CURL *curl, const char *string, int length)\n   while(len--) {\n     uint8_t in = (uint8_t)*string++;\n \n-    if(!(hextable[in] & 0x80))\n+    if(is_unreserved(in))\n       /* append this */\n       nappend++;\n     else {\n"
+    },
+    {
+      "sha": "6a7e36777dc65d0b106d7b5bc934acab857323ba",
+      "edited_message": "tidy-up: null-terminator, NUL byte\n\nMinor terminology cleanup across the tree. Also size curl_easy_escape() output exactly from its escape table.\n\nCloses #23201",
+      "patch": "diff --git a/lib/escape.c b/lib/escape.c\nindex 32f94cbb8e..03ad1af9ca 100644\n--- a/lib/escape.c\n+++ b/lib/escape.c\n@@ -158,6 +158,8 @@ char *curl_easy_escape(CURL *curl, const char *string, int length)\n   size_t len;\n   const char *f = string;\n   size_t nappend = 0;\n+  size_t outlen = 0;\n+  size_t i;\n   char *target;\n   char *encoded;\n   (void)curl;\n@@ -172,7 +174,12 @@ char *curl_easy_escape(CURL *curl, const char *string, int length)\n   if(len > SIZE_MAX / 16)\n     return NULL;\n \n-  encoded = target = curlx_malloc((len * 3) + 1);\n+  for(i = 0; i < len; i++) {\n+    unsigned char in = (unsigned char)string[i];\n+    outlen += (hextable[in] & 0x80) ? 3 : 1;\n+  }\n+\n+  encoded = target = curlx_malloc(outlen + 1);\n   if(!target)\n     return NULL;\n \n"
+    }
+  ],
+  "coupling": "The first commit changes the shared hextable entry for \"!\" to a literal marker, but simultaneously moves public escape emission to an explicit RFC 3986 unreserved predicate that still escapes \"!\"; public behavior is unchanged and that commit is safe alone. The later commit replaces the conservative three-byte allocation with exact sizing based on hextable. Applied to the original tree, hextable and the writer agree, so that commit is also safe alone. When composed, the size pass treats \"!\" as one byte while the emission path writes three bytes, so an all-\"!\" public curl_easy_escape() input overflows the exactly sized heap buffer. The safe invariant is the agreement of two classifiers introduced in different commits; a correct fix must reason across both the table change and the new size pass rather than trusting either classification source in isolation.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "curl_easy_escape",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

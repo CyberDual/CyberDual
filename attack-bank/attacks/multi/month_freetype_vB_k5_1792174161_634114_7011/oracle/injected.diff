@@ -1,0 +1,69 @@
+diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c
+index 151aeac..9205c48 100644
+--- a/src/type1/t1parse.c
++++ b/src/type1/t1parse.c
+@@ -302,6 +302,20 @@
+ 
+       parser->private_dict = priv_dict;
+       parser->private_len  = priv_len;
++
++      /* An odd merged ciphertext is padded to an even length so the */
++      /* eexec decoder consumes a whole number of cipher words.      */
++      if ( parser->private_len & 1 )
++      {
++        if ( FT_REALLOC( parser->private_dict,
++                         parser->private_len,
++                         parser->private_len + 1 ) )
++          goto Fail;
++
++        parser->private_dict[parser->private_len] = '\0';
++        parser->private_len++;
++        parser->single_block = 1;
++      }
+     }
+     else
+     {
+@@ -434,7 +448,43 @@
+         FT_MEM_MOVE( parser->private_dict, cur, size );
+     }
+ 
++    /* The segment bound is checked above.  An odd private dictionary */
++    /* still needs one alignment byte before it is decrypted.         */
++    if ( parser->in_pfb &&
++         ( parser->single_block || ( parser->private_len & 1 ) ) )
++    {
++      if ( !parser->single_block )
++      {
++        if ( FT_REALLOC( parser->private_dict,
++                         parser->private_len,
++                         parser->private_len + 1 ) )
++          goto Fail;
++
++        parser->private_dict[parser->private_len] = '\0';
++        parser->single_block = 1;
++      }
++
++      parser->private_len++;
++    }
++
+     /* we now decrypt the encoded binary private dictionary */
++
++    /* Merged PFB segments keep a one-byte pad when `single_block' is */
++    /* set; otherwise an odd length is padded here.                   */
++    if ( parser->in_pfb && parser->single_block )
++      parser->private_len++;
++    else if ( parser->in_pfb && ( parser->private_len & 1 ) )
++    {
++      if ( FT_REALLOC( parser->private_dict,
++                       parser->private_len,
++                       parser->private_len + 1 ) )
++        goto Fail;
++
++      parser->private_dict[parser->private_len] = '\0';
++      parser->private_len++;
++      parser->single_block = 1;
++    }
++
+     psaux->t1_decrypt( parser->private_dict, parser->private_len, 55665U );
+ 
+     if ( parser->private_len < 4 )

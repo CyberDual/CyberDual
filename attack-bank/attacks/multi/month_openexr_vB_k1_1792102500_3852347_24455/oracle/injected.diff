@@ -1,0 +1,40 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0a..47315f6 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -339,6 +339,16 @@ writePascalString (char*& outPtr, const string& str)
+     Xdr::write<CharPtrIO> ((char*&) outPtr, (const char*) str.c_str (), length);
+ }
+ 
++//
++// checks that at least n bytes are available, starting at data, before
++// endOfData is reached
++//
++bool
++haveBytes (const char* data, const char* endOfData, size_t n)
++{
++    return data + n - 1 <= endOfData;
++}
++
+ } // namespace
+ 
+ IDManifest::IDManifest (const char* data, const char* endOfData)
+@@ -349,7 +359,7 @@ IDManifest::IDManifest (const char* data, const char* endOfData)
+ void
+ IDManifest::init (const char* data, const char* endOfData)
+ {
+-    if (data + sizeof (unsigned int) > endOfData)
++    if (! haveBytes (data, endOfData, sizeof (unsigned int)))
+     {
+         throw IEX_NAMESPACE::InputExc (
+             "IDManifest too small for version field");
+@@ -484,7 +494,8 @@ IDManifest::init (const char* data, const char* endOfData)
+ 
+     _manifest.clear ();
+ 
+-    if (manifestEntries <0)
++    if (manifestEntries < 0 ||
++        ! haveBytes (data, endOfData, (size_t) manifestEntries))
+     {
+         throw IEX_NAMESPACE::InputExc ("bad number of ChannelGroupsManifests in IDManifest");
+     }

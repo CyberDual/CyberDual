@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "13c16da0cab524a7bff47d1c65511e2b5acd94c6",
+      "edited_message": "rar5: Detect 32 bit size_t overflows and reduce owner name stack use",
+      "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\nindex f9a2327..779e64c 100644\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -158,7 +158,7 @@ enum REDIR_TYPE {\n #define\tOWNER_GROUP_NAME\t0x02\n #define\tOWNER_USER_UID\t\t0x04\n #define\tOWNER_GROUP_GID\t\t0x08\n-#define\tOWNER_MAXNAMELEN\t256\n+#define\tOWNER_MAXNAMELEN\t128\n \n #define\tSFX_MAX_READAHEAD\t(1024 * 512)\n \n"
+    },
+    {
+      "sha": "c92e88cec0cc116f8c470d6173e589bc90b3462d",
+      "edited_message": "rar5: Adjust read_var/read_var_sized return values and preserve owner names",
+      "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -1620,8 +1620,8 @@\n \t\tif(!read_ahead(a, name_size, &p))\n \t\t\treturn ARCHIVE_EOF;\n \n-\t\tif (name_size >= OWNER_MAXNAMELEN) {\n-\t\t\tname_len = OWNER_MAXNAMELEN - 1;\n+\t\tif (name_size >= 256) {\n+\t\t\tname_len = 255;\n \t\t} else {\n \t\t\tname_len = name_size;\n \t\t}\n@@ -1651,8 +1651,8 @@\n \t\tif(!read_ahead(a, name_size, &p))\n \t\t\treturn ARCHIVE_EOF;\n \n-\t\tif (name_size >= OWNER_MAXNAMELEN) {\n-\t\t\tname_len = OWNER_MAXNAMELEN - 1;\n+\t\tif (name_size >= 256) {\n+\t\t\tname_len = 255;\n \t\t} else {\n \t\t\tname_len = name_size;\n \t\t}\n"
+    }
+  ],
+  "coupling": "The first commit reduces OWNER_MAXNAMELEN, which sizes the stack buffer and originally also caps both owner-name copies. The later commit uses the former 255-byte owner-name limit in both copy sites while the buffer remains 128 bytes. Either edit applied by itself leaves the copy bounded by a 256-byte buffer or by the 128-byte limit; only their combination makes a valid 200-byte owner name overflow the stack buffer. A repair has to reconcile the allocation and both copy limits across the two commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "archive_read_support_format_rar5, archive_read_open_memory, archive_read_next_header",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

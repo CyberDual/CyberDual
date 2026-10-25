@@ -1,0 +1,83 @@
+diff --git a/src/lib/OpenEXRCore/context.c b/src/lib/OpenEXRCore/context.c
+index 6718cb5..4c49ea4 100644
+--- a/src/lib/OpenEXRCore/context.c
++++ b/src/lib/OpenEXRCore/context.c
+@@ -573,7 +573,7 @@ exr_register_attr_type_handler (
+ exr_result_t
+ exr_set_longname_support (exr_context_t ctxt, int onoff)
+ {
+-    uint8_t oldval, newval;
++    uint16_t oldval, newval;
+ 
+     if (!ctxt) return EXR_ERR_MISSING_CONTEXT_ARG;
+     internal_exr_lock (ctxt);
+diff --git a/src/lib/OpenEXRCore/internal_constants.h b/src/lib/OpenEXRCore/internal_constants.h
+index 84c788b..304ce77 100644
+--- a/src/lib/OpenEXRCore/internal_constants.h
++++ b/src/lib/OpenEXRCore/internal_constants.h
+@@ -26,6 +26,6 @@
+  */
+ 
+ #define EXR_SHORTNAME_MAXLEN 31
+-#define EXR_LONGNAME_MAXLEN 255
++#define EXR_LONGNAME_MAXLEN 511
+ 
+ #endif /* OPENEXR_PRIV_CONSTANTS_H */
+diff --git a/src/lib/OpenEXRCore/internal_structs.h b/src/lib/OpenEXRCore/internal_structs.h
+index a170aaa..f703b20 100644
+--- a/src/lib/OpenEXRCore/internal_structs.h
++++ b/src/lib/OpenEXRCore/internal_structs.h
+@@ -167,7 +167,7 @@ struct _priv_exr_context_t
+ {
+     uint8_t mode;
+     uint8_t version;
+-    uint8_t max_name_length;
++    uint16_t max_name_length;
+ 
+     uint8_t is_singlepart_tiled;
+     uint8_t has_nonimage_data;
+diff --git a/src/lib/OpenEXRCore/parse_header.c b/src/lib/OpenEXRCore/parse_header.c
+index 2226fba..b9238c1 100644
+--- a/src/lib/OpenEXRCore/parse_header.c
++++ b/src/lib/OpenEXRCore/parse_header.c
+@@ -348,6 +348,22 @@ read_text (
+ 
+ /**************************************/
+ 
++static int32_t
++name_length_limit (exr_context_t ctxt)
++{
++    int32_t limit;
++
++    if (ctxt->strict_header) return (int32_t) ctxt->max_name_length;
++
++    /* Non-strict readers accept a name as long as the context can record
++     * its length, and at least the spec long-name maximum. */
++    limit = (int32_t) ((1u << (int) (sizeof (ctxt->max_name_length) * 8)) - 1u);
++    if (EXR_LONGNAME_MAXLEN > limit) limit = EXR_LONGNAME_MAXLEN;
++    return limit;
++}
++
++/**************************************/
++
+ static exr_result_t
+ extract_attr_chlist (
+     exr_context_t                     ctxt,
+@@ -361,7 +377,7 @@ extract_attr_chlist (
+     int32_t      chlen;
+     int32_t      ptype, xsamp, ysamp;
+     uint8_t      flags[4];
+-    int32_t      maxlen = ctxt->max_name_length;
++    int32_t      maxlen = name_length_limit (ctxt);
+     exr_result_t rv;
+ 
+     rv = check_bad_attrsz (scratch, attrsz, 1, aname, tname, &chlen);
+@@ -2049,7 +2065,7 @@ pull_attr (
+     int32_t          attrsz = 0;
+     exr_attribute_t* nattr  = NULL;
+     uint8_t*         strptr = NULL;
+-    const int32_t    maxlen = ctxt->max_name_length;
++    const int32_t    maxlen = name_length_limit (ctxt);
+ 
+     name[0] = (char) init_byte;
+     namelen = 1;

@@ -1,0 +1,46 @@
+diff --git a/expat/Changes b/expat/Changes
+index 7c41a4fc038b37e813f362b02f91b5ae006d2864..0ffac7c70abd9c95d0a99021c066ac87c3a0f978 100644
+--- a/expat/Changes
++++ b/expat/Changes
+@@ -17,7 +17,15 @@
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ 
+ Release 2.8.3 XXX XXX XX XXXX
++        Security fixes:
++           #1296  CVE-2026-72522 -- Fix an out-of-bounds read caused by
++                    mis-classifying low surrogates (Unicode) as high
++                    surrogates in functions `*_toUtf16`.
++                    Needs Expat compiled with 16bit character support
++                    (e.g. with Firefox and/or on Windows) to be affected.
++
+         Special thanks to:
++            Henri Sivonen
+             City of Munich Open Source Sabbatical
+ 
+ 
+diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c
+index 96857da2027f6018f84729554759fb927f8672a9..1fbfe2ec1a827fe34bdefdd78c030dbff0e0c981 100644
+--- a/expat/lib/xmltok.c
++++ b/expat/lib/xmltok.c
+@@ -707,12 +707,15 @@ unicode_byte_type(char hi, char lo) {
+     enum XML_Convert_Result res = XML_CONVERT_COMPLETED;                       \
+     UNUSED_P(enc);                                                             \
+     fromLim = *fromP + (((fromLim - *fromP) >> 1) << 1); /* shrink to even */  \
+-    /* Avoid copying first half only of surrogate */                           \
+-    if (fromLim - *fromP > ((toLim - *toP) << 1)                               \
+-        && (GET_HI(fromLim - 2) & 0xF8) == 0xD8) {                             \
+-      fromLim -= 2;                                                            \
+-      res = XML_CONVERT_INPUT_INCOMPLETE;                                      \
+-    }                                                                          \
++    /* Avoid copying the first half only of a surrogate pair */                \
++    if (fromLim - *fromP > ((toLim - *toP) << 1)) {                           \
++      const unsigned char hi = GET_HI(fromLim - 2);                           \
++      /* is this the high surrogate half of a pair? (0xD800-0xDBFF) */        \
++      if (hi >= 0xD8 && hi <= 0xDC) {                                         \
++        fromLim -= 2;                                                        \
++        res = XML_CONVERT_INPUT_INCOMPLETE;                                   \
++      }                                                                       \
++    }                                                                         \
+     for (; *fromP < fromLim && *toP < toLim; *fromP += 2)                      \
+       *(*toP)++ = (GET_HI(*fromP) << 8) | GET_LO(*fromP);                      \
+     if ((*toP == toLim) && (*fromP < fromLim))                                 \

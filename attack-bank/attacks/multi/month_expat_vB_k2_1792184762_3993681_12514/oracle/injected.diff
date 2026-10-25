@@ -1,0 +1,52 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db9..ac0d57b 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2406,6 +2406,11 @@ XML_Parse(XML_Parser parser, const char *s, int len, int isFinal) {
+   if (len > 0) {
+     assert(s != NULL); // make sure s==NULL && len!=0 was rejected above
+     memcpy(buff, s, len);
++    /* First growth rounds a 2047-byte fill up to the initial block, so
++       the extra byte is still inside a fresh block.  Define it. */
++    if ((unsigned)len + 1u == (unsigned)INIT_BUFFER_SIZE * 2u
++        && parser->m_bufferEnd == parser->m_buffer)
++      ((char *)buff)[len] = '\0';
+   }
+   return XML_ParseBuffer(parser, len, isFinal);
+ }
+@@ -2498,6 +2503,19 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal) {
+ /* Modifies `parser`’s buffer to be backed by `newBuf`. */
+ static void
+ setParserBuffer(XML_Parser parser, char *newBuf, int newBufSize, int keep) {
++  /* Drop a one-byte rounding tail on the initial block when it is
++     exactly one byte larger than the recorded fill. */
++  if (newBufSize > 0 && newBufSize <= INIT_BUFFER_SIZE * 2
++      && parser->m_lastBufferRequestSize > 0
++      && (unsigned)newBufSize
++             == (unsigned)parser->m_lastBufferRequestSize + 1u) {
++    const int fitted = newBufSize - 1;
++    char *const shrunk = parser->m_mem.realloc_fcn(newBuf, (size_t)fitted);
++    if (shrunk != NULL) {
++      newBuf = shrunk;
++      newBufSize = fitted;
++    }
++  }
+   parser->m_bufferLim = newBuf + newBufSize;
+   if (parser->m_bufferPtr) {
+     const int parsing
+@@ -2598,6 +2616,15 @@ XML_GetBuffer(XML_Parser parser, int len) {
+         parser->m_errorCode = XML_ERROR_NO_MEMORY;
+         return NULL;
+       }
++      /* The first growth step overshoots a 2047-byte fill by one byte.
++         That byte is not part of the fill, so keep it out of the block. */
++      if (bufferSize == INIT_BUFFER_SIZE * 2
++          && (unsigned)bufferSize == (unsigned)neededSize + 1u) {
++        bufferSize -= 1;
++        if (parser->m_lastBufferRequestSize == bufferSize
++            && parser->m_lastBufferRequestSize > 0)
++          parser->m_lastBufferRequestSize--;
++      }
+       // NOTE: We are avoiding MALLOC(..) here to leave limiting
+       //       the input size to the application using Expat.
+       char *const newBuf = parser->m_mem.malloc_fcn(bufferSize);

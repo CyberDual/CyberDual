@@ -1,0 +1,83 @@
+diff --git a/src/lib/OpenEXRCore/internal_zstd.c b/src/lib/OpenEXRCore/internal_zstd.c
+index 670b92a73c768ebf3b5cc4cec26d92c90fe23b79..d28d37e7144db2a09ed994fce0cf1e9e90e5fa47 100644
+--- a/src/lib/OpenEXRCore/internal_zstd.c
++++ b/src/lib/OpenEXRCore/internal_zstd.c
+@@ -858,6 +858,33 @@ exr_zstd_fill_channel_sample_count_grid (
+     }
+ }
+ 
++/** Total packed bytes a filled sample count grid describes: one term of
++ *  samples * bytes_per_element per (chunk line, channel). Returns an error
++ *  if the sum would overflow. */
++static exr_result_t
++exr_zstd_deep_grid_byte_size (
++    const uint64_t*                  grid,
++    int                              height,
++    const exr_coding_channel_info_t* channels,
++    int                              channel_count,
++    uint64_t*                        out_bytes)
++{
++    uint64_t bytes = 0;
++    for (int h = 0; h < height; ++h)
++    {
++        for (int i = 0; i < channel_count; ++i)
++        {
++            uint64_t const n   = grid[h * channel_count + i];
++            uint64_t const bpe = (uint64_t) channels[i].bytes_per_element;
++            if (n > (UINT64_MAX - bytes) / bpe)
++                return EXR_ERR_CORRUPT_CHUNK;
++            bytes += n * bpe;
++        }
++    }
++    *out_bytes = bytes;
++    return EXR_ERR_SUCCESS;
++}
++
+ /* --- Main Pipeline Implementation --- */
+ 
+ /** Store raw packed payload as the chunk (no ZSTD); used only when ZSTD
+@@ -1298,6 +1325,24 @@ exr_undo_zstd_v1 (
+         sorting_lookup,
+         pack_channels);
+ 
++    /* The deep pixel grid is the only one derived from the file's sample
++     * count table, which unpack_sample_table() does not validate until
++     * after decompression, so the byte total it describes must fit the
++     * unpacked chunk before the grid is used to place data. */
++    uint64_t deep_sample_bytes = 0;
++    if (grid_scenario == EXR_ZSTD_GRID_DEEP_PIXELS)
++    {
++        exr_result_t grv = exr_zstd_deep_grid_byte_size (
++            channel_sample_count_grid,
++            chunk_line_count,
++            pack_channels,
++            pack_channel_count,
++            &deep_sample_bytes);
++        if (grv != EXR_ERR_SUCCESS) return grv;
++        if (deep_sample_bytes > uncompressed_size)
++            return EXR_ERR_CORRUPT_CHUNK;
++    }
++
+     exr_zstd_pack_pipeline pipe;
+     exr_zstd_build_decode_pipeline (fr.format, fr.flags, &pipe);
+ 
+@@ -1361,6 +1406,19 @@ exr_undo_zstd_v1 (
+         (char*) uncompressed_data,
+         sorting_lookup);
+ 
++    if (grid_scenario == EXR_ZSTD_GRID_DEEP_PIXELS &&
++        deep_sample_bytes < uncompressed_size)
++    {
++        /* The sample counts may describe fewer bytes than the chunk header
++         * declares (older writers padded deep data out to a full tile
++         * block): zero the unused tail so callers never observe stale
++         * buffer contents beyond the decoded samples. */
++        memset (
++            (uint8_t*) uncompressed_data + deep_sample_bytes,
++            0,
++            (size_t) uncompressed_size);
++    }
++
+     return EXR_ERR_SUCCESS;
+ }
+ 

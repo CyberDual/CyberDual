@@ -1,0 +1,41 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index b758e0eff234b2233567ff901fc7458a3f975b8d..709fe7bc2be201c9532f1195ebf0f5778fcfec5b 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -651,6 +651,7 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+     int rc = 0;
+     size_t namelen = 0;
+     const char *name = host + hostlen;
++    char hostbuf[256];
+ 
+     if(hostlen < 1)
+         return ssh2_err(hosts->session, LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+@@ -664,10 +665,8 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+            name to the collection */
+         if(name == host || *(name - 1) == ',') {
+ 
+-            char hostbuf[256];
+-
+             /* make sure we do not overflow the buffer */
+-            if(namelen >= sizeof(hostbuf) - 1)
++            if(namelen > sizeof(hostbuf))
+                 return ssh2_err(hosts->session,
+                                 LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                                 "Failed to parse known_hosts line "
+diff --git a/src/openssl.c b/src/openssl.c
+index 6a38b55b91440c1c188472dde05a9770ea3a3f73..b1399b387b9cba2e7837d403033da6fcf1c9a6db 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -950,8 +950,10 @@ int ssh2_cipher_crypt(ssh2_cipher_ctx *ctx, SSH2_CIPHER_T(algo), int encrypt,
+ 
+     (void)algo;
+ 
+-    assert(blocksize <= sizeof(buf));
+-    assert(cryptlen >= 0);
++    /* the full block, including any AAD and authentication tag, must fit
++       within the scratch buffer or we would read and write out of bounds */
++    if(blocksize > sizeof(buf) || cryptlen < 0)
++        return 1;
+ 
+ #if LIBSSH2_AES_GCM
+     /* First block */

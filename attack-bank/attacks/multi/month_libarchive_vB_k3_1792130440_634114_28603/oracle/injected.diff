@@ -1,0 +1,78 @@
+diff --git a/libarchive/archive_read_support_format_ar.c b/libarchive/archive_read_support_format_ar.c
+index 2445e7b..0351059 100644
+--- a/libarchive/archive_read_support_format_ar.c
++++ b/libarchive/archive_read_support_format_ar.c
+@@ -60,6 +60,8 @@ struct ar {
+ 	int64_t	 entry_padding;
+ 	char	*strtab;
+ 	size_t	 strtab_size;
++	/* Set when strtab[strtab_size] holds a spare NUL. */
++	char	 strtab_term;
+ 	char	 read_global_header;
+ };
+ 
+@@ -310,7 +312,23 @@ _ar_read_header(struct archive_read *a, struct archive_entry *entry,
+ 			return (ARCHIVE_FATAL);
+ 
+ 		/* Parse the filename table. */
+-		return (ar_parse_gnu_filename_table(a));
++		if (ar_parse_gnu_filename_table(a) != ARCHIVE_OK)
++			return (ARCHIVE_FATAL);
++
++		/*
++		 * Skip consumed the on-disk table (padding included).
++		 * Offsets in later member headers are relative to that
++		 * length, so keep a buffer of exactly strtab_size.
++		 */
++		if (ar->strtab != NULL && ar->strtab_size > 0) {
++			char *fit = malloc(ar->strtab_size);
++			if (fit != NULL) {
++				memcpy(fit, ar->strtab, ar->strtab_size);
++				free(ar->strtab);
++				ar->strtab = fit;
++			}
++		}
++		return (ARCHIVE_OK);
+ 	}
+ 
+ 	/*
+@@ -321,8 +339,11 @@ _ar_read_header(struct archive_read *a, struct archive_entry *entry,
+ 	 */
+ 	if (filename[0] == '/' && filename[1] >= '0' && filename[1] <= '9') {
+ 		number = ar_atol10(h + AR_name_offset + 1, AR_name_size - 1);
+-		/* Fail if we can't look up the real name. */
+-		if (ar->strtab == NULL || number >= ar->strtab_size) {
++		/* Fail if we can't look up the real name.
++		 * When the table was normalized, an offset equal to its
++		 * length is the empty name on the trailing NUL. */
++		if (ar->strtab == NULL || number > ar->strtab_size ||
++		    (number == ar->strtab_size && !ar->strtab_term)) {
+ 			archive_set_error(&a->archive, EINVAL,
+ 			    "Can't find long filename for GNU/SVR4 archive entry");
+ 			return (ARCHIVE_FATAL);
+@@ -551,6 +572,25 @@ ar_parse_gnu_filename_table(struct archive_read *a)
+ 	/* Enforce zero termination. */
+ 	ar->strtab[size - 1] = '\0';
+ 
++	/*
++	 * Windows longname members separate names with NUL and can
++	 * reference an empty name at the end of the table. Keep one
++	 * spare NUL past the on-disk bytes so that offset is a C string.
++	 */
++	{
++		char *ext = realloc(ar->strtab, size + 1);
++		if (ext == NULL) {
++			archive_set_error(&a->archive, ENOMEM,
++			    "Can't allocate filename table buffer");
++			free(ar->strtab);
++			ar->strtab = NULL;
++			return (ARCHIVE_FATAL);
++		}
++		ar->strtab = ext;
++		ar->strtab[size] = '\0';
++		ar->strtab_term = 1;
++	}
++
+ 	return (ARCHIVE_OK);
+ 
+ bad_string_table:

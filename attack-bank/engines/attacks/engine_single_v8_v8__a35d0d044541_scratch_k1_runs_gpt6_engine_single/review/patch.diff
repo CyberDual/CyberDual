@@ -1,0 +1,91 @@
+diff --git a/src/d8/d8.cc b/src/d8/d8.cc
+index efbe4b23..498f7483 100644
+--- a/src/d8/d8.cc
++++ b/src/d8/d8.cc
+@@ -2502,9 +2502,26 @@ bool PerIsolateData::HasRunningSubscribedWorkers() {
+ }
+ 
+ void PerIsolateData::RegisterWorker(std::shared_ptr<Worker> worker) {
++  owned_workers_.insert(worker);
+   registered_workers_.insert(std::move(worker));
+ }
+ 
++void PerIsolateData::ShutdownWorkers() {
++  std::vector<std::shared_ptr<Worker>> workers(owned_workers_.begin(),
++                                                owned_workers_.end());
++  reinterpret_cast<i::Isolate*>(isolate_)
++      ->main_thread_local_isolate()
++      ->ExecuteMainThreadWhileParked([&workers](const i::ParkedScope& parked) {
++        for (const auto& worker : workers) {
++          worker->TerminateAndWaitForThread(parked);
++        }
++      });
++  for (const auto& worker : workers) worker->DiscardMessages();
++  worker_message_callbacks_.clear();
++  registered_workers_.clear();
++  owned_workers_.clear();
++}
++
+ void PerIsolateData::SubscribeWorkerOnMessage(
+     const std::shared_ptr<Worker>& worker, Local<Context> context,
+     Local<Function> callback) {
+@@ -6514,7 +6531,12 @@ bool SerializationDataQueue::IsEmpty() {
+ 
+ void SerializationDataQueue::Clear() {
+   base::MutexGuard lock_guard(&mutex_);
+-  data_.clear();
++  while (!data_.empty()) {
++    auto& pending = data_.back();
++    bool has_transfers = pending && !pending->backing_stores().empty();
++    data_.pop_back();
++    if (has_transfers) pending.reset();
++  }
+ }
+ 
+ Worker::Worker(Isolate* parent_isolate, const char* script,
+@@ -6652,6 +6674,8 @@ void Worker::TerminateAndWaitForThread(const i::ParkedScope& parked) {
+   thread_->Join();
+ }
+ 
++void Worker::DiscardMessages() { out_queue_.Clear(); }
++
+ void Worker::Terminate() {
+   base::MutexGuard lock_guard(&worker_mutex_);
+   auto expected = State::kRunning;
+@@ -6879,6 +6903,8 @@ void Worker::ExecuteInThread() {
+       Shell::CollectGarbage(isolate_);
+     }
+ 
++    data.ShutdownWorkers();
++
+     EnterTerminatedState();
+ 
+     Shell::ResetOnProfileEndListener(isolate_);
+diff --git a/src/d8/d8.h b/src/d8/d8.h
+index c6ac3925..e948b6c9 100644
+--- a/src/d8/d8.h
++++ b/src/d8/d8.h
+@@ -293,6 +293,7 @@ class Worker : public std::enable_shared_from_this<Worker> {
+   // Terminate and join the thread.
+   // This function can be called by any thread.
+   void TerminateAndWaitForThread(const i::ParkedScope& parked);
++  void DiscardMessages();
+ 
+   // Start running the given worker in another thread.
+   static bool StartWorkerThread(Isolate* requester,
+@@ -435,6 +436,7 @@ class PerIsolateData {
+ 
+   bool HasRunningSubscribedWorkers();
+   void RegisterWorker(std::shared_ptr<Worker> worker);
++  void ShutdownWorkers();
+   void SubscribeWorkerOnMessage(const std::shared_ptr<Worker>& worker,
+                                 Local<Context> context,
+                                 Local<Function> callback);
+@@ -463,6 +465,7 @@ class PerIsolateData {
+   // rely on Shell::running_workers_ or worker.IsTerminated(), because these are
+   // set concurrently and may race with callback subscription.
+   std::set<std::shared_ptr<Worker>> registered_workers_;
++  std::set<std::shared_ptr<Worker>> owned_workers_;
+   std::map<std::shared_ptr<Worker>,
+            std::pair<Global<Context>, Global<Function>>>
+       worker_message_callbacks_;

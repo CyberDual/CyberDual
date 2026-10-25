@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "6c554982af9c07f8092d9cf3c2f975bb89d92c34",
+      "edited_message": null,
+      "patch": "diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c\nindex 348be13..29446f4 100644\n--- a/src/dec/vp8l_dec.c\n+++ b/src/dec/vp8l_dec.c\n@@ -1175,9 +1175,7 @@ int VP8LGetWindowRows(int width, int height, int max_history_rows) {\n   //   1) margin in GetWindowLimit().\n   const int min_rows =\n       max_history_rows + NUM_ARGB_CACHE_ROWS + max_length_rows + 2;\n-  // Allocate 2x min_rows so that ShiftWindow() shifts ~min_rows at a time\n-  // rather than on every batch, amortizing the memmove() cost.\n-  const int num_window_rows = 2 * min_rows;\n+  const int num_window_rows = min_rows;\n   return (num_window_rows < height) ? num_window_rows : height;\n }\n \n"
+    },
+    {
+      "sha": "498ab71d4ee5ec8f1fbaf614e91b6d2c234f0373",
+      "edited_message": null,
+      "patch": "diff --git a/src/dec/alpha_dec.c b/src/dec/alpha_dec.c\nindex 9fb1448..e452e65 100644\n--- a/src/dec/alpha_dec.c\n+++ b/src/dec/alpha_dec.c\n@@ -133,16 +133,11 @@ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {\n   // (which equals io->height when cropping is not used).\n   const int height = io->crop_bottom;\n   if (dec->alpha_data == NULL) return 0;\n-  // For each non-last macroblock row (16 pixel rows), FinishRow() in\n-  // frame_dec.c holds back up to 8 bottom pixel rows (kFilterExtraRows[] for\n-  // complex filtering) until the next macroblock row is decoded. On the last\n-  // macroblock row, no bottom rows are held back, so FinishRow() requests the 8\n-  // pixel rows held back from the previous macroblock row plus all 16 pixel\n-  // rows of the last macroblock row (24 pixel rows total), while retaining 1\n-  // preceding row (row - 1) for spatial unfiltering and fancy upsampling.\n+  // The common window sizing includes decode batching and copy headroom.\n+  // Retain the preceding row for filtering and fancy upsampling.\n   return (dec->alpha_dithering > 0)\n              ? height\n-             : VP8LGetWindowRows(width, height, /*max_history_rows=*/25);\n+             : VP8LGetWindowRows(width, height, /*max_history_rows=*/1);\n }\n \n void WebPShiftAlphaWindow(ALPHDecoder* const alph_dec, int current_end_row,\n"
+    }
+  ],
+  "coupling": "The first commit sizes the shared sliding window at its documented minimum rather than twice that minimum. Lossless decoding still has its calculated history and copy headroom. The later alpha-window commit passes one row of history, relying on the earlier doubling to cover a 24-row final macroblock batch plus the preceding row. Either edit alone leaves at least 25 alpha rows; together they allocate 24 for the probe image, so alpha extraction writes beyond the allocated plane. The fix must reconcile the shared sizing rule with the alpha caller's batch requirement.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "WebPEncodeRGBA followed by WebPDecodeRGBA",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

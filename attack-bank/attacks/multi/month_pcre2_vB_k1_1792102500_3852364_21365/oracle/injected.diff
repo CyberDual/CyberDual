@@ -1,0 +1,77 @@
+diff --git a/src/pcre2_dfa_match.c b/src/pcre2_dfa_match.c
+index fb757d9..e9335f9 100644
+--- a/src/pcre2_dfa_match.c
++++ b/src/pcre2_dfa_match.c
+@@ -4504,7 +4504,7 @@ pcre2_dfa_match(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length,
+       if (rc >= 0 && (options & PCRE2_COPY_MATCHED_SUBJECT) != 0)
+       {
+         match_data->subject =
+-            match_data->memctl.malloc(CU2BYTES(length + 1), match_data->memctl.memory_data);
++            match_data->memctl.malloc(CU2BYTES(length), match_data->memctl.memory_data);
+         if (match_data->subject == NULL)
+         {
+           match_data->subject_length = 0;
+@@ -4513,7 +4513,6 @@ pcre2_dfa_match(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length,
+         }
+ 
+         memcpy((void *)match_data->subject, subject, CU2BYTES(length));
+-        ((PCRE2_UCHAR *)match_data->subject)[length] = 0;
+ 
+         match_data->flags |= PCRE2_MD_COPIED_SUBJECT;
+       }
+diff --git a/src/pcre2_match.c b/src/pcre2_match.c
+index 25cbda4..07815f0 100644
+--- a/src/pcre2_match.c
++++ b/src/pcre2_match.c
+@@ -7964,7 +7964,7 @@ pcre2_match(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length, PCRE2
+     if (rc >= 0 && (options & PCRE2_COPY_MATCHED_SUBJECT) != 0)
+     {
+       match_data->subject =
+-          match_data->memctl.malloc(CU2BYTES(length + 1), match_data->memctl.memory_data);
++          match_data->memctl.malloc(CU2BYTES(length), match_data->memctl.memory_data);
+       if (match_data->subject == NULL)
+       {
+         match_data->subject_length = 0;
+@@ -7972,7 +7972,6 @@ pcre2_match(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length, PCRE2
+       }
+ 
+       memcpy((void *)match_data->subject, subject, CU2BYTES(length));
+-      ((PCRE2_UCHAR *)match_data->subject)[length] = 0;
+ 
+       match_data->flags |= PCRE2_MD_COPIED_SUBJECT;
+     }
+@@ -8944,17 +8943,16 @@ ENDLOOP:
+     if ((options & PCRE2_COPY_MATCHED_SUBJECT) != 0)
+     {
+       match_data->subject =
+-          match_data->memctl.malloc(CU2BYTES(length + 1), match_data->memctl.memory_data);
++          match_data->memctl.malloc(CU2BYTES(length), match_data->memctl.memory_data);
+       if (match_data->subject == NULL)
+       {
+         match_data->subject_length = 0;
+         return match_data->rc = PCRE2_ERROR_NOMEMORY;
+       }
+ 
+-      /* PCRE2 does not require the copied subject to be zero-terminated. However,
+-      it is exposed to clients through pcre2_get_subject, who might appreciate this. */
++      /* PCRE2 does not require the copied subject to be zero-terminated; it is
++      exposed to clients through pcre2_get_subject together with its length. */
+       memcpy((void *)match_data->subject, subject, CU2BYTES(length));
+-      ((PCRE2_UCHAR *)match_data->subject)[length] = 0;
+ 
+       match_data->flags |= PCRE2_MD_COPIED_SUBJECT;
+     }
+diff --git a/src/pcre2_substring.c b/src/pcre2_substring.c
+index ae43dbb..d81f320 100644
+--- a/src/pcre2_substring.c
++++ b/src/pcre2_substring.c
+@@ -229,7 +229,8 @@ pcre2_substring_get_bynumber(pcre2_match_data *match_data, uint32_t stringnumber
+     return PCRE2_ERROR_NOMEMORY;
+   yield = (PCRE2_UCHAR *)(((char *)yield) + sizeof(pcre2_memctl));
+   if (size != 0)
+-    memcpy(yield, match_data->subject + match_data->ovector[stringnumber * 2], CU2BYTES(size));
++    memcpy(yield, match_data->subject + match_data->ovector[stringnumber * 2],
++           CU2BYTES(size + 1));
+   yield[size] = 0;
+   *stringptr = yield;
+   *sizeptr = size;

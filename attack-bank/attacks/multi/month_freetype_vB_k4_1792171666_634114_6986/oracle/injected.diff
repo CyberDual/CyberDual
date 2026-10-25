@@ -1,0 +1,54 @@
+diff --git a/src/smooth/ftgrays.c b/src/smooth/ftgrays.c
+index 1847f53..7ec6cd2 100644
+--- a/src/smooth/ftgrays.c
++++ b/src/smooth/ftgrays.c
+@@ -1881,7 +1881,13 @@ typedef ptrdiff_t  FT_PtrDist;
+     while ( 1 )
+     {
+       size_t  n;
+-      TCoord  i, count = ras.max_ey - ras.min_ey;
++      TCoord  i, height = ras.max_ey - ras.min_ey;
++
++      /* One list head per contour and per point.  Closing a    */
++      /* contour inserts a cell immediately, and a band only a  */
++      /* few rows tall would otherwise be split.                */
++      TCoord  count = height + (TCoord)ras.outline.n_contours +
++                                (TCoord)ras.outline.n_points;
+ 
+ 
+       /* memory management: zero out and skip ycells */
+@@ -1916,10 +1922,10 @@ typedef ptrdiff_t  FT_PtrDist;
+         goto Exit;
+ 
+       /* render pool overflow, reduce the render band by half */
+-      count >>= 1;
++      height >>= 1;
+ 
+       /* this happens only if the rendering pool is too small */
+-      if ( count == 0 )
++      if ( height == 0 )
+       {
+         FT_TRACE7(( "gray_convert_glyph: rotten glyph\n" ));
+         error = FT_THROW( Raster_Overflow );
+@@ -1927,7 +1933,7 @@ typedef ptrdiff_t  FT_PtrDist;
+       }
+ 
+       *band++     = ras.min_ey;
+-      ras.min_ey += count;
++      ras.min_ey += height;
+     }
+ 
+   Exit:
+@@ -2020,8 +2026,10 @@ typedef ptrdiff_t  FT_PtrDist;
+     if ( ras.min_ex >= ras.max_ex || ras.min_ey >= ras.max_ey )
+       return Smooth_Err_Ok;
+ 
+-    /* allocate memory based on empirical estimate from CJK fonts */
+-    estimate = ( ras.max_ex - ras.min_ex + ras.max_ey - ras.min_ey ) * 10UL;
++    /* Both axes are counted, so the empirical factor of ten  */
++    /* double-counts the long side.  Five cells per perimeter  */
++    /* pixel still covers the CJK glyphs that motivated it.    */
++    estimate = ( ras.max_ex - ras.min_ex + ras.max_ey - ras.min_ey ) * 5UL;
+     if ( estimate > FT_MAX_GRAY_POOL )
+     {
+       FT_Error   error;

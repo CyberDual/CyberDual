@@ -1,0 +1,69 @@
+diff --git a/src/value.cpp b/src/value.cpp
+index e7546cf3e8526adde8c770a39693c9fd24bcc587..9f1a53eb69575e4ae56494738287594a07e32b6c 100644
+--- a/src/value.cpp
++++ b/src/value.cpp
+@@ -944,6 +944,10 @@ int TimeValue::read(const std::string& buf) {
+ 
+     if (fpos != std::string::npos) {
+       auto format = buf.substr(fpos, buf.size());
++      // Use the sign of the raw offset string rather than of the parsed
++      // tzHour: when the hour magnitude is 0 (e.g. "-00:30" / "-0030"),
++      // std::stoi returns 0 and the '-' sign is lost. format always starts
++      // with '+' or '-' (see fpos above).
+       auto posColon = format.find(':');
+       if (posColon == std::string::npos) {
+         // Extended format
+@@ -955,10 +959,18 @@ int TimeValue::read(const std::string& buf) {
+           int minute = std::stoi(format.substr(3));
+           if (minute < 0 || minute > 59)
+             return printWarning();
+-          time_.tzMinute = time_.tzHour < 0 ? -minute : minute;
++          // Hour magnitude 0 does not keep a sign ("-00" -> 0). Read it back
++          // from the raw hour field.
++          const char* hourText = format.c_str();
++          if (tzhi == 0) {
++            std::string hourField = format.substr(0, 3);
++            hourText = hourField.c_str();
++          }
++          time_.tzMinute = (*hourText == '-') ? -minute : minute;
+         }
+       } else {
+         // Basic format
++        const bool negative = format[0] == '-';
+         auto tzhi = std::stoi(format.substr(0, posColon));
+         if (tzhi < -23 || tzhi > 23)
+           return printWarning();
+@@ -966,7 +978,7 @@ int TimeValue::read(const std::string& buf) {
+         int minute = std::stoi(format.substr(posColon + 1));
+         if (minute < 0 || minute > 59)
+           return printWarning();
+-        time_.tzMinute = time_.tzHour < 0 ? -minute : minute;
++        time_.tzMinute = negative ? -minute : minute;
+       }
+     }
+   } catch (std::exception&) {
+diff --git a/unitTests/test_TimeValue.cpp b/unitTests/test_TimeValue.cpp
+index e5f7b6b709f0c8dc2bbaa5f2a9f300565bf14739..65c1416a96e39e6bed65f1ccd8174e0b9edb8633 100644
+--- a/unitTests/test_TimeValue.cpp
++++ b/unitTests/test_TimeValue.cpp
+@@ -129,6 +129,20 @@ TEST(ATimeValue, canBeReadFromExtendedStringWithTimeZoneDesignatorNegative) {
+   ASSERT_EQ(0, value.getTime().tzMinute);
+ }
+ 
++TEST(ATimeValue, canBeReadFromExtendedStringWithNegativeZeroHourOffset) {
++  // Regression test: when the offset hour magnitude is 0 (e.g. "-00:30"),
++  // the minute's sign used to be derived from tzHour < 0, which is false
++  // for both +0 and -0, silently dropping the sign.
++  TimeValue value;
++  const std::string hms("12:34:56-00:30");
++  ASSERT_EQ(0, value.read(hms));
++  ASSERT_EQ(12, value.getTime().hour);
++  ASSERT_EQ(34, value.getTime().minute);
++  ASSERT_EQ(56, value.getTime().second);
++  ASSERT_EQ(0, value.getTime().tzHour);
++  ASSERT_EQ(-30, value.getTime().tzMinute);
++}
++
+ TEST(ATimeValue, cannotBeReadFromStringWithTimeZoneDesignatorWithoutSymbol) {
+   TimeValue value;
+   const std::string hms("23:55:02?04:04");

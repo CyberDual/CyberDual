@@ -1,0 +1,143 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index d380a8385b46927809b1832143a008c0aaa42e75..cec0b5ed24e5a22fbee6cc11ca3d60e38ef98c23 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -673,7 +673,7 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+             char hostbuf[256];
+ 
+             /* make sure we do not overflow the buffer */
+-            if(namelen >= sizeof(hostbuf) - 1)
++            if(namelen > sizeof(hostbuf))
+                 return ssh2_err(hosts->session,
+                                 LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                                 "Failed to parse known_hosts line "
+@@ -811,18 +811,24 @@ static int knownhost_line(LIBSSH2_KNOWNHOSTS *hosts,
+         }
+         key_type_len = key - key_type_name;
+ 
+-        if(!strncmp(key_type_name, "ssh-ed25519", key_type_len))
++        if(key_type_len == sizeof("ssh-ed25519") - 1 &&
++           !memcmp(key_type_name, "ssh-ed25519", key_type_len))
+             key_type = LIBSSH2_KNOWNHOST_KEY_ED25519;
+-        else if(!strncmp(key_type_name, "ecdsa-sha2-nistp256", key_type_len))
++        else if(key_type_len == sizeof("ecdsa-sha2-nistp256") - 1 &&
++                !memcmp(key_type_name, "ecdsa-sha2-nistp256", key_type_len))
+             key_type = LIBSSH2_KNOWNHOST_KEY_ECDSA_256;
+-        else if(!strncmp(key_type_name, "ecdsa-sha2-nistp384", key_type_len))
++        else if(key_type_len == sizeof("ecdsa-sha2-nistp384") - 1 &&
++                !memcmp(key_type_name, "ecdsa-sha2-nistp384", key_type_len))
+             key_type = LIBSSH2_KNOWNHOST_KEY_ECDSA_384;
+-        else if(!strncmp(key_type_name, "ecdsa-sha2-nistp521", key_type_len))
++        else if(key_type_len == sizeof("ecdsa-sha2-nistp521") - 1 &&
++                !memcmp(key_type_name, "ecdsa-sha2-nistp521", key_type_len))
+             key_type = LIBSSH2_KNOWNHOST_KEY_ECDSA_521;
+-        else if(!strncmp(key_type_name, "ssh-rsa", key_type_len))
++        else if(key_type_len == sizeof("ssh-rsa") - 1 &&
++                !memcmp(key_type_name, "ssh-rsa", key_type_len))
+             key_type = LIBSSH2_KNOWNHOST_KEY_SSHRSA;
+ #if LIBSSH2_DSA && !defined(LIBSSH2_NO_DEPRECATED)
+-        else if(!strncmp(key_type_name, "ssh-dss", key_type_len))
++        else if(key_type_len == sizeof("ssh-dss") - 1 &&
++                !memcmp(key_type_name, "ssh-dss", key_type_len))
+             key_type = LIBSSH2_KNOWNHOST_KEY_SSHDSS;
+ #endif
+         else
+diff --git a/src/pem.c b/src/pem.c
+index ac1cb6aa372dd383ac772e68772ea37b9b226742..57cab82faf5f896e1bb50d079d0944a050e285fb 100644
+--- a/src/pem.c
++++ b/src/pem.c
+@@ -411,7 +411,9 @@ static int pem_parse_data_openssh(LIBSSH2_SESSION *session,
+     unsigned char *f = NULL;
+     size_t f_len = 0;
+     int ret = 0, keylen = 0, ivlen = 0, total_len = 0;
++    int cipher_none, kdf_none, kdf_bcrypt;
+     size_t kdf_len = 0, tmp_len = 0, salt_len = 0;
++    size_t ciphername_len = 0, kdfname_len = 0;
+ 
+     if(decrypted_buf)
+         *decrypted_buf = NULL;
+@@ -441,12 +443,14 @@ static int pem_parse_data_openssh(LIBSSH2_SESSION *session,
+ 
+     decoded.dataptr += sizeof(OPENSSH_PRIVKEY_AUTH_MAGIC);
+ 
+-    if(ssh2_get_string(&decoded, &ciphername, &tmp_len) || tmp_len == 0) {
++    if(ssh2_get_string(&decoded, &ciphername, &ciphername_len) ||
++       ciphername_len == 0) {
+         ret = ssh2_err(session, LIBSSH2_ERROR_PROTO, "ciphername is missing");
+         goto out;
+     }
+ 
+-    if(ssh2_get_string(&decoded, &kdfname, &tmp_len) || tmp_len == 0) {
++    if(ssh2_get_string(&decoded, &kdfname, &kdfname_len) ||
++       kdfname_len == 0) {
+         ret = ssh2_err(session, LIBSSH2_ERROR_PROTO, "kdfname is missing");
+         goto out;
+     }
+@@ -461,22 +465,24 @@ static int pem_parse_data_openssh(LIBSSH2_SESSION *session,
+         kdf_buf.len = kdf_len;
+     }
+ 
+-    if((!passphrase || strlen(passphrase) == 0) &&
+-       strcmp((const char *)ciphername, "none")) {
++    cipher_none = ciphername_len == 4 &&
++                  !memcmp(ciphername, "none", 4);
++    kdf_none = kdfname_len == 4 && !memcmp(kdfname, "none", 4);
++    kdf_bcrypt = kdfname_len == 6 && !memcmp(kdfname, "bcrypt", 6);
++
++    if((!passphrase || strlen(passphrase) == 0) && !cipher_none) {
+         /* passphrase required */
+         ret = LIBSSH2_ERROR_KEYFILE_AUTH_FAILED;
+         goto out;
+     }
+ 
+-    if(strcmp((const char *)kdfname, "none") &&
+-       strcmp((const char *)kdfname, "bcrypt")) {
++    if(!kdf_none && !kdf_bcrypt) {
+         ret = ssh2_err(session, LIBSSH2_ERROR_PROTO,
+                        "unrecognized KDF algorithm");
+         goto out;
+     }
+ 
+-    if(!strcmp((const char *)kdfname, "none") &&
+-       strcmp((const char *)ciphername, "none")) {
++    if(kdf_none && !cipher_none) {
+         ret = ssh2_err(session, LIBSSH2_ERROR_PROTO, "invalid format");
+         goto out;
+     }
+@@ -505,14 +511,15 @@ static int pem_parse_data_openssh(LIBSSH2_SESSION *session,
+     decrypted.data = decrypted.dataptr = buf;
+     decrypted.len = tmp_len;
+ 
+-    if(ciphername && strcmp((const char *)ciphername, "none")) {
++    if(!cipher_none) {
+         const struct crypt_method **all_methods, *cur_method;
+ 
+         all_methods = ssh2_crypt_methods();
+         /* !checksrc! disable EQUALSNULL 1 */
+         while((cur_method = *all_methods++) != NULL) {
+-            if(*cur_method->name && !memcmp(ciphername, cur_method->name,
+-                                            strlen(cur_method->name)))
++            if(*cur_method->name &&
++               ciphername_len == strlen(cur_method->name) &&
++               !memcmp(ciphername, cur_method->name, ciphername_len))
+                 method = cur_method;
+         }
+ 
+@@ -541,7 +548,7 @@ static int pem_parse_data_openssh(LIBSSH2_SESSION *session,
+             goto out;
+         }
+ 
+-        if(!strcmp((const char *)kdfname, "bcrypt") && passphrase) {
++        if(kdf_bcrypt && passphrase) {
+             if(ssh2_get_string(&kdf_buf, &salt, &salt_len) ||
+                ssh2_get_u32(&kdf_buf, &rounds) != 0) {
+                 ret = ssh2_err(session, LIBSSH2_ERROR_PROTO,
+@@ -670,7 +677,7 @@ static int pem_parse_data_openssh(LIBSSH2_SESSION *session,
+             goto out;
+         }
+ 
+-        out_buf->data = SSH2_CALLOC(session, decrypted.len);
++        out_buf->data = SSH2_CALLOC(session, decrypted.len + 1);
+         if(!out_buf->data) {
+             ret = ssh2_err(session, LIBSSH2_ERROR_ALLOC,
+                            "Unable to allocate memory for decrypted struct");

@@ -1,0 +1,69 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..ba7b8c7 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -479,7 +479,8 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+             return 0;
+ 
+         p++;
+-        if(p < end && *p == ':') {
++        /* delimiter just past `end` can complete a split '::' */
++        if(p <= end && *p == ':') {
+             if(compressed >= 0)
+                 return 0;
+             compressed = (int)count;
+@@ -544,7 +545,30 @@ static int knownhost_ipv6_part(const char *host, const char **address,
+     return 1;
+ }
+ 
+-static int knownhost_plain_match(const char *host, const char *known)
++/* Parse from a private copy of the address bytes so a bracket, port or
++   comma that follows the token cannot be consumed as part of the literal. */
++static int knownhost_parse_ipv6_span(LIBSSH2_SESSION *session,
++                                     const char *address, size_t len,
++                                     unsigned char result[16])
++{
++    char *span;
++    int rc;
++
++    if(!len)
++        return 0;
++
++    span = SSH2_ALLOC(session, len);
++    if(!span)
++        return 0;
++
++    memcpy(span, address, len);
++    rc = knownhost_parse_ipv6(span, len, result);
++    SSH2_FREE(session, span);
++    return rc;
++}
++
++static int knownhost_plain_match(LIBSSH2_SESSION *session,
++                                 const char *host, const char *known)
+ {
+     const char *host_address;
+     const char *known_address;
+@@ -567,8 +591,10 @@ static int knownhost_plain_match(const char *host, const char *known)
+        strcmp(host_suffix, known_suffix))
+         return 0;
+ 
+-    if(!knownhost_parse_ipv6(host_address, host_len, host_binary) ||
+-       !knownhost_parse_ipv6(known_address, known_len, known_binary))
++    if(!knownhost_parse_ipv6_span(session, host_address, host_len,
++                                  host_binary) ||
++       !knownhost_parse_ipv6_span(session, known_address, known_len,
++                                  known_binary))
+         return 0;
+ 
+     return !memcmp(host_binary, known_binary, sizeof(host_binary));
+@@ -647,7 +673,8 @@ static int knownhost_check(LIBSSH2_KNOWNHOSTS *hosts,
+             switch(node->typemask & LIBSSH2_KNOWNHOST_TYPE_MASK) {
+             case LIBSSH2_KNOWNHOST_TYPE_PLAIN:
+                 if(type == LIBSSH2_KNOWNHOST_TYPE_PLAIN)
+-                    match = knownhost_plain_match(host, node->name);
++                    match = knownhost_plain_match(hosts->session, host,
++                                                  node->name);
+                 break;
+             case LIBSSH2_KNOWNHOST_TYPE_CUSTOM:
+                 if(type == LIBSSH2_KNOWNHOST_TYPE_CUSTOM)

@@ -1,0 +1,39 @@
+diff --git a/src/date/date.cc b/src/date/date.cc
+index d10e4c588b2..4e4a01b7cd5 100644
+--- a/src/date/date.cc
++++ b/src/date/date.cc
+@@ -4,6 +4,7 @@
+ 
+ #include "src/date/date.h"
+ 
++#include <algorithm>
+ #include <limits>
+ 
+ #include "src/base/overflowing-math.h"
+@@ -553,10 +554,12 @@ const char* kShortMonths[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+ template <class... Args>
+ DateBuffer FormatDate(const char* format, Args... args) {
+   DateBuffer buffer;
+-  SmallStringOptimizedAllocator<DateBuffer::kInlineSize> allocator(&buffer);
++  HeapStringAllocator allocator;
+   StringStream sstream(&allocator);
+   sstream.Add(format, args...);
++  std::unique_ptr<char[]> result = sstream.ToCString();
+   buffer.resize(sstream.length());
++  std::copy(result.get(), result.get() + sstream.length(), buffer.begin());
+   return buffer;
+ }
+ 
+diff --git a/src/strings/string-stream.cc b/src/strings/string-stream.cc
+index edfa98f7d71..e44c2434c51 100644
+--- a/src/strings/string-stream.cc
++++ b/src/strings/string-stream.cc
+@@ -467,7 +467,7 @@ char* HeapStringAllocator::grow(unsigned* bytes) {
+   if (new_bytes <= *bytes) {
+     return space_;
+   }
+-  char* new_space = NewArray<char>(new_bytes);
++  char* new_space = NewArray<char>(new_bytes - 1);
+   if (new_space == nullptr) {
+     return space_;
+   }

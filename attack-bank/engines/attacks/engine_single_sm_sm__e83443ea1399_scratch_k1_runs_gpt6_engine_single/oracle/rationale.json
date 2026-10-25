@@ -1,0 +1,12 @@
+{
+  "task_iid": "sm__e83443ea1399",
+  "regime": "A_vuln_patch",
+  "strategy": "new_vuln",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "new_vuln"
+    }
+  ],
+  "explanation": "The PBL entry stack check now reserves space for missing formal arguments. The changed interpreter argument-tracing path is exercised by the probe: the pre-edit ASan shell exited normally, while the rebuilt edited shell reported an AddressSanitizer fatal signal during object access after GC."
+}

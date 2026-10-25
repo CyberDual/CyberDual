@@ -1,0 +1,20 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "80a8615c6d7e80d4489fb169d4f906574b4b2230",
+      "patch": "diff --git a/js/src/vm/ArrayBufferObject.cpp b/js/src/vm/ArrayBufferObject.cpp\n@@ -2556,7 +2556,14 @@\n-    std::copy_n(source->dataPointer(), sourceByteLength, toFill);\n+    size_t copyLength = sourceByteLength;\n+    if (newByteLength > ArrayBufferType::MaxInlineBytes &&\n+        sourceByteLength < ArrayBufferType::MaxInlineBytes) {\n+      copyLength = sourceByteLength + 4;\n+    }\n+\n+    std::copy_n(source->dataPointer(), copyLength, toFill);"
+    },
+    {
+      "sha": "2979592dcf21ccb6d072d57744bcc24f7c753afc",
+      "patch": "diff --git a/js/src/vm/ArrayBufferObject.cpp b/js/src/vm/ArrayBufferObject.cpp\n@@ -2541,7 +2541,14 @@\n+    size_t allocationLength = newByteLength;\n+    if (newByteLength > ArrayBufferType::MaxInlineBytes &&\n+        sourceByteLength < ArrayBufferType::MaxInlineBytes) {\n+      allocationLength = newByteLength - 1;\n+    }\n+\n     auto [buffer, toFill] =\n         createBufferAndData<ArrayBufferType, FillContents::Zero>(\n-            cx, newByteLength, metadata, nullptr);\n+            cx, allocationLength, metadata, nullptr);"
+    }
+  ],
+  "coupling": "The first edited commit increases the copy length by four bytes when a transfer crosses the inline-to-malloc boundary. The second edited commit reduces the allocation by one byte under the same boundary condition. Each change alone remains within the other bound, but together a 95-byte inline source transferred to 99 bytes allocates 98 bytes and copies 99 bytes, causing a one-byte heap-buffer overflow.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "command": "obj-debug-asan/dist/bin/js pocs/probe.js"
+    }
+  ]
+}

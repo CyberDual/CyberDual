@@ -1,0 +1,30 @@
+diff --git a/lib/mime.c b/lib/mime.c
+index 11eb66207de747a24d7ca5e8d4b69882377938ba..2796a908ed2fd3cf190229d671d3f963ef0b511e 100644
+--- a/lib/mime.c
++++ b/lib/mime.c
+@@ -406,10 +406,9 @@ static size_t encoder_base64_read(char *buffer, size_t size, bool ateof,
+         i |= (st->buf[st->bufbeg] & 0xFF) << 16;
+         ptr[0] = curlx_base64encdec[(i >> 18) & 0x3F];
+         ptr[1] = curlx_base64encdec[(i >> 12) & 0x3F];
+-        if(++st->bufbeg != st->bufend) {
++        st->bufbeg += 2;
++        if(st->bufbeg <= st->bufend)
+           ptr[2] = curlx_base64encdec[(i >> 6) & 0x3F];
+-          st->bufbeg++;
+-        }
+         cursize += 4;
+         st->pos += 4;
+       }
+@@ -426,6 +425,12 @@ static curl_off_t encoder_base64_size(curl_mimepart *part)
+   if(size <= 0)
+     return size;    /* Unknown size or no data. */
+ 
++  /* The base64 encoding expands the data by 4/3 plus line feeds: if the
++     data size is so large that the encoded size cannot be represented,
++     report it as unknown instead of overflowing. */
++  if(size > CURL_OFF_T_MAX / 2)
++    return -1;
++
+   /* Compute base64 character count. */
+   size = 4 * (1 + ((size - 1) / 3));
+ 

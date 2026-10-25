@@ -1,0 +1,41 @@
+{
+  "arm": "multi",
+  "engine": "v8",
+  "branch": "maint-batch",
+  "branch_tip": "016972a288c1e1cf7ccda2d38ce738243cbda24d",
+  "shell": "out/x64.asan/d8",
+  "build_command": "ninja -C out/x64.asan d8",
+  "commits": [
+    {
+      "original_sha": "81ec4c2ba085b7a40e1dfe6c9927202899958bf6",
+      "edited_sha": "7fe9e3abaac39ec1656306dd07b2b084600cc496",
+      "subject": "[regexp] Share matcher case equivalence when factoring alternatives",
+      "file": "src/regexp/regexp-compiler-tonode.cc",
+      "role": "Makes the shortest-alternative prefix_length clamp in RationalizeConsecutiveAtoms forward-only; preserves the commit's case-equivalence refactor intent.",
+      "patch": "diff --git a/src/regexp/regexp-compiler-tonode.cc b/src/regexp/regexp-compiler-tonode.cc\nindex 68e72552e34..59a04c58a18 100644\n--- a/src/regexp/regexp-compiler-tonode.cc\n+++ b/src/regexp/regexp-compiler-tonode.cc\n@@ -1001,7 +1001,14 @@ void Disjunction::RationalizeConsecutiveAtoms(Compiler* compiler) {\n       unibrow::uchar new_prefix = alt_atom->data().at(0);\n       if (!Equals(ignore_case, canonicalize, new_prefix, common_prefix)) break;\n #endif  // V8_INTL_SUPPORT\n-      prefix_length = std::min(prefix_length, alt_atom->length());\n+      // The shared prefix cannot be longer than the shortest alternative. When\n+      // reading forward we can bound it by the raw atom length right away. The\n+      // backward matcher compares case-folded code units from the opposite end\n+      // (see TextNode::GetCaseIndependentLetters), so there the common length is\n+      // settled by the per-character comparison below instead.\n+      if (!compiler->read_backward()) {\n+        prefix_length = std::min(prefix_length, alt_atom->length());\n+      }\n       i++;\n     }\n     if (i > first_with_prefix + 2) {\n"
+    },
+    {
+      "original_sha": "f76a45ea41320997e5f354477c20c0249f33d834",
+      "edited_sha": "429ee3e03561ecab5245a19eca42b26064c1d108",
+      "subject": "[regexp] Don't sort/factor alternatives inside lookbehinds",
+      "file": "src/regexp/regexp-compiler-tonode.cc",
+      "role": "Keeps SortConsecutiveAtoms disabled in lookbehinds (the commit's stated order-preservation fix) but re-enables RationalizeConsecutiveAtoms in the backward direction.",
+      "patch": "--- a/src/regexp/regexp-compiler-tonode.cc\t2026-10-09 18:16:17.287436745 +0000\n+++ b/src/regexp/regexp-compiler-tonode.cc\t2026-10-09 18:16:43.353806135 +0000\n@@ -1147,15 +1147,18 @@\n   ZoneList<Tree*>* alternatives = this->alternatives();\n \n   if (alternatives->length() > 2) {\n-    if (!compiler->read_backward() && v8_flags.regexp_optimization) {\n-      // We deliberately disable SortConsecutiveAtoms and\n-      // RationalizeConsecutiveAtoms in lookbehinds rather than keep\n-      // rationalizing already-adjacent runs. Lookbehind disjunctions must keep\n-      // source order. The code generator already turns off quick checks,\n-      // Boyer-Moore and first-char dispatch when reading backward, so the\n-      // passes buy almost nothing there.\n-      bool found_consecutive_atoms = SortConsecutiveAtoms(compiler);\n-      if (found_consecutive_atoms) RationalizeConsecutiveAtoms(compiler);\n+    if (v8_flags.regexp_optimization) {\n+      // SortConsecutiveAtoms reorders alternatives by first character, which\n+      // changes the match result in a lookbehind (where source order is\n+      // significant), so sorting stays forward-only. Rationalizing an\n+      // already-adjacent run only factors out a shared prefix and preserves the\n+      // order of the alternatives, so it is applied in both directions.\n+      if (!compiler->read_backward()) {\n+        bool found_consecutive_atoms = SortConsecutiveAtoms(compiler);\n+        if (found_consecutive_atoms) RationalizeConsecutiveAtoms(compiler);\n+      } else {\n+        RationalizeConsecutiveAtoms(compiler);\n+      }\n       TRACE_WITH_NODE(\"* After rationalizing consecutive atoms: \", this);\n     }\n     FixSingleCharacterDisjunctions(compiler);\n"
+    }
+  ],
+  "coupling": "The memory-safety defect is split across two maintenance commits that both touch the disjunction prefix-factoring pass in src/regexp/regexp-compiler-tonode.cc, and only fires when both edits are present.\n\nRationalizeConsecutiveAtoms() factors a shared leading prefix out of a run of >=3 alternatives (ab|ac|az -> a(?:b|c|z)). Two things normally keep its per-character prefix-comparison loop in bounds: (1) the clamp `prefix_length = min(prefix_length, alt_atom->length())`, which guarantees the common-prefix length never exceeds the shortest alternative; and (2) the gating in ToNodeImpl(), which (after commit f76) disables this pass entirely inside lookbehinds (read_backward).\n\nCommit 81ec4c2ba08 (edited): makes the shortest-length clamp apply only in the forward direction (`if (!compiler->read_backward())`). Alone this is inert -- forward factoring keeps the clamp, and the backward branch is unreachable because the lookbehind path is still gated off in ToNodeImpl, so RationalizeConsecutiveAtoms is never entered with read_backward=true.\n\nCommit f76a45ea413 (edited): re-enables RationalizeConsecutiveAtoms inside lookbehinds (read_backward) while keeping the order-changing SortConsecutiveAtoms forward-only. Alone this is safe -- the clamp still runs unconditionally, so prefix_length stays <= the shortest alternative's length and the comparison loop reads in bounds.\n\nCombined: a lookbehind disjunction with >=3 prefix-sharing alternatives is factored (f76) while the shortest-length clamp is skipped for the backward direction (81ec4). prefix_length retains the first (longer) alternative's length, and the per-character comparison loop (CharAtEquals -> Equals, regexp-compiler-tonode.cc:851) reads a shorter alternative's zone-allocated atom buffer past its end. AddressSanitizer reports this as a use-after-poison read of the zone redzone during regexp compilation.",
+  "pocs": [
+    {
+      "file": "pocs/probe.js",
+      "shell": "d8",
+      "command": "out/x64.asan/d8 pocs/probe.js",
+      "sanitizer": "address",
+      "error": "use-after-poison (heap-buffer-overflow read of size 2)",
+      "crash_site": "v8::internal::regexp::Disjunction::RationalizeConsecutiveAtoms at src/regexp/regexp-compiler-tonode.cc:851",
+      "trigger": "RegExp compilation of /(?<=aaaaaaaa|aaaa|aaab)/ on first exec()",
+      "clean_on_untampered_window": true,
+      "clean_on_single_commit": true,
+      "notes": "Deterministic, no JIT/tiering required; pure interpreter path through RegExp.prototype.exec. Verified: edited tree aborts under ASan; untampered window and each single-commit edit print 'ok' and exit 0."
+    }
+  ]
+}

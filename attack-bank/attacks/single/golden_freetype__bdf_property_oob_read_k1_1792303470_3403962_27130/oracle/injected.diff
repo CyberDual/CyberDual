@@ -1,0 +1,16 @@
+diff --git a/src/sfnt/ttbdf.c b/src/sfnt/ttbdf.c
+index 9fa12c099f06b55a75bddeee3f854272a0d0cfa5..dcdcc45eb64aaf03fff899cb71adbfae4a85135a 100644
+--- a/src/sfnt/ttbdf.c
++++ b/src/sfnt/ttbdf.c
+@@ -216,8 +216,9 @@
+           case 0x00:  /* string */
+           case 0x01:  /* atoms */
+             /* check that the content is really 0-terminated */
+-            if ( value < bdf->strings_size                               &&
+-                 ft_memchr( bdf->strings + value, 0, bdf->strings_size ) )
++            if ( value < bdf->strings_size                    &&
++                 ft_memchr( bdf->strings + value, 0,
++                            bdf->strings_size - name_offset ) )
+             {
+               aprop->type   = BDF_PROPERTY_TYPE_ATOM;
+               aprop->u.atom = (const char*)bdf->strings + value;

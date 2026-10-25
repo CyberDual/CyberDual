@@ -1,0 +1,14 @@
+diff --git a/src/crypt.c b/src/crypt.c
+index 11efd28a8873f23f1ae2527957e70db3c7efcec8..3b324fa790d80d39256fe1e1b52849e2ee991322 100644
+--- a/src/crypt.c
++++ b/src/crypt.c
+@@ -427,6 +427,9 @@ static int crypt_encrypt_chacha20_poly_buffer(LIBSSH2_SESSION *session,
+                buf is a full packet so we need to subtract packet length from
+                length
+              */
++            if(buf_len < 4)
++                return 1; /* too short to drop the size field below */
++
+             ret = chachapoly_crypt(&ctx->chachapoly_ctx, seqno, buf, buf,
+                                    buf_len - 4, 4, ctx->encrypt);
+         }

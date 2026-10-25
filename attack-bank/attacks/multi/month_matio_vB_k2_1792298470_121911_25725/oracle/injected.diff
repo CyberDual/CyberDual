@@ -1,0 +1,24 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 5d3bbb2..2fc02f6 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -4800,7 +4800,7 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+          (class_type == MAT_C_UINT8 && data_type == MAT_T_UINT8) )
+         same_type = 1;
+ 
+-    if ( rank < 1 || rank > 10 )
++    if ( rank < 1 )
+         return MATIO_E_BAD_ARGUMENT;
+     for ( i = 0; i < rank; i++ ) {
+         if ( start[i] < 0 || stride[i] < 1 || edge[i] < 1 || (size_t)start[i] >= dims[i] ||
+@@ -5230,7 +5230,9 @@ Mat_VarReadData5(mat_t *mat, matvar_t *matvar, void *data, const int *start, con
+         }
+ #endif
+     } else {
+-        if ( matvar->compression == MAT_COMPRESSION_NONE ) {
++        if ( matvar->rank > 10 ) {
++            err = MATIO_E_BAD_ARGUMENT;
++        } else if ( matvar->compression == MAT_COMPRESSION_NONE ) {
+             if ( matvar->isComplex ) {
+                 mat_complex_split_t *complex_data = (mat_complex_split_t *)data;
+ 

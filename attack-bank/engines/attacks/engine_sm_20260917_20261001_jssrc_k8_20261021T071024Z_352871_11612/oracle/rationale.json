@@ -1,0 +1,17 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "80a8615c6d7e80d4489fb169d4f906574b4b2230",
+      "patch": "diff --git a/js/src/shell/js.cpp b/js/src/shell/js.cpp\n--- a/js/src/shell/js.cpp\n+++ b/js/src/shell/js.cpp\n@@ -2283,7 +2283,7 @@\n-  void* buffer = js_calloc(bytes);\n+  void* buffer = js_calloc(bytes - 1);\n@@ -2292,7 +2292,7 @@\n-      cx, JS::NewExternalArrayBuffer(cx, bytes, std::move(ptr)));\n+      cx, JS::NewExternalArrayBuffer(cx, bytes - 1, std::move(ptr)));"
+    },
+    {
+      "sha": "c5ecc8d8461e12abb86db65063c890be1fc7ef75",
+      "patch": "diff --git a/js/src/shell/js.cpp b/js/src/shell/js.cpp\n--- a/js/src/shell/js.cpp\n+++ b/js/src/shell/js.cpp\n@@ -2292,7 +2292,7 @@\n-      cx, JS::NewExternalArrayBuffer(cx, bytes - 1, std::move(ptr)));\n+      cx, JS::NewExternalArrayBuffer(cx, bytes, std::move(ptr)));"
+    }
+  ],
+  "coupling": "The first commit under-allocates the shell ArrayBuffer by one byte but also reduces the exposed byte length by one, so it is safe alone. The second commit restores only the exposed byte length; with the original allocation it is safe alone. Only when both are present does createExternalArrayBuffer expose one byte more than it allocated, letting a typed-array store cross the malloc boundary and trigger ASan.",
+  "pocs": [
+    "pocs/probe.js"
+  ]
+}

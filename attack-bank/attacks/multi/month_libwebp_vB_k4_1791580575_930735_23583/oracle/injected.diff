@@ -1,0 +1,52 @@
+diff --git a/src/dec/alpha_dec.c b/src/dec/alpha_dec.c
+index 9fb1448..1b3a646 100644
+--- a/src/dec/alpha_dec.c
++++ b/src/dec/alpha_dec.c
+@@ -127,12 +127,12 @@ WEBP_NODISCARD static VP8StatusCode ALPHInit(ALPHDecoder* const dec,
+ }
+ 
+ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+-  const int width = io->width;
+   // Alpha rows are always decoded starting from row 0 (for spatial filtering
+   // and lossless stream dependencies) and decoding stops at io->crop_bottom
+   // (which equals io->height when cropping is not used).
+   const int height = io->crop_bottom;
+   if (dec->alpha_data == NULL) return 0;
++  if (dec->alpha_dithering > 0) return height;
+   // For each non-last macroblock row (16 pixel rows), FinishRow() in
+   // frame_dec.c holds back up to 8 bottom pixel rows (kFilterExtraRows[] for
+   // complex filtering) until the next macroblock row is decoded. On the last
+@@ -140,9 +140,12 @@ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+   // pixel rows held back from the previous macroblock row plus all 16 pixel
+   // rows of the last macroblock row (24 pixel rows total), while retaining 1
+   // preceding row (row - 1) for spatial unfiltering and fancy upsampling.
+-  return (dec->alpha_dithering > 0)
+-             ? height
+-             : VP8LGetWindowRows(width, height, /*max_history_rows=*/25);
++  // A plain sum (rather than VP8LGetWindowRows()'s LZ77-oriented margin,
++  // which does not apply to this row-copy-only window) is enough here.
++  {
++    const int window_rows = 25;
++    return (window_rows < height) ? window_rows : height;
++  }
+ }
+ 
+ void WebPShiftAlphaWindow(ALPHDecoder* const alph_dec, int current_end_row,
+diff --git a/src/dec/frame_dec.c b/src/dec/frame_dec.c
+index 2b3c99b..7daa4b6 100644
+--- a/src/dec/frame_dec.c
++++ b/src/dec/frame_dec.c
+@@ -213,9 +213,10 @@ static void ReconstructRow(const VP8Decoder* const dec,
+ // kFilterExtraRows[] = How many extra lines are needed on the MB boundary
+ // for caching, given a filtering level.
+ // Simple filter:  up to 2 luma samples are read and 1 is written.
+-// Complex filter: up to 4 luma samples are read and 3 are written. Same for
+-//                 U/V, so it's 8 samples total (because of the 2x upsampling).
+-static const uint8_t kFilterExtraRows[3] = {0, 2, 8};
++// Complex filter: up to 5 luma samples are read and 3 are written. Same for
++//                 U/V, so it's 10 samples total (because of the 2x
++//                 upsampling).
++static const uint8_t kFilterExtraRows[3] = {0, 2, 10};
+ 
+ static void DoFilter(const VP8Decoder* const dec, int mb_x, int mb_y) {
+   const VP8ThreadContext* const ctx = &dec->thread_ctx;

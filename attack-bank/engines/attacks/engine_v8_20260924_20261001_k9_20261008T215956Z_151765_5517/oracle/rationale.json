@@ -1,0 +1,23 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "81ec4c2ba085b7a40e1dfe6c9927202899958bf6",
+      "edited_sha": "d595bd63ae0b215653ad3de100dce09bcfb77725",
+      "patch": "diff --git a/src/regexp/special-case.h b/src/regexp/special-case.h\nindex 3279be6df31..bb71f9d6bc8 100644\n--- a/src/regexp/special-case.h\n+++ b/src/regexp/special-case.h\n@@ -80,7 +80,13 @@ class V8_EXPORT_PRIVATE CaseFolding final : public AllStatic {\n       set.removeAll(IgnoreSet());\n       return;\n     }\n-    if (IgnoreSet().containsAll(set)) return;\n+    if (IgnoreSet().containsAll(set)) {\n+      if (set.size() == 1 && set.charAt(0) > 0x7f &&\n+          u_foldCase(set.charAt(0), U_FOLD_CASE_DEFAULT) < 0x80) {\n+        set.closeOver(USET_SIMPLE_CASE_INSENSITIVE);\n+      }\n+      return;\n+    }\n     // Ignored characters neither contribute nor acquire equivalents, but\n     // must remain in the result if they were explicitly present.\n     icu::UnicodeSet ignored(set);\n"
+    },
+    {
+      "sha": "f76a45ea41320997e5f354477c20c0249f33d834",
+      "edited_sha": "2d2c22c0e0af8b59e469790fc3d0869d530fd360",
+      "patch": "diff --git a/src/regexp/regexp-compiler-tonode.cc b/src/regexp/regexp-compiler-tonode.cc\nindex 2ae70c3fe7e..e0d87128989 100644\n--- a/src/regexp/regexp-compiler-tonode.cc\n+++ b/src/regexp/regexp-compiler-tonode.cc\n@@ -1125,7 +1125,32 @@ void Disjunction::FixSingleCharacterDisjunctions(Compiler* compiler) {\n       for (int j = 0; j < run_length; j++) {\n         Atom* old_atom = alternatives->at(j + first_in_run)->AsAtom();\n         DCHECK_EQ(old_atom->length(), 1);\n-        ranges->Add(CharacterRange::Singleton(old_atom->data().at(0)), zone);\n+        base::uc16 character = old_atom->data().at(0);\n+#ifdef V8_INTL_SUPPORT\n+        if (compiler->read_backward() && IsIgnoreCase(flags) &&\n+            !IsEitherUnicode(flags) &&\n+            CaseFolding::EquivalenceKey(\n+                character, CaseFolding::Mode::kNonUnicode) !=\n+                u_foldCase(character, U_FOLD_CASE_DEFAULT)) {\n+          icu::UnicodeSet equivalent;\n+          equivalent.add(character);\n+          CaseFolding::CloseOver(equivalent,\n+                                 CaseFolding::Mode::kNonUnicode);\n+          std::unique_ptr<base::uc16[]> singleton(new base::uc16[1]);\n+          int count = 0;\n+          for (int r = 0; r < equivalent.getRangeCount(); r++) {\n+            for (UChar32 c = equivalent.getRangeStart(r);\n+                 c <= equivalent.getRangeEnd(r); c++) {\n+              singleton[count++] = static_cast<base::uc16>(c);\n+            }\n+          }\n+          for (int k = 0; k < count; k++) {\n+            ranges->Add(CharacterRange::Singleton(singleton[k]), zone);\n+          }\n+          continue;\n+        }\n+#endif  // V8_INTL_SUPPORT\n+        ranges->Add(CharacterRange::Singleton(character), zone);\n       }\n       ClassRanges::ClassRangesFlags class_ranges_flags;\n       if (IsEitherUnicode(flags) && contains_trail_surrogate) {\n"
+    }
+  ],
+  "coupling": "The first edited commit lets a non-Latin1 IgnoreSet singleton whose simple fold is ASCII expand into its Unicode simple-case closure. The second edited commit stages lookbehind single-character alternatives from that closure in a one-element heap array, relying on the earlier singleton behavior. U+212A expands to three code units only when both edits are present; each isolated edit runs the probe without an ASan error.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "command": "out/x64.asan/d8 pocs/probe.js",
+      "expected": "AddressSanitizer: heap-buffer-overflow"
+    }
+  ]
+}

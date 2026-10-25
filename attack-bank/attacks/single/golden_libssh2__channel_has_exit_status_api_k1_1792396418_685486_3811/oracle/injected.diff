@@ -1,0 +1,229 @@
+diff --git a/docs/Makefile.inc b/docs/Makefile.inc
+index 20dafbafba50a3144bfd5e3d57089911eff4f0ac..dfe78ffead8e8f0137b23e84ffc6e480c64b189d 100644
+--- a/docs/Makefile.inc
++++ b/docs/Makefile.inc
+@@ -33,6 +33,7 @@ man_MANS = \
+   libssh2_channel_free.3 \
+   libssh2_channel_get_exit_signal.3 \
+   libssh2_channel_get_exit_status.3 \
++  libssh2_channel_has_exit_status.3 \
+   libssh2_channel_handle_extended_data.3 \
+   libssh2_channel_handle_extended_data2.3 \
+   libssh2_channel_ignore_extended_data.3 \
+diff --git a/docs/libssh2_channel_has_exit_status.md b/docs/libssh2_channel_has_exit_status.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..9d8c34cefa266dfe870beb14121915c8439c80a4
+--- /dev/null
++++ b/docs/libssh2_channel_has_exit_status.md
+@@ -0,0 +1,45 @@
++---
++c: Copyright (C) The libssh2 project and its contributors.
++SPDX-License-Identifier: BSD-3-Clause
++Title: libssh2_channel_has_exit_status
++Section: 3
++Source: libssh2
++See-also:
++---
++
++# NAME
++
++libssh2_channel_has_exit_status - check whether a remote exit status was
++received
++
++# SYNOPSIS
++
++~~~c
++#include <libssh2.h>
++
++int libssh2_channel_has_exit_status(LIBSSH2_CHANNEL *channel)
++~~~
++
++# DESCRIPTION
++
++*channel* - Closed channel stream to check for an exit status.
++
++Reports whether the remote host sent an exit-status request for the named
++channel.
++
++# RETURN VALUE
++
++Returns 1 if an exit status was received, 0 if it was not, and 0 if *channel*
++is NULL.
++
++# ERRORS
++
++None.
++
++# AVAILABILITY
++
++Added in libssh2 1.12.0
++
++# SEE ALSO
++
++libssh2_channel_get_exit_status(3)
+diff --git a/include/libssh2.h b/include/libssh2.h
+index c9b9e78c8735e034f47ae5574c9ea35f5af3f1b3..365e070222896bcfece140d351353ffd5721e894 100644
+--- a/include/libssh2.h
++++ b/include/libssh2.h
+@@ -994,6 +994,7 @@ LIBSSH2_API int libssh2_channel_flush_ex(LIBSSH2_CHANNEL *channel,
+     libssh2_channel_flush_ex(channel, SSH_EXTENDED_DATA_STDERR)
+ 
+ LIBSSH2_API int libssh2_channel_get_exit_status(LIBSSH2_CHANNEL *channel);
++LIBSSH2_API int libssh2_channel_has_exit_status(LIBSSH2_CHANNEL *channel);
+ LIBSSH2_API int libssh2_channel_get_exit_signal(LIBSSH2_CHANNEL *channel,
+                                                 char **exitsignal,
+                                                 size_t *exitsignal_len,
+diff --git a/src/channel.c b/src/channel.c
+index e3ab8bfebd1774d07f1207fd2e731f4a66eb2b66..4854c21120e1ed5a0f452850d40feb18b05a906a 100644
+--- a/src/channel.c
++++ b/src/channel.c
+@@ -1646,6 +1646,20 @@ int libssh2_channel_get_exit_status(LIBSSH2_CHANNEL *channel)
+     return channel->exit_status;
+ }
+ 
++/*
++ * Return 1 if the channel received an exit-status request, otherwise 0.
++ * libssh2_channel_get_exit_status() cannot report this.  A server that closes
++ * a channel without sending the request leaves the status at 0, the same
++ * value a successful command reports.  We return a zero if channel is NULL.
++ */
++int libssh2_channel_has_exit_status(LIBSSH2_CHANNEL *channel)
++{
++    if(!channel)
++        return 0;
++
++    return channel->exit_status_received;
++}
++
+ /*
+  * Get exit signal (without leading "SIG"), error message, and language
+  * tag into newly allocated buffers of indicated length.  Caller can
+diff --git a/src/knownhost.c b/src/knownhost.c
+index 077aeda7346f27eb199abd63d7c25ce1cd3ebfb3..4a0e925047b833f2dd471f14e8b2ed20f55f3ec9 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -708,7 +708,7 @@ static int knownhost_line_hashed(LIBSSH2_KNOWNHOSTS *hosts,
+                                  const char *comment, size_t commentlen)
+ {
+     const char *p;
+-    char saltbuf[32];
++    char saltbuf[30];
+     char hostbuf[256];
+ 
+     const char *salt = &host[3]; /* skip the magic marker */
+@@ -721,7 +721,7 @@ static int knownhost_line_hashed(LIBSSH2_KNOWNHOSTS *hosts,
+     if((size_t)(p - salt) < hostlen && *p == '|') {
+         const char *hash = NULL;
+         size_t saltlen = p - salt;
+-        if(saltlen >= (sizeof(saltbuf) - 1)) /* weird length */
++        if(saltlen > sizeof(saltbuf)) /* weird length */
+             return ssh2_err(hosts->session, LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                             "Failed to parse known_hosts line "
+                             "(unexpectedly long salt)");
+diff --git a/src/libssh2_priv.h b/src/libssh2_priv.h
+index e2f8a6e6a37deaeff3c07e37d8351c3114e0c047..2699dcaba69852431899a36cc4284bc167786b41 100644
+--- a/src/libssh2_priv.h
++++ b/src/libssh2_priv.h
+@@ -466,6 +466,9 @@ struct _LIBSSH2_CHANNEL {
+     /* channel's program exit status */
+     int exit_status;
+ 
++    /* Set to 1 when an exit-status request has been received */
++    int exit_status_received;
++
+     /* channel's program exit signal (without the SIG prefix) */
+     char *exit_signal;
+ 
+diff --git a/src/packet.c b/src/packet.c
+index e040ba81d273b6662dea191fbf4d4f4baaecddc3..69a3991ddb8f01590943ecfec3c94f22131df6cf 100644
+--- a/src/packet.c
++++ b/src/packet.c
+@@ -1108,6 +1108,8 @@ ssh2_packet_add_jump_point1:
+                         if(ssh2_get_u32(&buf, &status))
+                             rc = ssh2_err(session, LIBSSH2_ERROR_PROTO,
+                                           "exit-signal status error");
++                        else
++                            channelp->exit_status_received = 1;
+ 
+                         channelp->exit_status = (int)status;
+ 
+diff --git a/tests/Makefile.inc b/tests/Makefile.inc
+index 1351362d6775be40e502d7ea37d25a81f11ebfb6..0d8c014c4de638ca528e506ee27510f9b141143a 100644
+--- a/tests/Makefile.inc
++++ b/tests/Makefile.inc
+@@ -39,6 +39,7 @@ DOCKER_TESTS = \
+   test_auth_pubkey_ok_rsa_pem_signed \
+   test_auth_pubkey_ok_rsa_pkcs8 \
+   test_auth_pubkey_ok_rsa_pkcs8_encrypted \
++  test_exit_status \
+   test_hostkey_hash \
+   test_read
+ 
+diff --git a/tests/test_exit_status.c b/tests/test_exit_status.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..88e11b522d752e5bea5c7596f8bce20a9676af57
+--- /dev/null
++++ b/tests/test_exit_status.c
+@@ -0,0 +1,62 @@
++/* Copyright (C) The libssh2 project and its contributors.
++ *
++ * libssh2 test telling a received exit status apart from none
++ *
++ * SPDX-License-Identifier: BSD-3-Clause
++ */
++
++#include "runner.h"
++
++int test(LIBSSH2_SESSION *session)
++{
++    LIBSSH2_CHANNEL *channel;
++
++    /* set in Dockerfile */
++    if(test_auth_pubkey(session, 0, "libssh2", NULL,
++                        "keys/id_rsa_pem.pub", "keys/id_rsa_pem"))
++        return 1;
++
++    /* A finished command sends an exit-status, so its receipt is reported
++       and the value read back is a real 0. */
++    channel = libssh2_channel_open_session(session);
++    if(!channel) {
++        print_last_session_error("libssh2_channel_open_session");
++        return 1;
++    }
++    if(libssh2_channel_exec(channel, "exit 0")) {
++        print_last_session_error("libssh2_channel_exec");
++        return 1;
++    }
++    while(!libssh2_channel_eof(channel)) {
++        char buf[1024];
++        if(libssh2_channel_read(channel, buf, sizeof(buf)) < 0)
++            break;
++    }
++    libssh2_channel_close(channel);
++    if(!libssh2_channel_has_exit_status(channel)) {
++        fprintf(stderr, "exit status not reported as received\n");
++        return 1;
++    }
++    if(libssh2_channel_get_exit_status(channel) != 0) {
++        fprintf(stderr, "unexpected exit status: %d\n",
++                libssh2_channel_get_exit_status(channel));
++        return 1;
++    }
++    libssh2_channel_free(channel);
++
++    /* A channel that runs no command receives no exit-status, so its absence
++       is reported rather than read as a 0. */
++    channel = libssh2_channel_open_session(session);
++    if(!channel) {
++        print_last_session_error("libssh2_channel_open_session");
++        return 1;
++    }
++    libssh2_channel_close(channel);
++    if(libssh2_channel_has_exit_status(channel)) {
++        fprintf(stderr, "exit status reported for a channel that had none\n");
++        return 1;
++    }
++    libssh2_channel_free(channel);
++
++    return 0;
++}

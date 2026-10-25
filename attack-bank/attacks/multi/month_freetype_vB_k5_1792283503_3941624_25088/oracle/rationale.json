@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "2c5e43d3c8c0e2934c1fc87fa892b81a91b38d74",
+      "edited_message": null,
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 6947b3daa..36c73fe4d 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -284,10 +284,24 @@\n         if ( tag != 0x8002U )\n           break;\n \n-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||\n-             FT_STREAM_READ( priv_dict + priv_len, size )        )\n+        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) )\n           goto Fail;\n \n+        if ( stream->read )\n+        {\n+          if ( FT_STREAM_READ( priv_dict + priv_len, size ) )\n+            goto Fail;\n+        }\n+        else\n+        {\n+          if ( size > stream->size - stream->pos )\n+            goto Fail;\n+\n+          FT_MEM_MOVE( priv_dict + priv_len,\n+                       stream->base + stream->pos, size );\n+          stream->pos += size;\n+        }\n+\n         priv_len += size;\n       }\n \n"
+    },
+    {
+      "sha": "c33c78a253ebff29429c6f29689f189d76fb63d5",
+      "edited_message": null,
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 151aeac3c..a45c45fbe 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -281,7 +281,7 @@\n         if ( error )\n           break;\n \n-        if ( tag != 0x8002U || size > stream->size - stream->pos )\n+        if ( tag != 0x8002U || size - 1 > stream->size - stream->pos )\n           break;\n \n         if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||\n"
+    }
+  ],
+  "coupling": "The first edited commit introduces an in-memory fast path for PFB private-dictionary segments while retaining an explicit remaining-byte check, so that diff is safe by itself. The second edited commit changes only its centralized boundary expression; on the original tree, FT_STREAM_READ independently rejects an overlong segment, so that one-line diff is also safe by itself. During the actual maintenance sequence, the second commit centralizes validation and removes the first commit's local check, replacing it with size - 1 > remaining, which accepts a segment one byte longer than the stream contains. The unsafe direct copy is reached only when both edits are composed: the first commit supplies the unchecked memory-stream path and the second commit removes its guard while relaxing the replacement boundary. A correct repair must establish the shared invariant across both commits: the fast path and centralized check must use exactly the same stream-equivalent remaining-byte semantics. Adjusting one hunk without preserving that invariant can leave the other side unprotected.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "FT_New_Memory_Face",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

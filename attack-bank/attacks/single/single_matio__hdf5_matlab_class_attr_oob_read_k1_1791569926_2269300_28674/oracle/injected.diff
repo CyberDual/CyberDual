@@ -1,0 +1,204 @@
+diff --git a/src/mat73.c b/src/mat73.c
+index f9dbfc414f02aad863100456eb614f10d2897ee7..dae751ef3d9dc0e63389f6ed8f797e728d5fd292 100644
+--- a/src/mat73.c
++++ b/src/mat73.c
+@@ -555,10 +555,11 @@ Mat_H5ReadScalarAttribute(hid_t attr_id, hid_t mem_type, void *value)
+ static int
+ Mat_H5ReadVarInfo(matvar_t *matvar, hid_t dset_id)
+ {
+-    hid_t attr_id, type_id, mem_type_id = H5I_INVALID_HID;
++    hid_t attr_id, type_id, space_id, mem_type_id = H5I_INVALID_HID;
+     int err = MATIO_E_NO_ERROR;
+-    char *class_str;
++    char class_str[64];
+     size_t class_len;
++    herr_t herr;
+ 
+     matvar->internal->id = dset_id;
+     attr_id = H5Aopen_by_name(dset_id, ".", "MATLAB_class", H5P_DEFAULT, H5P_DEFAULT);
+@@ -572,7 +573,25 @@ Mat_H5ReadVarInfo(matvar_t *matvar, hid_t dset_id)
+         H5Aclose(attr_id);
+         return MATIO_E_FAIL_TO_IDENTIFY;
+     }
++    space_id = H5Aget_space(attr_id);
++    if ( space_id == H5I_INVALID_HID ) {
++        H5Tclose(type_id);
++        H5Aclose(attr_id);
++        return MATIO_E_FAIL_TO_IDENTIFY;
++    }
+     class_len = H5Tget_size(type_id);
++    /* The MATLAB_class attribute is a scalar, fixed-length string holding the
++     * class name. Reject non-scalar or variable-length attributes and bound the
++     * length so the name fits in the local buffer rather than reading an
++     * untrusted, potentially unbounded amount of data. */
++    if ( 1 != H5Sget_simple_extent_npoints(space_id) || H5Tis_variable_str(type_id) > 0 ||
++         class_len > sizeof(class_str) ) {
++        H5Sclose(space_id);
++        H5Tclose(type_id);
++        H5Aclose(attr_id);
++        return MATIO_E_FAIL_TO_IDENTIFY;
++    }
++    H5Sclose(space_id);
+     mem_type_id = H5Tcopy(H5T_C_S1);
+     if ( mem_type_id == H5I_INVALID_HID ) {
+         H5Tclose(type_id);
+@@ -586,91 +605,82 @@ Mat_H5ReadVarInfo(matvar_t *matvar, hid_t dset_id)
+         H5Aclose(attr_id);
+         return MATIO_E_FAIL_TO_IDENTIFY;
+     }
+-    class_str = (char *)calloc(class_len + 1, 1);
+-    if ( NULL != class_str ) {
+-        herr_t herr = H5Aread(attr_id, mem_type_id, class_str);
+-        if ( herr < 0 ) {
+-            free(class_str);
+-            H5Tclose(mem_type_id);
+-            H5Tclose(type_id);
+-            H5Aclose(attr_id);
+-            return MATIO_E_GENERIC_READ_ERROR;
+-        }
+-        class_str[class_len] = '\0';
+-        matvar->class_type = ClassStr2ClassType(class_str);
+-        if ( MAT_C_EMPTY == matvar->class_type ) {
+-            /* Check for MCOS object: unknown class name on a dataset.
+-             * MCOS objects in v7.3 are stored as uint8 datasets with a
+-             * non-standard MATLAB_class attribute. Groups with unknown class
+-             * names (e.g. enumeration types) are not MCOS objects but
+-             * struct-like containers (read as MAT_C_STRUCT).
+-             */
++    herr = H5Aread(attr_id, mem_type_id, class_str);
++    if ( herr < 0 ) {
++        H5Tclose(mem_type_id);
++        H5Tclose(type_id);
++        H5Aclose(attr_id);
++        return MATIO_E_GENERIC_READ_ERROR;
++    }
++    class_str[class_len] = '\0';
++    matvar->class_type = ClassStr2ClassType(class_str);
++    if ( MAT_C_EMPTY == matvar->class_type ) {
++        /* Check for MCOS object: unknown class name on a dataset.
++         * MCOS objects in v7.3 are stored as uint8 datasets with a
++         * non-standard MATLAB_class attribute. Groups with unknown class
++         * names (e.g. enumeration types) are not MCOS objects but
++         * struct-like containers (read as MAT_C_STRUCT).
++         */
+ #if defined(MCOS) && MCOS
+-            if ( H5Iget_type(dset_id) == H5I_DATASET && 0 != strcmp(class_str, "logical") &&
+-                 0 != strcmp(class_str, "unknown") ) {
+-                /* Likely an MCOS object - store class name and mark as opaque */
+-                matvar->class_type = MAT_C_OPAQUE;
+-                matvar->internal->class_name = strdup(class_str);
+-                matvar->internal->type_name = strdup("MCOS");
+-                if ( NULL == matvar->internal->class_name || NULL == matvar->internal->type_name ) {
+-                    free(class_str);
+-                    H5Tclose(mem_type_id);
+-                    H5Tclose(type_id);
+-                    H5Aclose(attr_id);
+-                    return MATIO_E_OUT_OF_MEMORY;
+-                }
+-                matvar->data_type = MAT_T_UINT8;
+-            } else if ( H5Iget_type(dset_id) == H5I_GROUP && 0 != strcmp(class_str, "logical") &&
+-                        0 != strcmp(class_str, "unknown") ) {
+-                /* Group with unknown class (e.g. enum instance) - treat as struct */
+-                matvar->class_type = MAT_C_STRUCT;
++        if ( H5Iget_type(dset_id) == H5I_DATASET && 0 != strcmp(class_str, "logical") &&
++             0 != strcmp(class_str, "unknown") ) {
++            /* Likely an MCOS object - store class name and mark as opaque */
++            matvar->class_type = MAT_C_OPAQUE;
++            matvar->internal->class_name = strdup(class_str);
++            matvar->internal->type_name = strdup("MCOS");
++            if ( NULL == matvar->internal->class_name || NULL == matvar->internal->type_name ) {
++                H5Tclose(mem_type_id);
++                H5Tclose(type_id);
++                H5Aclose(attr_id);
++                return MATIO_E_OUT_OF_MEMORY;
+             }
+-#endif
++            matvar->data_type = MAT_T_UINT8;
++        } else if ( H5Iget_type(dset_id) == H5I_GROUP && 0 != strcmp(class_str, "logical") &&
++                    0 != strcmp(class_str, "unknown") ) {
++            /* Group with unknown class (e.g. enum instance) - treat as struct */
++            matvar->class_type = MAT_C_STRUCT;
+         }
+-        if ( MAT_C_EMPTY == matvar->class_type || MAT_C_CHAR == matvar->class_type ) {
+-            int int_decode = 0;
+-            if ( H5Aexists_by_name(dset_id, ".", "MATLAB_int_decode", H5P_DEFAULT) ) {
+-                hid_t attr_id2 =
+-                    H5Aopen_by_name(dset_id, ".", "MATLAB_int_decode", H5P_DEFAULT, H5P_DEFAULT);
+-                err = Mat_H5ReadScalarAttribute(attr_id2, H5T_NATIVE_INT, &int_decode);
+-                H5Aclose(attr_id2);
+-                if ( err ) {
+-                    free(class_str);
+-                    H5Tclose(mem_type_id);
+-                    H5Tclose(type_id);
+-                    H5Aclose(attr_id);
+-                    return err;
+-                }
+-            }
+-            switch ( int_decode ) {
+-                case 2:
+-                    matvar->data_type = MAT_T_UINT16;
+-                    break;
+-                case 1:
+-                    matvar->data_type = MAT_T_UINT8;
+-                    break;
+-                case 4:
+-                    matvar->data_type = MAT_T_UINT32;
+-                    break;
+-                default:
+-                    matvar->data_type = MAT_T_UNKNOWN;
+-                    break;
++#endif
++    }
++    if ( MAT_C_EMPTY == matvar->class_type || MAT_C_CHAR == matvar->class_type ) {
++        int int_decode = 0;
++        if ( H5Aexists_by_name(dset_id, ".", "MATLAB_int_decode", H5P_DEFAULT) ) {
++            hid_t attr_id2 =
++                H5Aopen_by_name(dset_id, ".", "MATLAB_int_decode", H5P_DEFAULT, H5P_DEFAULT);
++            err = Mat_H5ReadScalarAttribute(attr_id2, H5T_NATIVE_INT, &int_decode);
++            H5Aclose(attr_id2);
++            if ( err ) {
++                H5Tclose(mem_type_id);
++                H5Tclose(type_id);
++                H5Aclose(attr_id);
++                return err;
+             }
+-            if ( MAT_C_EMPTY == matvar->class_type ) {
+-                /* Check if this is a logical variable */
+-                if ( 0 == strcmp(class_str, "logical") ) {
+-                    matvar->isLogical = MAT_F_LOGICAL;
+-                }
+-                matvar->class_type = DataType2ClassType(matvar->data_type);
+-            } else if ( MAT_T_UNKNOWN == matvar->data_type ) {
++        }
++        switch ( int_decode ) {
++            case 2:
+                 matvar->data_type = MAT_T_UINT16;
++                break;
++            case 1:
++                matvar->data_type = MAT_T_UINT8;
++                break;
++            case 4:
++                matvar->data_type = MAT_T_UINT32;
++                break;
++            default:
++                matvar->data_type = MAT_T_UNKNOWN;
++                break;
++        }
++        if ( MAT_C_EMPTY == matvar->class_type ) {
++            /* Check if this is a logical variable */
++            if ( 0 == strcmp(class_str, "logical") ) {
++                matvar->isLogical = MAT_F_LOGICAL;
+             }
+-        } else {
+-            matvar->data_type = ClassType2DataType(matvar->class_type);
++            matvar->class_type = DataType2ClassType(matvar->data_type);
++        } else if ( MAT_T_UNKNOWN == matvar->data_type ) {
++            matvar->data_type = MAT_T_UINT16;
+         }
+-        free(class_str);
+     } else {
+-        err = MATIO_E_OUT_OF_MEMORY;
++        matvar->data_type = ClassType2DataType(matvar->class_type);
+     }
+     H5Tclose(mem_type_id);
+     H5Tclose(type_id);

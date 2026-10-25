@@ -1,0 +1,108 @@
+diff --git a/src/hb-gpu-paint.cc b/src/hb-gpu-paint.cc
+index 82e06a931..72cc8fa41 100644
+--- a/src/hb-gpu-paint.cc
++++ b/src/hb-gpu-paint.cc
+@@ -716,7 +716,7 @@ hb_gpu_paint_emit_linear (hb_gpu_paint_t  *c,
+    * untransformed space, so affine distortions of the axis are
+    * handled exactly rather than approximated. */
+   hb_vector_t<int16_t> grad_data;
+-  if (unlikely (!grad_data.resize (8)))
++  if (unlikely (!grad_data.resize (12)))
+   { c->unsupported = true; return; }
+ 
+   float lx0, ly0, lx1, ly1;
+@@ -740,6 +740,10 @@ hb_gpu_paint_emit_linear (hb_gpu_paint_t  *c,
+   grad_data[5] = Linv[1];
+   grad_data[6] = Linv[2];
+   grad_data[7] = Linv[3];
++  grad_data[8] = 0;
++  grad_data[9] = 0;
++  grad_data[10] = 0;
++  grad_data[11] = 0;
+ 
+   if (unlikely (!append_color_stops (grad_data, stops, got)))
+   { c->unsupported = true; return; }
+@@ -748,7 +752,7 @@ hb_gpu_paint_emit_linear (hb_gpu_paint_t  *c,
+   hb_blob_t *grad_blob = hb_blob_create ((const char *) grad_data.arrayZ,
+ 					 grad_bytes, HB_MEMORY_MODE_DUPLICATE,
+ 					 nullptr, nullptr);
+-  if (unlikely (!grad_blob || !c->push_sub_blob (grad_blob)))
++  if (unlikely (!grad_blob || !c->push_gradient_sub_blob (grad_blob, 8, got)))
+   {
+     hb_blob_destroy (grad_blob);
+     c->unsupported = true;
+@@ -836,7 +840,7 @@ hb_gpu_paint_emit_radial (hb_gpu_paint_t  *c,
+   hb_blob_t *grad_blob = hb_blob_create ((const char *) grad_data.arrayZ,
+ 					 grad_bytes, HB_MEMORY_MODE_DUPLICATE,
+ 					 nullptr, nullptr);
+-  if (unlikely (!grad_blob || !c->push_sub_blob (grad_blob)))
++  if (unlikely (!grad_blob || !c->push_gradient_sub_blob (grad_blob, 12, got)))
+   {
+     hb_blob_destroy (grad_blob);
+     c->unsupported = true;
+@@ -936,7 +940,7 @@ hb_gpu_paint_emit_sweep (hb_gpu_paint_t  *c,
+    * handled exactly.
+    */
+   hb_vector_t<int16_t> grad_data;
+-  if (unlikely (!grad_data.resize (8)))
++  if (unlikely (!grad_data.resize (12)))
+   { c->unsupported = true; hb_free (heap_stops); return; }
+ 
+   float mn, mx;
+@@ -963,6 +967,10 @@ hb_gpu_paint_emit_sweep (hb_gpu_paint_t  *c,
+   grad_data[5] = Linv[1];
+   grad_data[6] = Linv[2];
+   grad_data[7] = Linv[3];
++  grad_data[8] = 0;
++  grad_data[9] = 0;
++  grad_data[10] = 0;
++  grad_data[11] = 0;
+ 
+   if (unlikely (!append_color_stops (grad_data, stops, got)))
+   { c->unsupported = true; hb_free (heap_stops); return; }
+@@ -972,7 +980,7 @@ hb_gpu_paint_emit_sweep (hb_gpu_paint_t  *c,
+   hb_blob_t *grad_blob = hb_blob_create ((const char *) grad_data.arrayZ,
+ 					 grad_bytes, HB_MEMORY_MODE_DUPLICATE,
+ 					 nullptr, nullptr);
+-  if (unlikely (!grad_blob || !c->push_sub_blob (grad_blob)))
++  if (unlikely (!grad_blob || !c->push_gradient_sub_blob (grad_blob, 8, got)))
+   {
+     hb_blob_destroy (grad_blob);
+     c->unsupported = true;
+@@ -1459,12 +1467,7 @@ hb_gpu_paint_encode (hb_gpu_paint_t     *paint,
+   const unsigned texel_bytes   = 8;
+ 
+   unsigned ops_texels = paint->ops.length / 4;
+-  unsigned sub_bytes = 0;
+-  for (hb_blob_t *b : paint->sub_blobs)
+-    if (unlikely (hb_unsigned_add_overflows (sub_bytes,
+-					     hb_blob_get_length (b),
+-					     &sub_bytes)))
+-      return nullptr;
++  unsigned sub_bytes = paint->sub_bytes;
+   /* Sub-blobs come from the draw encoder which produces 8-byte
+    * aligned blobs; assert so we notice if that ever changes. */
+   if (unlikely (sub_bytes % texel_bytes))
+diff --git a/src/hb-gpu-paint.hh b/src/hb-gpu-paint.hh
+index 554a1159c..ab563d242 100644
+--- a/src/hb-gpu-paint.hh
++++ b/src/hb-gpu-paint.hh
+@@ -280,6 +280,18 @@ struct hb_gpu_paint_t
+     return true;
+   }
+ 
++  bool push_gradient_sub_blob (hb_blob_t *blob,
++			       unsigned header_words,
++			       unsigned stop_count)
++  {
++    unsigned len = (header_words + stop_count * 8) * sizeof (int16_t);
++    if (unlikely (len > HB_GPU_PAINT_MAX_SUB_BYTES - sub_bytes ||
++		  !sub_blobs.push_or_fail (blob)))
++      return false;
++    sub_bytes += len;
++    return true;
++  }
++
+   /* Nesting depth of push_group / pop_group.  We bail (set
+    * `unsupported`) if it exceeds HB_GPU_PAINT_MAX_GROUP_DEPTH,
+    * which matches HB_GPU_PAINT_GROUP_DEPTH in the fragment shader. */

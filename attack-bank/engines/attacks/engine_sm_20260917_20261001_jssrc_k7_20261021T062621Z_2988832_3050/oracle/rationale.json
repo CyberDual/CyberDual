@@ -1,0 +1,22 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "cdfebc80b32c5befd0b2c23e5454b75cf8be8e3e",
+      "patch": "diff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h\nindex da485238b18ae..921b964f8a37b 100644\n--- a/js/src/vm/RegExpShared.h\n+++ b/js/src/vm/RegExpShared.h\n@@ -74,2 +74,3 @@ class RegExpShared\n   enum class Kind : uint8_t { Unparsed, Atom, RegExp };\n+  static_assert(sizeof(Kind) == 1);\n   enum class CodeKind { Bytecode, Jitcode, Any };\n"
+    },
+    {
+      "sha": "f261527e7a33168c727f4d48ae2490d3e0a5e891",
+      "patch": "diff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp\nindex 98e89d68844d3..24db214ea3b8c 100644\n--- a/js/src/vm/RegExpObject.cpp\n+++ b/js/src/vm/RegExpObject.cpp\n@@ -738,3 +738,3 @@ bool RegExpShared::quickCheckRejects(const JS::Latin1Char* chars, size_t length,\n   // If there are at least 4 characters remaining in the string, test the mask.\n-  if (index + sizeof(uint32_t) <= length) {\n+  if (index + sizeof(RegExpShared::Kind) <= length) {\n     // We use memcpy here because this load may not be aligned. It will generate\n"
+    }
+  ],
+  "coupling": "The RegExpShared shrink commit changes Kind from uint32_t to uint8_t and adds a size assertion. The later quickcheck commit changes the four-byte mask guard to sizeof(RegExpShared::Kind). Each edited commit alone keeps the guard equivalent to four bytes on the original window; together the guard becomes one byte, so quickCheckRejects can perform a four-byte memcpy when only one character remains.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "engine": "spidermonkey",
+      "command": "ASAN_OPTIONS=abort_on_error=1:symbolize=1 ./obj-debug-asan/dist/bin/js pocs/probe.js",
+      "expected": "AddressSanitizer heap-buffer-overflow in RegExpShared::quickCheckRejects"
+    }
+  ]
+}

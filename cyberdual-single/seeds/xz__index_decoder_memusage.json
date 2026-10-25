@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "2187b27c64ef23d6ffa2917c8d835e100969e3e6",
+  "parent_sha": "2187b27c64ef23d6ffa2917c8d835e100969e3e6",
+  "project": "xz",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/tukaani-project/xz",
+  "repo_url": "https://github.com/tukaani-project/xz",
+  "source": "reuse",
+  "target": "xz",
+  "task": "Public lzma_index_decoder: lzma_memusage() returns a wrong (too-small, decreasing) estimate once Records have been decoded during an incremental Index decode; behaviour/correctness carrier. Recovered fix_sha = direct commit whose first-parent == admitted parent.",
+  "task_iid": "xz__index_decoder_memusage",
+  "vuln_desc": "Public lzma_index_decoder: lzma_memusage() returns a wrong (too-small, decreasing) estimate once Records have been decoded during an incremental Index decode; behaviour/correctness carrier. Recovered fix_sha = direct commit whose first-parent == admitted parent."
+}

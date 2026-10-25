@@ -1,0 +1,63 @@
+diff --git a/js/src/irregexp/imported/regexp-compiler.cc b/js/src/irregexp/imported/regexp-compiler.cc
+index 7cb587bb9aa6a..161f596ec3e2f 100644
+--- a/js/src/irregexp/imported/regexp-compiler.cc
++++ b/js/src/irregexp/imported/regexp-compiler.cc
+@@ -3139,8 +3139,8 @@ bool ComputeFirstCharacterSet(Node* start, Compiler* compiler, Zone* zone,
+ // covers one character.  Neither dominates, so store both and let the runtime
+ // chain them.
+ //
+-// Skip for multiline regexps as match attempts are less likely to be rejected
+-// early based on the first few characters.
++// Skip for non-sticky multiline regexps as match attempts are less likely to be
++// rejected early based on the first few characters.
+ void Compiler::ComputeQuickCheckFilters(Node* start,
+                                         DirectHandle<RegExpData> re_data) {
+   // Both filters describe the character at the match position, so they say
+@@ -3153,7 +3153,8 @@ void Compiler::ComputeQuickCheckFilters(Node* start,
+   constexpr int kMinChars = 1;
+   constexpr int kMaxChars = 4;
+   int eats_at_least = start->EatsAtLeast(kPossiblyAtStart);
+-  if (!one_byte() || eats_at_least < kMinChars || IsMultiline(flags())) {
++  if (!one_byte() || eats_at_least < kMinChars ||
++      (IsMultiline(flags()) && !IsSticky(flags()))) {
+     return;
+   }
+ 
+diff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp
+index 98e89d68844d3..3825155040535 100644
+--- a/js/src/vm/RegExpObject.cpp
++++ b/js/src/vm/RegExpObject.cpp
+@@ -4,6 +4,7 @@
+ 
+ #include "vm/RegExpObject.h"
+ 
++
+ #include "mozilla/MemoryReporting.h"
+ #include "mozilla/PodOperations.h"
+ 
+@@ -718,6 +719,11 @@ bool RegExpShared::compileIfNecessary(JSContext* cx,
+   return true;
+ }
+ 
++static MOZ_NEVER_INLINE void CopyQuickCheckWord(void* dest,
++                                               const JS::Latin1Char* source) {
++  memcpy(dest, source, sizeof(uint32_t));
++}
++
+ // This is inlined in jitcode in PrepareAndExecuteRegExp.
+ // The two should be kept in sync.
+ bool RegExpShared::quickCheckRejects(const JS::Latin1Char* chars, size_t length,
+@@ -744,6 +750,13 @@ bool RegExpShared::quickCheckRejects(const JS::Latin1Char* chars, size_t length,
+     if ((word & quickCheckMask_) != quickCheckValue_) {
+       return true;
+     }
++  } else if (index + sizeof(uint16_t) <= length &&
++             (quickCheckMask_ & 0xffff0000) == 0) {
++    uint16_t word;
++    CopyQuickCheckWord(&word, chars + index);
++    if ((word & quickCheckMask_) != quickCheckValue_) {
++      return true;
++    }
+   }
+ 
+   return false;

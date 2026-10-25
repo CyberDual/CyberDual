@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "1cfc4e6fb4dc8cb7bb21e092e99e845abae3ccd9",
+      "edited_message": null,
+      "patch": "diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c\nindex ae2e2b4..41e1fe8 100644\n--- a/src/liblzma/common/index.c\n+++ b/src/liblzma/common/index.c\n@@ -453,7 +453,7 @@ lzma_index_prealloc(lzma_index *i, lzma_vli records)\n \tif (records == 0)\n \t\trecords = INDEX_GROUP_SIZE;\n \n-\ti->prealloc = (size_t)(records);\n+\ti->prealloc = (size_t)(records < PREALLOC_MAX ? records + 1 : records);\n \treturn false;\n }\n \n"
+    },
+    {
+      "sha": "41637ae1cfbb9603691a284b86dbb8e2207051d7",
+      "edited_message": null,
+      "patch": "diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c\nindex 3fbb5b1..fdb7402 100644\n--- a/src/liblzma/common/index.c\n+++ b/src/liblzma/common/index.c\n@@ -1013,7 +1013,9 @@ index_dup_stream(const index_stream *src, const lzma_allocator *allocator)\n \tsize_t i = 0;\n \tdo {\n \t\tmemcpy(destg->records + i, srcg->records,\n-\t\t\t\t(srcg->last + 1) * sizeof(index_record));\n+\t\t\t\t(srcg->allocated < INDEX_GROUP_SIZE\n+\t\t\t\t\t? srcg->allocated : srcg->last + 1)\n+\t\t\t\t\t* sizeof(index_record));\n \t\ti += srcg->last + 1;\n \t\tsrcg = index_tree_next(&srcg->node);\n \t} while (srcg != NULL);\n"
+    }
+  ],
+  "coupling": "The earlier Index decoder preallocation change reserves one extra record slot, so a decoded one-record group has allocated=2 but last=0. The later duplication change copies allocated records from small groups while allocating the destination for record_count used records. Either edit alone is safe for this input: the original duplicator copies last+1, and the original preallocator makes small decoded groups tightly allocated. A repair must reconcile the producer capacity with the consumer copy length across these two commits; checking only the new tree traversal in the later commit misses the changed capacity invariant.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "lzma_index_buffer_decode() followed by lzma_index_dup()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

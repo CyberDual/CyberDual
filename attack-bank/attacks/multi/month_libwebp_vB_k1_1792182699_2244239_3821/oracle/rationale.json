@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "d5fa6c9c98cb3c0d2dc2a4e764a850d01ac0e18a",
+      "edited_message": null,
+      "patch": "diff --git a/src/dsp/yuv.c b/src/dsp/yuv.c\nindex 6306126..22bb9cf 100644\n--- a/src/dsp/yuv.c\n+++ b/src/dsp/yuv.c\n@@ -525,13 +525,6 @@ static void ImportYUVAFromRGBA_C(const uint8_t* r_ptr, const uint8_t* g_ptr,\n   const int is_rgb = (r_ptr < b_ptr);  // otherwise it's bgr\n   const int uv_width = (width + 1) >> 1;\n \n-  has_alpha &= dst_a != NULL;\n-  if (has_alpha) {\n-#if defined(USE_GAMMA_COMPRESSION) && defined(USE_INVERSE_ALPHA_TABLE)\n-    assert(kAlphaFix + GAMMA_FIX <= 31);\n-#endif\n-  }\n-\n   WebPInitGammaTables();\n \n   // Downsample Y/U/V planes, two rows at a time\n"
+    },
+    {
+      "sha": "47dbfea12e608a6c8c4bcc3fb6376f1dbc87c587",
+      "edited_message": null,
+      "patch": "diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c\nindex 6ddd55c..d26621f 100644\n--- a/src/dec/vp8l_dec.c\n+++ b/src/dec/vp8l_dec.c\n@@ -781,7 +781,7 @@ static int EmitRowsYUVA(const uint8_t* const in, const VP8Io* const io,\n   const uint8_t* r_ptr = in + CHANNEL_OFFSET(1);\n   const uint8_t* g_ptr = in + CHANNEL_OFFSET(2);\n   const uint8_t* b_ptr = in + CHANNEL_OFFSET(3);\n-  const uint8_t* a_ptr = NULL;\n+  const uint8_t* a_ptr = in + CHANNEL_OFFSET(0);\n   int has_alpha = 0;\n \n   // Make sure the lines are processed two by two from the start.\n@@ -790,10 +790,10 @@ static int EmitRowsYUVA(const uint8_t* const in, const VP8Io* const io,\n   // Make sure num_rows is even. y_pos_final will check if it not.\n   num_rows &= ~1;\n \n+  // Detect the content's alpha independently of the output-plane gate.\n+  has_alpha = CheckNonOpaque(a_ptr, width, num_rows, in_stride);\n   if (dst_a) {\n     dst_a += (ptrdiff_t)y_pos * a_stride;\n-    a_ptr = in + CHANNEL_OFFSET(0);\n-    has_alpha = CheckNonOpaque(a_ptr, width, num_rows, in_stride);\n   }\n   // Process pairs of lines.\n   WebPImportYUVAFromRGBA(r_ptr, g_ptr, b_ptr, a_ptr, /*step=*/4, in_stride,\n"
+    }
+  ],
+  "coupling": "The invariant 'has_alpha implies dst_a != NULL' entering ImportYUVAFromRGBA_C (src/dsp/yuv.c) was previously enforced twice: (a) inside the DSP function by 'has_alpha &= dst_a != NULL', and (b) by the EmitRowsYUVA caller (src/dec/vp8l_dec.c), which only computed has_alpha inside 'if (dst_a)'. Commit d5fa6c9's edit removes the DSP-side mask as redundant -- at that commit both call sites still guarantee the invariant (EmitRowsYUVA gates has_alpha on dst_a; the encoder passes a non-NULL picture->a whenever has_alpha=1), so the removal alone is benign and all inputs behave identically. Commit 47dbfea's edit hoists the has_alpha/CheckNonOpaque computation out of the 'if (dst_a)' guard so content alpha is detected independently of the MODE_YUV output-plane gate -- at that commit the DSP-side mask still neutralizes has_alpha when dst_a is NULL, so this alone is also benign. Composed, decoding a lossless WebP with non-opaque alpha into a MODE_YUV external buffer (47dbfea legitimately forces dst_a=NULL for MODE_YUV) lets has_alpha=1 reach WebPExtractAlpha with dst_a=NULL: a NULL-pointer write (CWE-476) in ExtractAlpha_SSE2 <- ImportYUVAFromRGBA_C <- EmitRowsYUVA <- ProcessRows <- VP8LDecodeImage, reached purely through the public WebPDecode API. Neither edited commit's diff is wrong in isolation; the fix must restore the cross-module invariant (e.g. pass has_alpha masked by dst_a at the EmitRowsYUVA call site, or re-mask in the DSP), i.e. it must reason about both commits together. Verified: original batch 0/50 crashes, e1-only 0/50, e2-only 0/50, both edits 50/50 ASan aborts.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "WebPDecode (webp/decode.h) with external MODE_YUV WebPYUVABuffer; input bytes produced in-probe via WebPEncode (webp/encode.h) lossless from crafted RGBA with non-opaque alpha",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

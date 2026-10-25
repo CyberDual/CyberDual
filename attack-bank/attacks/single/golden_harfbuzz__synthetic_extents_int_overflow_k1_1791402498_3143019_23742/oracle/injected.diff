@@ -1,0 +1,109 @@
+diff --git a/src/hb-font.hh b/src/hb-font.hh
+index bc75fe1f9fec7b79ca756e9b05f49debc60cd4c2..b5b1722ed49253d3a2b5556000474fa0b785a091 100644
+--- a/src/hb-font.hh
++++ b/src/hb-font.hh
+@@ -216,16 +216,18 @@ struct hb_font_t
+     /* Slant. */
+     if (slant_xy)
+     {
+-      hb_position_t x1 = extents->x_bearing;
+-      hb_position_t y1 = extents->y_bearing;
+-      hb_position_t x2 = extents->x_bearing + extents->width;
+-      hb_position_t y2 = extents->y_bearing + extents->height;
+-
+-      x1 += floorf (hb_min (y1 * slant_xy, y2 * slant_xy));
+-      x2 += ceilf (hb_max (y1 * slant_xy, y2 * slant_xy));
+-
+-      extents->x_bearing = x1;
+-      extents->width = x2 - extents->x_bearing;
++      /* The extent producers (glyf's contour_bounds_t, the sbix png path)
++       * clamp x_bearing/width and y_bearing/height to the full hb_position_t
++       * range independently, so a single field can reach INT32_MIN/MAX and
++       * the sums/differences below overflow int32.  Accumulate in int64. */
++      int64_t y1 = extents->y_bearing;
++      int64_t y2 = (int64_t) extents->y_bearing + extents->height;
++
++      int64_t x1 = (int64_t) extents->x_bearing + (int64_t) floorf (hb_min (y1 * slant_xy, y2 * slant_xy));
++      int64_t x2 = (int64_t) extents->x_bearing + extents->width + (int64_t) ceilf (hb_max (y1 * slant_xy, y2 * slant_xy));
++
++      extents->x_bearing = hb_clamp_to<hb_position_t> (x1);
++      extents->width = hb_clamp_to<hb_position_t> (x2 - x1);
+     }
+ 
+     /* Embolden. */
+@@ -234,14 +236,14 @@ struct hb_font_t
+       /* Y */
+       int y_shift = y_strength;
+       if (y_scale < 0) y_shift = -y_shift;
+-      extents->y_bearing += y_shift;
+-      extents->height -= y_shift;
++      extents->y_bearing = hb_clamp_to<hb_position_t> ((int64_t) extents->y_bearing + y_shift);
++      extents->height = hb_clamp_to<hb_position_t> ((int64_t) extents->height - y_shift);
+ 
+       /* X */
+       int x_shift = x_strength;
+       if (x_scale < 0) x_shift = -x_shift;
+       if (embolden_in_place)
+-	extents->x_bearing -= x_shift / 2;
++	extents->x_bearing = hb_clamp_to<hb_position_t> ((int64_t) extents->x_bearing - x_shift / 2);
+       extents->width += x_shift;
+     }
+   }
+diff --git a/test/api/test-font.c b/test/api/test-font.c
+index 2a04939fba04a532ab6482c89b2b3a9f79ec4047..bc366bc81a0c1ca982c73fcf9da97f3d50f4fb1c 100644
+--- a/test/api/test-font.c
++++ b/test/api/test-font.c
+@@ -672,6 +672,45 @@ test_font_properties (void)
+   hb_font_destroy (subfont);
+ }
+ 
++static hb_bool_t
++_extreme_glyph_extents_func (hb_font_t *font HB_UNUSED, void *font_data HB_UNUSED,
++			     hb_codepoint_t glyph HB_UNUSED,
++			     hb_glyph_extents_t *extents,
++			     void *user_data HB_UNUSED)
++{
++  /* Mimic extents that the glyf/sbix producers can legitimately emit after
++   * clamping each field independently to the full hb_position_t range. */
++  extents->x_bearing = G_MAXINT;
++  extents->y_bearing = G_MAXINT;
++  extents->width = 100;
++  extents->height = 100;
++  return TRUE;
++}
++
++static void
++test_synthetic_glyph_extents_overflow (void)
++{
++  hb_font_funcs_t *ffuncs = hb_font_funcs_create ();
++  hb_font_funcs_set_glyph_extents_func (ffuncs, _extreme_glyph_extents_func, NULL, NULL);
++
++  hb_face_t *face = hb_face_create (hb_blob_get_empty (), 0);
++  hb_font_t *font = hb_font_create (face);
++  hb_font_set_funcs (font, ffuncs, NULL, NULL);
++  hb_font_set_scale (font, 2048, 2048);
++
++  /* Both synthetic transforms operate on the extreme extents above; without
++   * saturating arithmetic the int32 sums/differences overflow. */
++  hb_font_set_synthetic_slant (font, 0.25f);
++  hb_font_set_synthetic_bold (font, 0.05f, 0.05f, TRUE);
++
++  hb_glyph_extents_t extents;
++  g_assert_true (hb_font_get_glyph_extents (font, 1, &extents));
++
++  hb_font_destroy (font);
++  hb_face_destroy (face);
++  hb_font_funcs_destroy (ffuncs);
++}
++
+ int
+ main (int argc, char **argv)
+ {
+@@ -689,6 +728,7 @@ main (int argc, char **argv)
+ 
+   hb_test_add (test_font_empty);
+   hb_test_add (test_font_properties);
++  hb_test_add (test_synthetic_glyph_extents_overflow);
+ 
+   return hb_test_run();
+ }

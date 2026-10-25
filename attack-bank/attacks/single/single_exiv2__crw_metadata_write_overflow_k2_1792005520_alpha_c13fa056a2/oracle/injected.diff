@@ -1,0 +1,22 @@
+diff --git a/src/crwimage_int.cpp b/src/crwimage_int.cpp
+index 9c20d7d2d4d8ecbea92ed5f1d4f8667fe83eaee5..7c8301ec0a4f16c8967f1b37c6ed20a3342e18fb 100644
+--- a/src/crwimage_int.cpp
++++ b/src/crwimage_int.cpp
+@@ -990,13 +990,10 @@ DataBuf packIfdId(const ExifData& exifData, IfdId ifdId, ByteOrder byteOrder) {
+   for (auto&& exif : exifData) {
+     if (exif.ifdId() != ifdId)
+       continue;
+-    const uint16_t s = (exif.tag() * 2) + static_cast<uint16_t>(exif.size());
+-    if (s <= size) {
+-      len = std::max(len, s);
+-      exif.copy(buf.data(exif.tag() * 2), byteOrder);
+-    } else {
+-      EXV_ERROR << "packIfdId out-of-bounds error: s = " << std::dec << s << "\n";
+-    }
++    const size_t offset = exif.tag() * 2;
++    enforce(offset < size && exif.size() <= size, ErrorCode::kerCorruptedMetadata);
++    len = std::max(len, static_cast<uint16_t>(offset + exif.size()));
++    exif.copy(buf.data(offset), byteOrder);
+   }
+   // Round the size to make it even.
+   buf.resize(len + (len % 2));

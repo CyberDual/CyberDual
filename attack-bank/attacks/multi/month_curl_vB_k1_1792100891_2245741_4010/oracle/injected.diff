@@ -1,0 +1,40 @@
+diff --git a/lib/u8_strset.c b/lib/u8_strset.c
+index e2e368e..8d278b2 100644
+--- a/lib/u8_strset.c
++++ b/lib/u8_strset.c
+@@ -35,7 +35,7 @@
+ 
+ #define CURL_SWAP(a, b) (((a) ^= (b)), ((b) ^= (a)), ((a) ^= (b)))
+ 
+-#define CURL_U8_STRSET_SLOT_IDX(s, i)    (uint8_t)((i) & (s)->slotmask)
++#define CURL_U8_STRSET_SLOT_IDX(s, i)    (uint8_t)((i) & ((s)->slotmask - 1))
+ #define CURL_U8_SLOT_CNT(i)              (uint16_t)((i) ? (1U << (i)) : 0)
+ #define CURL_U8_SLOT_MASK(i)             (uint8_t)((1U << (i)) - 1)
+ #define CURL_U8_STRSET_SLOT_CNT(s)       CURL_U8_SLOT_CNT((s)->slotbits)
+@@ -74,7 +74,7 @@ void Curl_u8_strset_init(struct u8_strset *set)
+   set->ids = set->sids;
+   set->psl = set->spsl;
+   set->slotbits = CURL_U8_STRSET_START_BITS;
+-  set->slotmask = CURL_U8_SLOT_MASK(set->slotbits);
++  set->slotmask = CURL_U8_SLOT_CNT(set->slotbits);
+   set->count = 0;
+ #ifdef DEBUGBUILD
+   set->init = CURL_U8_STRSET_MAGIC;
+@@ -85,7 +85,7 @@ void Curl_u8_strset_clear(struct u8_strset *set)
+ {
+   uint16_t i;
+   DEBUGASSERT(set->init == CURL_U8_STRSET_MAGIC);
+-  for(i = 0; i < CURL_U8_STRSET_SLOT_CNT(set); ++i)
++  for(i = 0; i <= set->slotmask; ++i)
+     curlx_safefree(set->data[i]);
+ 
+   if(set->data != set->sdata)
+@@ -149,7 +149,7 @@ static bool u8_strset_grow(struct u8_strset *set)
+   set->ids = (uint8_t *)d + (nslots * sizeof(char *));
+   set->psl = set->ids + nslots;
+   set->slotbits = nslotbits;
+-  set->slotmask = CURL_U8_SLOT_MASK(set->slotbits);
++  set->slotmask = CURL_U8_SLOT_CNT(set->slotbits);
+   set->count = 0;
+   /* re-add previous entries */
+   {

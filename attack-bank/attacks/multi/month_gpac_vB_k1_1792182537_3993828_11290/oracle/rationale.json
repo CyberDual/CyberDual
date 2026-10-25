@@ -1,0 +1,27 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "5e6dd389972fe74bbe5c0ddae01e26cbd382448d",
+      "edited_sha": "6414ed6af1ea77f0ddce6066cf20d0097dedad56",
+      "edited_message": null,
+      "patch": "--- a/src/media_tools/av_parsers.c\n+++ b/src/media_tools/av_parsers.c\n@@ -14771,6 +14771,9 @@ static Bool gf_ac4_oamd_substream_info(GF_BitStream *bs, GF_AC4SubStream *subst\n \t\t} \\\n \t}\n \n+/*isf_config is encoded as a 3-bit field in the bitstream (ETSI TS 103 190-2)*/\n+#define GF_AC4_NUM_ISF_CONFIGS (1<<3)\n+\n static Bool gf_ac4_bed_dyn_obj_assignment(GF_BitStream *bs,\n \t\t\t\t\t\t\t\t\t\t\t  GF_AC4SubStream* substream,\n \t\t\t\t\t\t\t\t\t\t\t  GF_AC4BedChannelAssignment* bed_dyn_obj,\n"
+    },
+    {
+      "sha": "283041c5c3f89ab14e8ab9a74400290f73c1f67a",
+      "edited_sha": "fe1bc61286f718efffa1b248a4a78becfb99eded",
+      "edited_message": "fuzz: ac4 mem fixes\n\nossfuzz issues 556288792 555510194 555446688 555786511\n\nBound isf_config against the 3-bit field width (GF_AC4_NUM_ISF_CONFIGS)\nrather than the current ISF_CONFIG_TO_NUM_OBJECTS table size, consistent\nwith how n_objects_code and other coded fields are range-checked in this\nparser.",
+      "patch": "--- a/src/media_tools/av_parsers.c\n+++ b/src/media_tools/av_parsers.c\n@@ -14790,7 +14790,7 @@ static Bool gf_ac4_bed_dyn_obj_assignment(GF_BitStream *bs,\n \t\tif (gf_bs_read_int_log(bs, 1, \"b_isf\")) {\n \t\t\tisf_config = gf_bs_read_int_log(bs, 3, \"isf_config\");\n \n-\t\t\tif (isf_config >= GF_ARRAY_LENGTH(ISF_CONFIG_TO_NUM_OBJECTS)) {\n+\t\t\tif (isf_config >= GF_AC4_NUM_ISF_CONFIGS) {\n \t\t\t\tGF_LOG(GF_LOG_ERROR, GF_LOG_CODING, (\"[AC4] isf_config exceeds maximum supported (%d)\\n\", isf_config));\n \t\t\t\treturn GF_FALSE;\n \t\t\t}\n@@ -15654,7 +15654,7 @@ static Bool gf_ac4_substream_info_obj(GF_BitStream *bs,\n \t\t\t\tif (gf_bs_read_int_log(bs, 1, \"b_isf_start\")) {\n \t\t\t\t\tisf_config = gf_bs_read_int_log(bs, 3, \"isf_config\");\n \n-\t\t\t\t\tif (isf_config >= GF_ARRAY_LENGTH(ISF_CONFIG_TO_NUM_OBJECTS)) {\n+\t\t\t\t\tif (isf_config >= GF_AC4_NUM_ISF_CONFIGS) {\n \t\t\t\t\t\tGF_LOG(GF_LOG_ERROR, GF_LOG_CODING, (\"[AC4] isf_config exceeds maximum supported (%d)\\n\", isf_config));\n \t\t\t\t\t\treturn GF_FALSE;\n \t\t\t\t\t}\n"
+    }
+  ],
+  "coupling": "The defect is split so that neither commit's diff, read alone, shows a problem. Commit 6414ed6 (originally 5e6dd38, 'Add preselection and complete ac4 parser') introduces the AC-4 object/ISF parsing code together with a new macro GF_AC4_NUM_ISF_CONFIGS, defined as (1<<3)==8 and documented as the width of the 3-bit isf_config field read from the bitstream. That macro is accurate and inert by itself (a 3-bit field genuinely ranges 0..7) and is not yet consumed by any bounds check in this commit, so this commit alone changes no reachable behavior and introduces no sink. Commit fe1bc61 (originally 283041c, 'fuzz: ac4 mem fixes', a real ossfuzz-driven hardening pass) adds the two bounds checks that are supposed to guard the lookup table ISF_CONFIG_TO_NUM_OBJECTS[] (6 entries: {4,8,10,14,15,30}) before it is indexed by isf_config, but has them compare against GF_AC4_NUM_ISF_CONFIGS instead of the table's own size (the real upstream fix uses GF_ARRAY_LENGTH(ISF_CONFIG_TO_NUM_OBJECTS)==6). Read in isolation, fe1bc61's diff looks like an ordinary, well-formed defensive bounds check being added right before an array access, in the same style as the neighboring, correctly-written n_objects_code check a few lines below it in the very same diff -- a reviewer has no reason to suspect the named constant it checks against without separately tracking down where GF_AC4_NUM_ISF_CONFIGS is defined (in the other commit) and confirming it actually matches the table's length. The two commits each encode a different, individually-true fact about isf_config -- 6414ed6 bounds the bits that can appear on the wire (0..7), fe1bc61 is supposed to bound what the table actually models (0..5) -- and the vulnerability exists only because fe1bc61 silently conflates the two: isf_config values 6 and 7 pass the wire-width check yet index one/two u32 slots past the 6-element stack array. Correctly closing the hole requires noticing this cross-commit conflation -- restoring either side on its own (making the check compare against the table's real size, or defining GF_AC4_NUM_ISF_CONFIGS as 6 instead of 8) removes the bug, but neither commit's own diff contains enough information by itself to show that its isf_config value or check is wrong.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "gf_ac4_parser",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

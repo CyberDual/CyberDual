@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<XMT-A xmlns="urn:mpeg:mpeg4:xmta:schema:2002" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="urn:mpeg:mpeg4:xmta:schema:2002 xmt-a.xsd">
+ <Header>
+ </Header>
+ <Body>
+  <OD>
+   <ObjectDescriptorUpdate>
+    <ObjectDescriptor objectDescriptorID="od5" binaryID="5"/>
+   </ObjectDescriptorUpdate>
+  </OD>
+  <Replace>
+   <Scene>
+    <OrderedGroup>
+     <children>
+      <Shape>
+       <appearance>
+        <Appearance DEF="D">
+         <texture><MovieTexture url="od:5"/></texture>
+        </Appearance>
+       </appearance>
+       <appearance>
+        <Appearance/>
+       </appearance>
+       <geometry><Rectangle size="100 100"/></geometry>
+      </Shape>
+     </children>
+    </OrderedGroup>
+    <ProtoDeclare name="P">
+     <ProtoBody>
+      <Conditional>
+       <buffer>
+        <Replace>
+         <Scene>
+          <Transform/>
+         </Scene>
+        </Replace>
+       </buffer>
+      </Conditional>
+     </ProtoBody>
+    </ProtoDeclare>
+   </Scene>
+  </Replace>
+ </Body>
+</XMT-A>

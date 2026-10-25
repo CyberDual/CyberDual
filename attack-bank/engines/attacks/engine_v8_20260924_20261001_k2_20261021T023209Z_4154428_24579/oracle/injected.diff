@@ -1,0 +1,62 @@
+diff --git a/src/wasm/baseline/liftoff-assembler-inl.h b/src/wasm/baseline/liftoff-assembler-inl.h
+index 4cbc6d8b14b..a6caa225695 100644
+--- a/src/wasm/baseline/liftoff-assembler-inl.h
++++ b/src/wasm/baseline/liftoff-assembler-inl.h
+@@ -163,6 +163,15 @@ void LiftoffAssembler::emit_ptrsize_shri(Register dst, Register src,
+   }
+ }
+ 
++void LiftoffAssembler::emit_i32_to_intptr(Register dst, Register src) {
++  if constexpr (kSystemPointerSize == 8) {
++    emit_i64_shli(LiftoffRegister(dst), LiftoffRegister(src), 32);
++    emit_i64_sari(LiftoffRegister(dst), LiftoffRegister(dst), 32);
++  } else {
++    emit_i32_addi(dst, src, 0);
++  }
++}
++
+ void LiftoffAssembler::emit_ptrsize_addi(Register dst, Register lhs,
+                                          intptr_t imm) {
+   if constexpr (kSystemPointerSize == 8) {
+diff --git a/src/wasm/baseline/liftoff-assembler.h b/src/wasm/baseline/liftoff-assembler.h
+index 3443ca9f670..adc13136712 100644
+--- a/src/wasm/baseline/liftoff-assembler.h
++++ b/src/wasm/baseline/liftoff-assembler.h
+@@ -999,6 +999,7 @@ class LiftoffAssembler : public MacroAssembler {
+   inline void emit_i64_mul_wide_u();
+ 
+   inline void emit_u32_to_uintptr(Register dst, Register src);
++  inline void emit_i32_to_intptr(Register dst, Register src);
+   // For security hardening: unconditionally clear {dst}'s high word.
+   inline void clear_i32_upper_half(Register dst);
+ 
+diff --git a/src/wasm/baseline/liftoff-compiler.cc b/src/wasm/baseline/liftoff-compiler.cc
+index b30751f8cf8..7bb30ed858b 100644
+--- a/src/wasm/baseline/liftoff-compiler.cc
++++ b/src/wasm/baseline/liftoff-compiler.cc
+@@ -6737,7 +6737,11 @@ class LiftoffCompiler {
+       }
+     } else {
+       index_plus_offset = pinned.set(__ GetUnusedRegister(kGpReg, pinned)).gp();
+-      __ emit_u32_to_uintptr(index_plus_offset, index.gp());
++      if (imm.memory->is_shared && imm.memory->can_grow()) {
++        __ emit_i32_to_intptr(index_plus_offset, index.gp());
++      } else {
++        __ emit_u32_to_uintptr(index_plus_offset, index.gp());
++      }
+       if (imm.offset) {
+         __ emit_ptrsize_addi(index_plus_offset, index_plus_offset, imm.offset);
+       }
+diff --git a/src/wasm/turboshaft-graph-interface.cc b/src/wasm/turboshaft-graph-interface.cc
+index 411130a309a..27cf5cca567 100644
+--- a/src/wasm/turboshaft-graph-interface.cc
++++ b/src/wasm/turboshaft-graph-interface.cc
+@@ -6743,7 +6743,7 @@ class TurboshaftGraphBuildingInterface
+         memory_can_grow_ = mem.can_grow();
+         memory_can_move_ = mem.can_move();
+         memory_is_shared_ = mem.is_shared.value();
+-        memory_size_cached_ = !memory_can_grow_;
++        memory_size_cached_ = !memory_is_shared_ && !memory_can_grow_;
+         if (memory_size_cached_) {
+           mem_size_ = LoadMemSize();
+         }

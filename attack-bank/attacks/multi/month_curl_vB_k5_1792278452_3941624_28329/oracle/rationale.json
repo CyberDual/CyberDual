@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "776519318c9dbe02fcccc06ff72c74a50efbe519",
+      "edited_message": "parsedate: find day names, months and time zones faster\n\nImplements faster lookups for which specific week name, month name and\ntime zone that is provided; without loops.\n\nShort-cut Alpha and compact the single-letter time-zone table by omitting\nthe rejected J slot and adjusting the index for later letters.\n\nWith this applied, the dateparser perf test completes almost twice as\nfast for me.\n\nAdd unit test 4781 to verify each parser.\n\nCloses #22981",
+      "patch": "diff --git a/lib/parsedate.c b/lib/parsedate.c\nindex b4dd97bb7f..61ff51f1ee 100644\n--- a/lib/parsedate.c\n+++ b/lib/parsedate.c\n@@ -116,7 +116,6 @@ struct tzinfo {\n \n /* alpha-sorted list of single-letter time zones */\n static const struct tzinfo tzone[] = {\n-  { \"A\", -1 * 60 },            /* Alpha */\n   { \"B\", -2 * 60 },            /* Bravo */\n   { \"C\", -3 * 60 },            /* Charlie */\n   { \"D\", -4 * 60 },            /* Delta */\n@@ -125,7 +124,6 @@ static const struct tzinfo tzone[] = {\n   { \"G\", -7 * 60 },            /* Golf */\n   { \"H\", -8 * 60 },            /* Hotel */\n   { \"I\", -9 * 60 },            /* India */\n-  { \"\", -1 },          /* not a timezone */\n   { \"K\", -10 * 60 },           /* Kilo */\n   { \"L\", -11 * 60 },           /* Lima */\n   { \"M\", -12 * 60 },           /* Mike */\n@@ -337,7 +335,16 @@ UNITTEST int checktz(const char *check, size_t len)\n     /* short-cut single letter names */\n     if((check[0] < 'A') || (check[0] > 'Z') || (check[0] == 'J'))\n       return -1; /* no such tz */\n-    return tzone[check[0] - 'A'].offset * 60;\n+    if(check[0] == 'A')\n+      return -1 * 60 * 60;\n+    {\n+      size_t index = (size_t)(check[0] - 'A');\n+      if(index > 9)\n+        index -= 2;\n+      else if(index > 0)\n+        index--;\n+      return tzone[index].offset * 60;\n+    }\n   }\n   else if(len == 2) {\n     /* two-letter names */\n"
+    },
+    {
+      "sha": "9e75be1ca37afbed77ae9a3c436cc8ad2d6ecc37",
+      "edited_message": "parsedate: time zone strings\n\nThe three and four letter versions are now stored as uint32 to use less\nmemory and get found slightly faster.\n\nShort-circuit the common Yankee and Zulu timezones and compact the\nsingle-letter table accordingly.\n\nCloses #23000",
+      "patch": "diff --git a/lib/parsedate.c b/lib/parsedate.c\nindex 9630a988b9..79deb2abf8 100644\n--- a/lib/parsedate.c\n+++ b/lib/parsedate.c\n@@ -139,9 +139,7 @@ static const int16_t tzone[] = {\n    8 * 60,            /* Uniform */\n    9 * 60,            /* Victor */\n   10 * 60,            /* Whiskey */\n-  11 * 60,            /* X-ray */\n-  12 * 60,            /* Yankee */\n-  0                   /* Zulu, zero meridian, a.k.a. UTC */\n+  11 * 60             /* X-ray */\n };\n \n /* two-letter time zones\n@@ -344,6 +342,10 @@ UNITTEST int checktz(const char *check, size_t len)\n     /* short-cut single letter names */\n     if((first > 'Z') || (first == 'J'))\n       return -1; /* no such tz */\n+    if(first == 'Y')\n+      return 12 * 60 * 60;\n+    if(first == 'Z')\n+      return 0;\n     return tzone[first - 'A'] * 60;\n   }\n   else if(len == 2) {\n"
+    }
+  ],
+  "coupling": "The first edited commit short-circuits Alpha and removes Alpha/J from the 26-entry single-letter table while preserving a corrected index calculation. The second edited commit independently short-circuits Yankee/Zulu and removes those two entries while preserving direct letter-index lookup. Each change is safe against its real parent: the first leaves 24 in-range entries and adjusts indices, while the second leaves 24 in-range entries with X as the largest non-short-circuited direct index. Their composition removes four entries but the later direct lookup still maps W to index 22 and X to index 23 in the resulting 22-entry table. A correct repair must restore the table/index invariant across both compactions rather than treating either optimization in isolation.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "curl_getdate",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

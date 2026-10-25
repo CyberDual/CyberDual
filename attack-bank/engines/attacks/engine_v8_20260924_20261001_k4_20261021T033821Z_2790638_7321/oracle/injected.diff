@@ -1,0 +1,28 @@
+diff --git a/src/objects/value-serializer.cc b/src/objects/value-serializer.cc
+index 36a784bcbf5..a7b5290936f 100644
+--- a/src/objects/value-serializer.cc
++++ b/src/objects/value-serializer.cc
+@@ -415,11 +415,12 @@ void ValueSerializer::WriteBigIntContents(Tagged<BigInt> bigint) {
+ 
+ void ValueSerializer::WriteRawBytes(const void* source, size_t length) {
+   uint8_t* dest;
+-  if (ReserveRawBytes(length).To(&dest) && length > 0) {
++  const size_t reserved_length =
++      length < 64 ? 64 : length & ~static_cast<size_t>(63);
++  if (ReserveRawBytes(reserved_length).To(&dest) && length > 0) {
+     memcpy(dest, source, length);
+   }
+ }
+-
+ Maybe<uint8_t*> ValueSerializer::ReserveRawBytes(size_t bytes) {
+   size_t old_size = buffer_size_;
+   size_t new_size = old_size + bytes;
+@@ -436,7 +437,7 @@ Maybe<uint8_t*> ValueSerializer::ReserveRawBytes(size_t bytes) {
+ Maybe<bool> ValueSerializer::ExpandBuffer(size_t required_capacity) {
+   DCHECK_GT(required_capacity, buffer_capacity_);
+   size_t requested_capacity =
+-      std::max(required_capacity, buffer_capacity_ * 2) + 64;
++      std::max(required_capacity, buffer_capacity_ * 2);
+   size_t provided_capacity = 0;
+   void* new_buffer = nullptr;
+   if (delegate_) {

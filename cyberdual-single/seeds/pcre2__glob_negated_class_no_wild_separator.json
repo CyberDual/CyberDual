@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "06ea3c7cd1a9159b1f917ad2b5a53e0b9822a714",
+  "parent_sha": "06ea3c7cd1a9159b1f917ad2b5a53e0b9822a714",
+  "project": "pcre2",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/PCRE2Project/pcre2",
+  "repo_url": "https://github.com/PCRE2Project/pcre2",
+  "source": "reuse",
+  "target": "pcre2",
+  "task": "pcre2_pattern_convert() with PCRE2_CONVERT_GLOB + GLOB_NO_WILD_SEPARATOR on a negated class [!a]/[^xy] emits a spurious stale byte ([^sa] vs [^a]); behaviour fix.",
+  "task_iid": "pcre2__glob_negated_class_no_wild_separator",
+  "vuln_desc": "pcre2_pattern_convert() with PCRE2_CONVERT_GLOB + GLOB_NO_WILD_SEPARATOR on a negated class [!a]/[^xy] emits a spurious stale byte ([^sa] vs [^a]); behaviour fix."
+}

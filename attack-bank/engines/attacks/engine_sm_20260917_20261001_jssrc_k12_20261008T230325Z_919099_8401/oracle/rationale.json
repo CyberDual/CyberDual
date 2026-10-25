@@ -1,0 +1,21 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "47240d72475d6e4d2b7e5532f65f8d4e4b126022",
+      "patch": "diff --git a/js/src/wasm/WasmValidate.cpp b/js/src/wasm/WasmValidate.cpp\nindex 378b49e5b5a4a..728d70d90d0a0 100644\n--- a/js/src/wasm/WasmValidate.cpp\n+++ b/js/src/wasm/WasmValidate.cpp\n@@ -4749,6 +4749,9 @@ static bool DecodeNameSubsection(Decoder& d,\n       if (!DecodeNameSectionName(d, nameSection, \"module\", &moduleName)) {\n         return false;\n       }\n+      if (moduleName.length == 0) {\n+        moduleName.length = sizeof(Name);\n+      }\n       codeMeta->nameSection->moduleName = moduleName;\n     } break;\n     case NameType::Function: {\n"
+    },
+    {
+      "sha": "1bfe958776b182404131b8c1a17f7d3a696c6729",
+      "patch": "diff --git a/js/src/builtin/TestingFunctions.cpp b/js/src/builtin/TestingFunctions.cpp\nindex a88eb7733029a..78caf34af78db 100644\n--- a/js/src/builtin/TestingFunctions.cpp\n+++ b/js/src/builtin/TestingFunctions.cpp\n@@ -2457,7 +2457,40 @@ static bool WasmParsedBranchHints(JSContext* cx, unsigned argc, Value* vp) {\n #endif  // ENABLE_WASM_BRANCH_HINTING\n \n static bool WasmParsedNameSection(JSContext* cx, unsigned argc, Value* vp) {\n-  return WasmReturnFlag(cx, argc, vp, Flag::ParsedNameSection);\n+  CallArgs args = CallArgsFromVp(argc, vp);\n+  if (!args.get(1).isBoolean() || !args[1].toBoolean()) {\n+    return WasmReturnFlag(cx, argc, vp, Flag::ParsedNameSection);\n+  }\n+\n+  if (!args.get(0).isObject()) {\n+    JS_ReportErrorASCII(cx, \"argument is not an object\");\n+    return false;\n+  }\n+  Rooted<WasmModuleObject*> module(\n+      cx, args[0].toObject().maybeUnwrapIf<WasmModuleObject>());\n+  if (!module) {\n+    JS_ReportErrorASCII(cx, \"argument is not a WebAssembly.Module\");\n+    return false;\n+  }\n+\n+  const auto& meta = module->module().codeMeta();\n+  if (!meta.nameSection) {\n+    args.rval().setUndefined();\n+    return true;\n+  }\n+\n+  const auto& name = meta.nameSection->moduleName;\n+  const auto& payload =\n+      module->module().code().codeTailMeta().nameSectionPayload->vector;\n+  JSString* str = JS_NewStringCopyN(\n+      cx, reinterpret_cast<const char*>(payload.begin()) +\n+              name.offsetInNamePayload,\n+      name.length);\n+  if (!str) {\n+    return false;\n+  }\n+  args.rval().setString(str);\n+  return true;\n }\n \n static bool WasmBuiltinI8VecMul(JSContext* cx, unsigned argc, Value* vp) {\n@@ -11031,9 +11064,9 @@ JS_FOR_WASM_FEATURES(WASM_FEATURE)\n #endif // ENABLE_WASM_BRANCH_HINTING\n \n     JS_FN_HELP(\"wasmParsedNameSection\", WasmParsedNameSection, 1, 0,\n-\"wasmParsedNameSection(module)\",\n+\"wasmParsedNameSection(module, [returnModuleName])\",\n \"  Returns a boolean indicating whether a given module has successfully parsed a\\n\"\n-\"  custom name section.\"),\n+\"  custom name section, or its module name if returnModuleName is true.\"),\n \n     JS_FN_HELP(\"largeArrayBufferSupported\", LargeArrayBufferSupported, 0, 0,\n \"largeArrayBufferSupported()\",\n"
+    }
+  ],
+  "coupling": "The name-section parser records an empty module name with sizeof(Name) as its byte length. The later shell name-section helper adds a module-name retrieval path that trusts this length and copies from the payload. The parser edit alone is not exercised by the probe through the original boolean-only helper; the helper edit alone copies the original zero length. Together, an empty name at the end of the name-section payload makes the helper read beyond the allocation.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "command": "obj-debug-asan/dist/bin/js pocs/probe.js",
+      "expected": "AddressSanitizer: heap-buffer-overflow"
+    }
+  ]
+}

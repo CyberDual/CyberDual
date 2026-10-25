@@ -1,0 +1,38 @@
+diff --git a/src/OT/Var/VARC/VARC.cc b/src/OT/Var/VARC/VARC.cc
+index e0d370f..d0d1da8 100644
+--- a/src/OT/Var/VARC/VARC.cc
++++ b/src/OT/Var/VARC/VARC.cc
+@@ -506,7 +506,20 @@ VARC::get_path_at (const hb_varc_context_t &c,
+   if (unlikely (!node.visit (glyph)))
+     return true;
+ 
+-  hb_ubytes_t record = (this+glyphRecords)[idx];
++  /* Records are immutable for the life of the face; cache the fetched
++   * bytes so the recursive walk skips repeated CFF2Index decoding. */
++  auto &recordBytes = c.scratch.recordBytes;
++  const unsigned record_count = (this+glyphRecords).count;
++  if (unlikely (recordBytes.length < record_count &&
++		!recordBytes.resize (record_count)))
++    return true;
++
++  hb_ubytes_t record = recordBytes.arrayZ[idx];
++  if (!record.arrayZ)
++  {
++    record = (this+glyphRecords)[idx];
++    recordBytes.arrayZ[idx] = record;
++  }
+ 
+   hb_scalar_cache_t static_cache;
+   hb_scalar_cache_t *cache = parent_cache ?
+diff --git a/src/OT/Var/VARC/VARC.hh b/src/OT/Var/VARC/VARC.hh
+index 9dcec6d..56ae803 100644
+--- a/src/OT/Var/VARC/VARC.hh
++++ b/src/OT/Var/VARC/VARC.hh
+@@ -27,6 +27,7 @@ struct hb_varc_scratch_t
+ {
+   hb_vector_t<unsigned> axisIndices;
+   hb_vector_t<float> axisValues;
++  hb_vector_t<hb_ubytes_t> recordBytes;
+   hb_glyf_scratch_t glyf_scratch;
+ };
+ 

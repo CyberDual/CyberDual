@@ -1,0 +1,23 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0ae..efadb18a 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -585,6 +585,9 @@ IDManifest::init (const char* data, const char* endOfData)
+ 
+ IDManifest::IDManifest (const CompressedIDManifest& compressed)
+ {
++    uint32_t outCapacity =
++        static_cast<uint32_t> (compressed._uncompressedDataSize);
++
+     //
+     // Reject an implausible declared uncompressed size before allocating
+     // anything for it. The declared size is otherwise an unvalidated
+@@ -617,7 +620,7 @@ IDManifest::IDManifest (const CompressedIDManifest& compressed)
+     // decompress the compressed manifest
+     //
+ 
+-    vector<char> uncomp (compressed._uncompressedDataSize);
++    vector<char> uncomp (outCapacity);
+     size_t       outSize;
+     size_t       inSize = static_cast<size_t> (compressed._compressedDataSize);
+     if (EXR_ERR_SUCCESS != exr_uncompress_buffer (

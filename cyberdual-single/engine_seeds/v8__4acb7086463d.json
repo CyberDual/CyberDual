@@ -1,0 +1,28 @@
+{
+ "task_iid": "v8__4acb7086463d",
+ "project": "v8",
+ "engine": "v8",
+ "repo": "https://github.com/v8/v8",
+ "repo_url": "https://github.com/v8/v8",
+ "regime": "A",
+ "regime_full": "A_vuln_patch",
+ "family": "collect_seeds",
+ "source": "mined",
+ "parent_commit": "7ec754d5fd9df64dd2ad9bb2c9f5cc3eec09182c",
+ "parent_sha": "7ec754d5fd9df64dd2ad9bb2c9f5cc3eec09182c",
+ "fix_sha": "4acb7086463dba7bc0601bc80758586aadb607e5",
+ "date": "2026-09-28T11:16:26+00:00",
+ "cwe": "",
+ "vuln_type": "Out-of-bounds (max_byte_length on deserialized resizable Wasm SAB)",
+ "vuln_desc": "[wasm] Fix max_byte_length on deserialized resizable Wasm SABs",
+ "task": "[wasm] Fix max_byte_length on deserialized resizable Wasm SABs",
+ "grading": "engine",
+ "selection_criteria": [
+  "in the three-month single-task period [2026-07-01, 2026-10-01); the shorter multi-commit replay window is separate",
+  "mined from v8/v8 with our collect_seeds policy (regime-A security signal), NOT SEC-bench",
+  "contamination-clean: earliest-public-date post-cutoff, not AI-authored",
+  "genuine memory-safety class (bounds/stack/overflow/corruption)",
+  "5 per engine, diverse classes"
+ ],
+ "selection_reason": "Mined from v8/v8 in-window (before 2026-10-01) via collect_seeds; Out-of-bounds (max_byte_length on deserialized resizable Wasm SAB); fix 4acb708646 dated 2026-09-28."
+}

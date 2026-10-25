@@ -1,0 +1,64 @@
+diff --git a/src/truetype/ttvarc.c b/src/truetype/ttvarc.c
+index 50d08bc..cfc19a9 100644
+--- a/src/truetype/ttvarc.c
++++ b/src/truetype/ttvarc.c
+@@ -689,10 +689,10 @@
+     /* read axis values (TupleValues) */
+     if ( component->flags & VARC_HAVE_AXES )
+     {
+-      FT_UInt   axis_count  = 0;
+-      FT_Byte*  table_limit = (FT_Byte*)varc->table + varc->table_size;
+-      FT_Byte*  tuple_data;
+-      FT_UInt   tuple_size;
++      FT_UShort  axis_count  = 0;
++      FT_Byte*   table_limit = (FT_Byte*)varc->table + varc->table_size;
++      FT_Byte*   tuple_data;
++      FT_UInt    tuple_size;
+ 
+ 
+       if ( !varc->axis_indices_list )
+@@ -2059,16 +2059,13 @@
+       control = *p++;
+       cnt     = ( control & 0x3F ) + 1;
+ 
+-      if ( cnt > num_indices - i )
+-        cnt = num_indices - i;
+-
+       if ( ( control & 0xC0 ) == 0xC0 )
+       {
+         /* 32-bit values */
+         if ( p + 4 * cnt > tuple_limit )
+           return FT_THROW( Invalid_Table );
+ 
+-        for ( j = 0; j < cnt && i < num_indices; j++, i++ )
++        for ( j = 0; j < cnt; j++, i++ )
+         {
+           indices[i] = ( (FT_UInt)p[0] << 24 ) |
+                        ( (FT_UInt)p[1] << 16 ) |
+@@ -2080,7 +2077,7 @@
+       else if ( control & 0x80 )
+       {
+         /* zeros */
+-        for ( j = 0; j < cnt && i < num_indices; j++, i++ )
++        for ( j = 0; j < cnt; j++, i++ )
+           indices[i] = 0;
+       }
+       else if ( control & 0x40 )
+@@ -2089,7 +2086,7 @@
+         if ( p + 2 * cnt > tuple_limit )
+           return FT_THROW( Invalid_Table );
+ 
+-        for ( j = 0; j < cnt && i < num_indices; j++, i++ )
++        for ( j = 0; j < cnt; j++, i++ )
+         {
+           indices[i] = ( (FT_UInt)p[0] << 8 ) |
+                          (FT_UInt)p[1];
+@@ -2102,7 +2099,7 @@
+         if ( p + cnt > tuple_limit )
+           return FT_THROW( Invalid_Table );
+ 
+-        for ( j = 0; j < cnt && i < num_indices; j++, i++ )
++        for ( j = 0; j < cnt; j++, i++ )
+           indices[i] = *p++;
+       }
+     }

@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-190",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "4d15b443457d4fca54bbe2bf950fccb517907fff",
+  "parent_sha": "4d15b443457d4fca54bbe2bf950fccb517907fff",
+  "project": "openexr",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/AcademySoftwareFoundation/openexr",
+  "repo_url": "https://github.com/AcademySoftwareFoundation/openexr",
+  "source": "reselect",
+  "target": "openexr",
+  "task": "Reading an HTJ2K-compressed EXR with a negative data-window Y origin: signed start_y promotes to unsigned and wraps the decode row-loop end bound, running the write loop past the image buffer; single-file internal_ht.cpp, core decode via public read API.",
+  "task_iid": "openexr__htj2k_planar_decode_row_wraparound",
+  "vuln_desc": "Reading an HTJ2K-compressed EXR with a negative data-window Y origin: signed start_y promotes to unsigned and wraps the decode row-loop end bound, running the write loop past the image buffer; single-file internal_ht.cpp, core decode via public read API."
+}

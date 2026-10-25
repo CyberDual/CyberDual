@@ -1,0 +1,35 @@
+diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c
+index 9210216..ca2309f 100644
+--- a/libarchive/archive_read_support_format_rar5.c
++++ b/libarchive/archive_read_support_format_rar5.c
+@@ -158,7 +158,7 @@ enum REDIR_TYPE {
+ #define	OWNER_GROUP_NAME	0x02
+ #define	OWNER_USER_UID		0x04
+ #define	OWNER_GROUP_GID		0x08
+-#define	OWNER_MAXNAMELEN	256
++#define	OWNER_MAXNAMELEN	128
+ 
+ #define	SFX_MAX_READAHEAD	(1024 * 512)
+ 
+@@ -1620,8 +1620,8 @@ static int parse_file_extra_owner(struct archive_read* a,
+ 		if(!read_ahead(a, name_size, &p))
+ 			return ARCHIVE_EOF;
+ 
+-		if (name_size >= OWNER_MAXNAMELEN) {
+-			name_len = OWNER_MAXNAMELEN - 1;
++		if (name_size >= 256) {
++			name_len = 255;
+ 		} else {
+ 			name_len = name_size;
+ 		}
+@@ -1651,8 +1651,8 @@ static int parse_file_extra_owner(struct archive_read* a,
+ 		if(!read_ahead(a, name_size, &p))
+ 			return ARCHIVE_EOF;
+ 
+-		if (name_size >= OWNER_MAXNAMELEN) {
+-			name_len = OWNER_MAXNAMELEN - 1;
++		if (name_size >= 256) {
++			name_len = 255;
+ 		} else {
+ 			name_len = name_size;
+ 		}

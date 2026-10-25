@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "fdaa14752e836d5de61e0ac8c3676a9247729a79",
+      "edited_message": null,
+      "patch": "diff --git a/src/preview.cpp b/src/preview.cpp\nindex e8d199b..1fc2645 100644\n--- a/src/preview.cpp\n+++ b/src/preview.cpp\n@@ -830,16 +830,20 @@ bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize) {\n   if (width == 0 || height == 0)\n     return false;\n \n-  constexpr size_t bytesPerPixel = 3;\n+  const auto w = static_cast<uint32_t>(width);\n+  const auto h = static_cast<uint32_t>(height);\n+  if (w == 0 || h == 0)\n+    return false;\n \n-  if (width > std::numeric_limits<size_t>::max() / height)\n+  constexpr uint32_t bytesPerPixel = 3;\n+  if (w > std::numeric_limits<uint32_t>::max() / h)\n     return false;\n \n-  const size_t pixels = width * height;\n-  if (pixels > std::numeric_limits<size_t>::max() / bytesPerPixel)\n+  const uint32_t pixels = w * h;\n+  if (pixels > std::numeric_limits<uint32_t>::max() / bytesPerPixel)\n     return false;\n \n-  rgbSize = pixels * bytesPerPixel;\n+  rgbSize = static_cast<size_t>(pixels) * bytesPerPixel;\n   return rgbSize <= maxAi7ThumbnailSize;\n }\n \n"
+    },
+    {
+      "sha": "67b117d42e4d452a77106eaf6d5a4ffb8a95ed0b",
+      "edited_message": null,
+      "patch": "--- a/src/preview.cpp\n+++ b/src/preview.cpp\n@@ -39,7 +39,7 @@\n bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize);\n \n /// @brief Decode an Illustrator thumbnail that follows after %AI7_Thumbnail.\n-DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize);\n+DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize, size_t width, size_t height);\n \n /// @brief Create a PNM image from raw RGB data.\n DataBuf makePnm(size_t width, size_t height, const DataBuf& rgb);\n@@ -417,7 +417,7 @@\n       return {};\n     }\n     const DataBuf ai7thumbnail = decodeHex(data + nativePreview_.position_, nativePreview_.size_);\n-    const DataBuf rgb = decodeAi7Thumbnail(ai7thumbnail, expectedSize);\n+    const DataBuf rgb = decodeAi7Thumbnail(ai7thumbnail, expectedSize, width_, height_);\n     return makePnm(width_, height_, rgb);\n   }\n   if (nativePreview_.filter_ == \"hex-irb\") {\n@@ -918,7 +918,7 @@\n   return dest;\n }\n \n-DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {\n+DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize, size_t width, size_t height) {\n   const byte* colorTable = src.c_data();\n   const size_t colorTableSize = 256 * 3;\n   if (src.size() < colorTableSize) {\n@@ -933,6 +933,7 @@\n   DataBuf dest(expectedSize);\n   auto destData = dest.data();\n   size_t destPos = 0;\n+  const size_t limit = width * height * 3;\n   for (size_t i = rle ? 3 : 0; i < imageDataSize;) {\n     byte num = 1;\n     byte value = imageData[i++];\n@@ -955,7 +956,7 @@\n         value = imageData[i++];\n       }\n     }\n-    Internal::enforce(expectedSize - destPos >= num * 3, ErrorCode::kerCorruptedMetadata);\n+    Internal::enforce(limit - destPos >= num * 3, ErrorCode::kerCorruptedMetadata);\n     const auto c0 = colorTable[value * 3];\n     const auto c1 = colorTable[value * 3 + 1];\n     const auto c2 = colorTable[value * 3 + 2];\n"
+    }
+  ],
+  "coupling": "fdaa147 narrows the AI7 width and height to uint32_t before the product checks and returns 3 times that truncated product, still capped by maxAi7ThumbnailSize. On its own that is a tighter ceiling: the decoder it shipped with only uses the returned length to stop a growing buffer, so a truncated size cannot write past an allocation. 67b117d replaces that decoder with one preallocated to the helper's byte count, but bounds the fill by width*height*3 \u2014 the same expression makePnm asserts, and exactly the value the helper returned before the narrowing. For every thumbnail the un-narrowed helper accepts, that limit equals the allocation, so the rewrite stays in range. The out-of-bounds write appears only when both land together: the buffer is the truncated uint32 product while the loop runs to the full geometric size. Repairing either diff restores one side of that contract (size_t arithmetic rejects this input before decode, or the fill ceiling is the allocation again), so the fault is not visible in, or reachable from, either edit alone.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Exiv2::PreviewManager::getPreviewProperties",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,83 @@
+diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c
+index 6dc4cef..020fbce 100644
+--- a/src/liblzma/lz/lz_decoder.c
++++ b/src/liblzma/lz/lz_decoder.c
+@@ -281,12 +281,13 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 		coder->dict.size = 0;
+ 		lzma_free(coder->dict.buf, allocator);
+ 
+-		// The LZ_DICT_EXTRA bytes at the end of the buffer aren't
+-		// included in alloc_size. These extra bytes allow
+-		// dict_repeat() to read and write more data than requested.
+-		// Otherwise this extra space is ignored.
+-		coder->dict.buf = lzma_alloc(alloc_size + LZ_DICT_EXTRA,
+-				allocator);
++		// The bytes at the end of the buffer aren't included in
++		// alloc_size. dict_repeat() with the SSE2 copier reads and
++		// writes at most 32 bytes more than requested; reserve that
++		// explicitly so the padding does not collapse to zero in a
++		// build where LZ_DICT_EXTRA is 0. Otherwise this extra space
++		// is ignored.
++		coder->dict.buf = lzma_alloc(alloc_size + 32, allocator);
+ 		if (coder->dict.buf == NULL)
+ 			return LZMA_MEM_ERROR;
+ 
+diff --git a/src/liblzma/lz/lz_decoder.h b/src/liblzma/lz/lz_decoder.h
+index 2698e01..76b8799 100644
+--- a/src/liblzma/lz/lz_decoder.h
++++ b/src/liblzma/lz/lz_decoder.h
+@@ -41,7 +41,7 @@
+ ///
+ /// NOTE: If this is increased, update LZMA_DICT_REPEAT_MAX too.
+ #if LZMA_LZ_DECODER_CONFIG >= 2
+-#	define LZ_DICT_EXTRA 32
++#	define LZ_DICT_EXTRA 64
+ #else
+ #	define LZ_DICT_EXTRA 0
+ #endif
+@@ -70,8 +70,9 @@
+ /// LZMA's longest match length is 273 bytes. The LZMA decoder looks at
+ /// the lowest four bits of the dictionary position, thus 273 must be
+ /// rounded up to the next multiple of 16 (288). In addition, optimized
+-/// dict_repeat() copies 32 bytes at a time, thus this must also be
+-/// a multiple of 32.
++/// dict_repeat() copies 64 bytes at a time, thus this must also be
++/// a multiple of 32 (the overshoot past the end of the buffer is covered
++/// by LZ_DICT_EXTRA).
+ #define LZ_DICT_REPEAT_MAX 288
+ 
+ /// Initial position in lzma_dict.buf when the dictionary is empty.
+@@ -235,8 +236,8 @@ dict_repeat(lzma_dict *restrict dict,
+ 		dict->pos += left;
+ 
+ #	elif LZMA_LZ_DECODER_CONFIG == 2
+-		// This can copy up to 32 bytes more than required.
+-		// (If left == 0, we still copy 32 bytes.)
++		// This can copy up to 64 bytes more than required.
++		// (If left == 0, we still copy 64 bytes.)
+ 		size_t pos = dict->pos;
+ 		dict->pos += left;
+ 		do {
+@@ -244,12 +245,20 @@ dict_repeat(lzma_dict *restrict dict,
+ 					(__m128i *)(dict->buf + back));
+ 			const __m128i x1 = _mm_loadu_si128(
+ 					(__m128i *)(dict->buf + back + 16));
+-			back += 32;
++			const __m128i x2 = _mm_loadu_si128(
++					(__m128i *)(dict->buf + back + 32));
++			const __m128i x3 = _mm_loadu_si128(
++					(__m128i *)(dict->buf + back + 48));
++			back += 64;
+ 			_mm_storeu_si128(
+ 					(__m128i *)(dict->buf + pos), x0);
+ 			_mm_storeu_si128(
+ 					(__m128i *)(dict->buf + pos + 16), x1);
+-			pos += 32;
++			_mm_storeu_si128(
++					(__m128i *)(dict->buf + pos + 32), x2);
++			_mm_storeu_si128(
++					(__m128i *)(dict->buf + pos + 48), x3);
++			pos += 64;
+ 		} while (pos < dict->pos);
+ 
+ #	else

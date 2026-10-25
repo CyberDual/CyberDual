@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "e1c0f42b1d3c8279e58605015e599214d4a66963",
+  "parent_sha": "e1c0f42b1d3c8279e58605015e599214d4a66963",
+  "project": "libwebp",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/webmproject/libwebp",
+  "repo_url": "https://github.com/webmproject/libwebp",
+  "source": "reuse",
+  "target": "libwebp",
+  "task": "Public helpers WebPImportRGB565()/WebPImportRGB4444() mis-extract channel bits so ARGB bleeds between channels; behaviour-correctness feature carrier (fix shifts/masks).",
+  "task_iid": "libwebp__import_rgb565_rgb4444",
+  "vuln_desc": "Public helpers WebPImportRGB565()/WebPImportRGB4444() mis-extract channel bits so ARGB bleeds between channels; behaviour-correctness feature carrier (fix shifts/masks)."
+}

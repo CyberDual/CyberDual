@@ -1,0 +1,25 @@
+{
+  "regime": "incomplete_fix",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "ce2bcd0577ee2904d30fe34335f82c640c56fd61",
+      "edited_message": "Bound GetDataSlab copies to selected columns",
+      "patch": "--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4779,9 +4779,13 @@\n             err = MATIO_E_BAD_ARGUMENT;\n         else if ( (size_t)stride[1] * (edge[1] - 1) + start[1] + 1 > dims[1] )\n             err = MATIO_E_BAD_ARGUMENT;\n-        else if ( (stride[0] == 1 && (size_t)edge[0] == dims[0]) &&\n-                  (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) )\n-            memcpy(data_out, data_in, nbytes);\n+        else if ( start[0] == 0 && start[1] >= 0 && edge[1] > 0 && dims[1] > 0 &&\n+                  stride[0] == 1 && (size_t)edge[0] == dims[0] && stride[1] == 1 &&\n+                  same_type == 1 && nbytes % dims[1] == 0 ) {\n+            const size_t column_bytes = nbytes / dims[1];\n+            memcpy(data_out, (const char *)data_in + (size_t)start[1] * column_bytes,\n+                   (size_t)edge[1] * column_bytes);\n+        }\n         else {\n             int i, j;\n \n"
+    },
+    {
+      "sha": "9957a9142d9cc22e46d2d483f5b9ef2b8ad076c5",
+      "edited_message": null,
+      "patch": "--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4813,8 +4813,7 @@\n              stride[0] == 1 && (size_t)edge[0] == dims[0] && stride[1] == 1 &&\n              same_type == 1 && nbytes % dims[1] == 0 ) {\n             const size_t column_bytes = nbytes / dims[1];\n-            memcpy(data_out, (const char *)data_in + (size_t)start[1] * column_bytes,\n-                   (size_t)edge[1] * column_bytes);\n+            memcpy(data_out, (const char *)data_in + (size_t)start[1] * column_bytes, nbytes);\n         }\n         else {\n             int i, j;\n"
+    }
+  ],
+  "coupling": "The base copied the complete numeric array for a partial column slab. The first edited maintenance commit repairs that by allowing contiguous full-column slices while copying only their selected byte count. The later rank-N indexing refactor retains that wider rank-2 fast path but passes the entire source byte count to memcpy. With the original first commit, the later full-size copy is restricted to the complete array; with only the first edit, partial slices use the selected size. The repair must reconcile the earlier fast-path selection contract with the later copy length. A compressed cell child reaches this in-memory path through Mat_VarReadData.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Mat_Open / Mat_VarReadInfo / Mat_VarReadData",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+diff --git a/src/hb-font.hh b/src/hb-font.hh
+index bc75fe1f9fec7b79ca756e9b05f49debc60cd4c2..adcd436ab4760c095f31bba6fd77d29760ddcd8f 100644
+--- a/src/hb-font.hh
++++ b/src/hb-font.hh
+@@ -216,33 +216,85 @@ struct hb_font_t
+     /* Slant. */
+     if (slant_xy)
+     {
+-      hb_position_t x1 = extents->x_bearing;
+-      hb_position_t y1 = extents->y_bearing;
+-      hb_position_t x2 = extents->x_bearing + extents->width;
+-      hb_position_t y2 = extents->y_bearing + extents->height;
++      int64_t x1 = extents->x_bearing;
++      int64_t y1 = extents->y_bearing;
++      int64_t x2 = x1 + extents->width;
++      int64_t y2 = y1 + extents->height;
+ 
+-      x1 += floorf (hb_min (y1 * slant_xy, y2 * slant_xy));
+-      x2 += ceilf (hb_max (y1 * slant_xy, y2 * slant_xy));
++      float smin = floorf (hb_min ((float) y1 * slant_xy, (float) y2 * slant_xy));
++      float smax = ceilf (hb_max ((float) y1 * slant_xy, (float) y2 * slant_xy));
+ 
+-      extents->x_bearing = x1;
+-      extents->width = x2 - extents->x_bearing;
++      x1 += hb_clamp_to<int64_t> (smin);
++      x2 += hb_clamp_to<int64_t> (smax);
++
++      extents->x_bearing = hb_clamp_to<hb_position_t> (x1);
++      extents->width = hb_clamp_to<hb_position_t> (x2 - (int64_t) extents->x_bearing);
+     }
+ 
+     /* Embolden. */
+     if (x_strength || y_strength)
+     {
+-      /* Y */
+-      int y_shift = y_strength;
++      int64_t y_shift = y_strength;
+       if (y_scale < 0) y_shift = -y_shift;
+-      extents->y_bearing += y_shift;
+-      extents->height -= y_shift;
+-
+-      /* X */
+-      int x_shift = x_strength;
++      int64_t x_shift = x_strength;
+       if (x_scale < 0) x_shift = -x_shift;
++
++      /* Thinning a tall slanted box can swap the sheared edges, so the
++       * outer x is taken from samples along the edge rather than from
++       * a single width adjustment. */
++      if (slant_xy && x_shift < 0)
++      {
++	int64_t y1 = extents->y_bearing;
++	int64_t y2 = y1 + extents->height;
++	int64_t dy = y2 >= y1 ? y2 - y1 : y1 - y2;
++	if (dy > hb_int_max (signed short))
++	{
++	  unsigned step = 256;
++	  unsigned n_points = (unsigned) (dy / step) + 1;
++	  int64_t *xs = (int64_t *) hb_malloc (n_points * sizeof (int64_t));
++	  if (xs)
++	  {
++	    int64_t x1 = extents->x_bearing;
++	    int64_t x2 = x1 + extents->width;
++	    int64_t y_lo = y1 < y2 ? y1 : y2;
++	    int64_t inset = -x_shift;
++	    int64_t left_inset = embolden_in_place ? inset / 2 : 0;
++	    int64_t right_inset = embolden_in_place ? inset - left_inset : inset;
++
++	    for (unsigned i = 0; i < n_points; i++)
++	    {
++	      int64_t y = y_lo + (int64_t) i * (int64_t) step;
++	      if (y > y_lo + dy)
++		y = y_lo + dy;
++	      float ysl = (float) y * slant_xy;
++	      int64_t left = x1 + hb_clamp_to<int64_t> (floorf (ysl)) + left_inset;
++	      int64_t right = x2 + hb_clamp_to<int64_t> (ceilf (ysl)) - right_inset;
++	      xs[2 * i] = left;
++	      xs[2 * i + 1] = right;
++	    }
++
++	    int64_t min_x = xs[0];
++	    int64_t max_x = xs[1];
++	    for (unsigned i = 1; i < n_points; i++)
++	    {
++	      min_x = hb_min (min_x, xs[2 * i]);
++	      max_x = hb_max (max_x, xs[2 * i + 1]);
++	    }
++	    hb_free (xs);
++
++	    extents->x_bearing = hb_clamp_to<hb_position_t> (min_x);
++	    extents->width = hb_clamp_to<hb_position_t> (max_x - min_x);
++	    x_shift = 0;
++	  }
++	}
++      }
++
++      extents->y_bearing = hb_clamp_to<hb_position_t> ((int64_t) extents->y_bearing + y_shift);
++      extents->height = hb_clamp_to<hb_position_t> ((int64_t) extents->height - y_shift);
++
+       if (embolden_in_place)
+-	extents->x_bearing -= x_shift / 2;
+-      extents->width += x_shift;
++	extents->x_bearing = hb_clamp_to<hb_position_t> ((int64_t) extents->x_bearing - x_shift / 2);
++      extents->width = hb_clamp_to<hb_position_t> ((int64_t) extents->width + x_shift);
+     }
+   }
+ 

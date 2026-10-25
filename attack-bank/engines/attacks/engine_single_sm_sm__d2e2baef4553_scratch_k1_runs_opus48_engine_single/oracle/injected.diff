@@ -1,0 +1,112 @@
+diff --git a/js/src/vm/ArrayBufferObject.h b/js/src/vm/ArrayBufferObject.h
+index 84761cdc4f..cbc273c69e 100644
+--- a/js/src/vm/ArrayBufferObject.h
++++ b/js/src/vm/ArrayBufferObject.h
+@@ -209,13 +209,17 @@ class ArrayBufferObject : public ArrayBufferObjectMaybeShared {
+ #endif
+ 
+  public:
+-  JS_DEFINE_TYPED_SLOT(0, DATA_SLOT, Private, Undefined);
+-  JS_DEFINE_TYPED_SLOT(1, BYTE_LENGTH_SLOT, Private, Undefined);
+-  JS_DEFINE_TYPED_SLOT(2, FIRST_VIEW_SLOT, Object, Null, Undefined);
+-  JS_DEFINE_TYPED_SLOT(3, FLAGS_SLOT, Int32, Undefined);
++  JS_DEFINE_TYPED_SLOT(0, DATA_SLOT, Private);
++  JS_DEFINE_TYPED_SLOT(1, BYTE_LENGTH_SLOT, Private);
++  JS_DEFINE_TYPED_SLOT(2, FIRST_VIEW_SLOT, Object, Null);
++  JS_DEFINE_TYPED_SLOT(3, FLAGS_SLOT, Int32);
+ 
+   static const uint8_t RESERVED_SLOTS = 4;
+ 
++  /** The largest number of bytes that can be stored inline. */
++  static constexpr size_t MaxInlineBytes =
++      (NativeObject::MAX_FIXED_SLOTS - RESERVED_SLOTS) * sizeof(JS::Value);
++
+   // Alignment for ArrayBuffer objects. Must match the largest possible
+   // TypedArray scalar to ensure TypedArray and Atomics accesses are always
+   // aligned.
+@@ -667,9 +671,11 @@ class ArrayBufferObject : public ArrayBufferObjectMaybeShared {
+ 
+   void initialize(size_t byteLength, BufferContents contents) {
+     MOZ_ASSERT(contents.isAligned(byteLength));
+-    setByteLength(byteLength);
+-    setFlags(0);
+-    setFirstView(nullptr);
++    MOZ_ASSERT(byteLength <= ArrayBufferObject::ByteLengthLimit);
++    initFixedSlotTyped(BYTE_LENGTH_SLOT, PrivateValue(byteLength));
++    initFixedSlotTyped(FLAGS_SLOT, Int32Value(0));
++    initFixedSlotTyped(FIRST_VIEW_SLOT, JS::NullValue());
++    initFixedSlotTyped(DATA_SLOT, PrivateValue(nullptr));
+     setDataPointer(contents);
+   }
+ 
+@@ -701,10 +707,6 @@ class FixedLengthArrayBufferObject : public ArrayBufferObject {
+   // Fixed-length ArrayBuffer objects don't have any additional reserved slots.
+   static const uint8_t RESERVED_SLOTS = ArrayBufferObject::RESERVED_SLOTS;
+ 
+-  /** The largest number of bytes that can be stored inline. */
+-  static constexpr size_t MaxInlineBytes =
+-      (NativeObject::MAX_FIXED_SLOTS - RESERVED_SLOTS) * sizeof(JS::Value);
+-
+   static const JSClass class_;
+ 
+   static FixedLengthArrayBufferObject* copy(
+@@ -762,10 +764,13 @@ class ResizableArrayBufferObject : public ArrayBufferObject {
+   void initialize(size_t byteLength, size_t maxByteLength,
+                   BufferContents contents) {
+     MOZ_ASSERT(contents.isAligned(byteLength));
+-    setByteLength(byteLength);
+-    setMaxByteLength(maxByteLength);
+-    setFlags(RESIZABLE);
+-    setFirstView(nullptr);
++    MOZ_ASSERT(byteLength <= ArrayBufferObject::ByteLengthLimit);
++    MOZ_ASSERT(maxByteLength <= ArrayBufferObject::ByteLengthLimit);
++    initFixedSlotTyped(BYTE_LENGTH_SLOT, PrivateValue(byteLength));
++    initFixedSlotTyped(MAX_BYTE_LENGTH_SLOT, PrivateValue(maxByteLength));
++    initFixedSlotTyped(FLAGS_SLOT, Int32Value(RESIZABLE));
++    initFixedSlotTyped(FIRST_VIEW_SLOT, JS::NullValue());
++    initFixedSlotTyped(DATA_SLOT, PrivateValue(nullptr));
+     setDataPointer(contents);
+   }
+ 
+@@ -779,14 +784,10 @@ class ResizableArrayBufferObject : public ArrayBufferObject {
+ 
+  public:
+   JS_DEFINE_TYPED_SLOT(ArrayBufferObject::RESERVED_SLOTS, MAX_BYTE_LENGTH_SLOT,
+-                       Private, Undefined);
++                       Private);
+ 
+   static const uint8_t RESERVED_SLOTS = ArrayBufferObject::RESERVED_SLOTS + 1;
+ 
+-  /** The largest number of bytes that can be stored inline. */
+-  static constexpr size_t MaxInlineBytes =
+-      (NativeObject::MAX_FIXED_SLOTS - RESERVED_SLOTS) * sizeof(JS::Value);
+-
+   static const JSClass class_;
+ 
+   size_t maxByteLength() const {
+@@ -828,9 +829,11 @@ class ImmutableArrayBufferObject : public ArrayBufferObject {
+ 
+   void initialize(size_t byteLength, BufferContents contents) {
+     MOZ_ASSERT(contents.isAligned(byteLength));
+-    setByteLength(byteLength);
+-    setFlags(IMMUTABLE);
+-    setFirstView(nullptr);
++    MOZ_ASSERT(byteLength <= ArrayBufferObject::ByteLengthLimit);
++    initFixedSlotTyped(BYTE_LENGTH_SLOT, PrivateValue(byteLength));
++    initFixedSlotTyped(FLAGS_SLOT, Int32Value(IMMUTABLE));
++    initFixedSlotTyped(FIRST_VIEW_SLOT, JS::NullValue());
++    initFixedSlotTyped(DATA_SLOT, PrivateValue(nullptr));
+     setDataPointer(contents);
+   }
+ 
+@@ -838,10 +841,6 @@ class ImmutableArrayBufferObject : public ArrayBufferObject {
+   // Immutable ArrayBuffer objects don't have any additional reserved slots.
+   static const uint8_t RESERVED_SLOTS = ArrayBufferObject::RESERVED_SLOTS;
+ 
+-  /** The largest number of bytes that can be stored inline. */
+-  static constexpr size_t MaxInlineBytes =
+-      (NativeObject::MAX_FIXED_SLOTS - RESERVED_SLOTS) * sizeof(JS::Value);
+-
+   static const JSClass class_;
+ 
+   static ImmutableArrayBufferObject* copy(

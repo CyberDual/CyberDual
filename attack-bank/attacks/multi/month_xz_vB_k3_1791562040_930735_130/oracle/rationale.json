@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "b5bc191a40cbe6c72677a3e2090161b4a8a9afce",
+      "edited_message": null,
+      "patch": "diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c\nindex 09ee2fe..01528b5 100644\n--- a/src/liblzma/common/index.c\n+++ b/src/liblzma/common/index.c\n@@ -309,7 +309,7 @@ index_tree_append(index_tree *tree, index_tree_node *node, bool prepend)\n \t\tpivot->parent = node->parent;\n \n \t\tif (prepend) {\n-\t\t\tnode->left = pivot->right;\n+\t\t\tnode->left = pivot->left;\n \t\t\tif (node->left != NULL)\n \t\t\t\tnode->left->parent = node;\n \n"
+    },
+    {
+      "sha": "20f77f090548be551cba441c6cca737709e51628",
+      "edited_message": null,
+      "patch": "diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c\nindex 3fbb5b1..e29a340 100644\n--- a/src/liblzma/common/index.c\n+++ b/src/liblzma/common/index.c\n@@ -312,7 +312,7 @@ index_tree_append(index_tree *tree, index_tree_node *node, bool prepend)\n \t\tpivot->parent = node->parent;\n \n \t\tif (prepend) {\n-\t\t\tnode->left = pivot->right;\n+\t\t\tnode->left = pivot->left;\n \t\t\tif (node->left != NULL)\n \t\t\t\tnode->left->parent = node;\n \n@@ -819,9 +819,10 @@ typedef struct {\n } index_cat_info;\n \n \n-/// Add the Stream nodes from the source index to dest using recursion.\n-/// Simplest iterative traversal of the source tree wouldn't work, because\n-/// we update the pointers in nodes when moving them to the destination tree.\n+/// Prepend the Stream nodes from dest into src's tree using recursion,\n+/// walking dest's tree from the rightmost Stream to the leftmost one.\n+/// Simplest iterative traversal wouldn't work, because we update the\n+/// pointers in nodes when moving them to the destination tree.\n static void\n index_cat_helper(const index_cat_info *info, index_stream *this)\n {\n"
+    }
+  ],
+  "coupling": "b5bc191 (2/4 of the index.c Stream-tree refactor) adds the 'prepend' side of index_tree_append()'s AVL rebalancing rotation. The correct mirror of the existing append-side rotation is 'node->left = pivot->right;' (append-side symmetric counterpart is 'node->right = pivot->left;'); the edit changes it to 'node->left = pivot->left;', which leaves the AVL subtree that should become node's new left child (pivot's old right child) untouched while also never clearing pivot's own left pointer. At b5bc191 this line is cold: every call site in the whole codebase still calls index_tree_append(..., false) at that point in history (lzma_index_init, lzma_index_append, index_cat_helper and lzma_index_dup all pass 'false'), so the prepend branch of the rotation never executes and the commit is behaviorally identical to the real one for every caller -- it reads as a plausible, if unexercised, mirror of the append branch. 20f77f0 (4/4) is the commit that actually starts invoking index_tree_append(..., true): it flips lzma_index_init's initial-stream insertion and, more importantly, rewrites lzma_index_cat()/index_cat_helper() to prepend Streams being combined (this is the real, substantive, documented performance fix in that commit -- unrelated in its own diff to the rotation internals). Once a prepend-triggered rotation actually happens (which requires the Stream tree being built by repeated prepends to reach an unbalanced node count, e.g. 3 Streams), the corrupted pointer wiring makes two different tree nodes (a parent and its child) both point to the same grandchild Stream node, turning the tree into a DAG. The very next full-tree teardown (lzma_index_end(), which recursively frees left/right children) then frees that shared node twice -- walking into it once via the first parent, then walking into the already-freed node again via the second parent -- producing a heap-use-after-free immediately followed by a double-free. Reverting only b5bc191 (restoring the correct 'pivot->right' line) removes the bug outright even though 20f77f0 still wires prepend=true everywhere. Reverting only 20f77f0 (i.e. never calling index_tree_append with prepend=true) also removes the bug, but only by leaving the corrupted rotation branch permanently unreachable dead code -- it would still be latent and would resurface the moment any later, unedited commit wires in a prepend call (as the real upstream history in fact does). The fix therefore requires recognizing, across both diffs, that b5bc191's seemingly-dead rotation code is in fact live and wrong as soon as 20f77f0's call-site changes are applied.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "lzma_index_cat",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

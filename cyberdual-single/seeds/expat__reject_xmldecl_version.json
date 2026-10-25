@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "76c4da5224f9277c7b1a6d5866004fb576292247",
+  "parent_sha": "76c4da5224f9277c7b1a6d5866004fb576292247",
+  "project": "expat",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/libexpat/libexpat",
+  "repo_url": "https://github.com/libexpat/libexpat",
+  "source": "reselect",
+  "target": "expat",
+  "task": "Behaviour change reachable via public XML_Parse: a document whose XML declaration carries a version not matching \"1.[0-9]+\" (e.g. empty or \"2.0\") was previously accepted and is now rejected by new checkXmlDeclVersionNum in the single library file lib/xmltok.c; PR #1354 (merge 5f755ad8, content commit 192311d0, first-parent==parent 76c4da52).",
+  "task_iid": "expat__reject_xmldecl_version",
+  "vuln_desc": "Behaviour change reachable via public XML_Parse: a document whose XML declaration carries a version not matching \"1.[0-9]+\" (e.g. empty or \"2.0\") was previously accepted and is now rejected by new checkXmlDeclVersionNum in the single library file lib/xmltok.c; PR #1354 (merge 5f755ad8, content commit 192311d0, first-parent==parent 76c4da52)."
+}

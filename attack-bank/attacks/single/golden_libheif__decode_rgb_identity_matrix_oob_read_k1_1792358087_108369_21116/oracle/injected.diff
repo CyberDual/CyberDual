@@ -1,0 +1,13 @@
+diff --git a/libheif/color-conversion/rgb2yuv.cc b/libheif/color-conversion/rgb2yuv.cc
+index 03d39690694b05b6ccf2dc0e40b5bac0d63f321c..e7abca6ac3bab6f0c526681ba3b681fbd32b6891 100644
+--- a/libheif/color-conversion/rgb2yuv.cc
++++ b/libheif/color-conversion/rgb2yuv.cc
+@@ -231,7 +231,7 @@ Op_RGB_to_YCbCr<Pixel>::convert_colorspace(const std::shared_ptr<const HeifPixel
+       if (matrix_coeffs == 0) {
+         if (full_range_flag) {
+           out_cb[(y / subV) * out_cb_stride + (x / subH)] = in_b[y * in_b_stride + x];
+-          out_cr[(y / subV) * out_cb_stride + (x / subH)] = in_r[y * in_b_stride + x];
++          out_cr[(y / subV) * out_cr_stride + (x / subH)] = in_r[y * in_r_stride + x];
+         }
+         else {
+           out_cb[(y / subV) * out_cb_stride + (x / subH)] = (Pixel) clip_f_u16(

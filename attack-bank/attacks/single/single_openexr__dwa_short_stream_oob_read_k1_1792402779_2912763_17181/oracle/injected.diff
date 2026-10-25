@@ -1,0 +1,82 @@
+diff --git a/src/lib/OpenEXRCore/internal_dwa.c b/src/lib/OpenEXRCore/internal_dwa.c
+index 841ed5d6aafa41c02dd497f57295e0a04363e7d8..166226eb7beebbbb4847c135614a5eb546517907 100644
+--- a/src/lib/OpenEXRCore/internal_dwa.c
++++ b/src/lib/OpenEXRCore/internal_dwa.c
+@@ -110,6 +110,7 @@
+ #include "internal_cpuid.h"
+ #include "internal_huf.h"
+ #include "internal_structs.h"
++#include "internal_util.h"
+ #include "internal_xdr.h"
+ 
+ #include <math.h>
+diff --git a/src/lib/OpenEXRCore/internal_dwa_compressor.h b/src/lib/OpenEXRCore/internal_dwa_compressor.h
+index 1fe256e4b511fc0f7e0d6b1925973d32774b6387..052c20c5c407103ad2963a8eb3cefdf3de19e09b 100644
+--- a/src/lib/OpenEXRCore/internal_dwa_compressor.h
++++ b/src/lib/OpenEXRCore/internal_dwa_compressor.h
+@@ -864,6 +864,56 @@ DwaCompressor_uncompress (
+ 
+     if (version > 2) { return EXR_ERR_BAD_CHUNK_LEADER; }
+ 
++    //
++    // The sizes declared for the UNKNOWN and RLE data must cover what
++    // the channels classified for those schemes consume when they are
++    // copied out below, otherwise the per-channel copies would read
++    // beyond the data decoded from the chunk.
++    //
++
++    {
++        uint64_t unknownDataNeeded = 0;
++        uint64_t rleDataNeeded     = 0;
++
++        for (int c = 0; c < me->_numChannels; ++c)
++        {
++            const ChannelData*               cd   = &(me->_channelData[c]);
++            const exr_coding_channel_info_t* chan = cd->chan;
++            uint64_t                         chanSize =
++                (uint64_t) compute_sampled_width (
++                    chan->width, chan->x_samples, me->_min[0]) *
++                (uint64_t) compute_sampled_height (
++                    chan->height, chan->y_samples, me->_min[1]) *
++                (uint64_t) chan->bytes_per_element;
++
++            if (cd->compression == UNKNOWN)
++                unknownDataNeeded += chanSize;
++            else if (cd->compression == RLE)
++                rleDataNeeded += chanSize;
++        }
++
++        if (unknownDataNeeded > unknownUncompressedSize ||
++            rleDataNeeded > rleRawSize)
++        {
++            return EXR_ERR_CORRUPT_CHUNK;
++        }
++    }
++
++    //
++    // Now that the declared RLE size has been validated against the
++    // channel data, the interleave buffer only needs to hold the
++    // decoded data rather than the worst case estimate.
++    //
++
++    if (rleRawSize > 0 && rleRawSize < me->_planarUncBufferSize[RLE])
++    {
++        uint8_t* rleBuf = me->alloc_fn ((size_t) rleRawSize);
++        if (!rleBuf) return EXR_ERR_OUT_OF_MEMORY;
++        me->free_fn (me->_planarUncBuffer[RLE]);
++        me->_planarUncBuffer[RLE]     = rleBuf;
++        me->_planarUncBufferSize[RLE] = rleRawSize;
++    }
++
+     rv = DwaCompressor_setupChannelData (me);
+     if (rv != EXR_ERR_SUCCESS) { return rv; }
+ 
+@@ -1238,7 +1288,7 @@ DwaCompressor_uncompress (
+                         if ((cd->planarUncBufferEnd +
+                              (size_t) (dstScanlineSize)) >
+                             (me->_planarUncBuffer[UNKNOWN] +
+-                             me->_planarUncBufferSize[UNKNOWN]))
++                             unknownUncompressedSize))
+                         {
+                             return EXR_ERR_CORRUPT_CHUNK;
+                         }

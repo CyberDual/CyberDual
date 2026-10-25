@@ -1,0 +1,29 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index b758e0eff234b2233567ff901fc7458a3f975b8d..3951717969a03a66d11cf68c8647d8ce85c19c9d 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -719,7 +719,7 @@ static int knownhost_line_hashed(LIBSSH2_KNOWNHOSTS *hosts,
+     if((size_t)(p - salt) < hostlen && *p == '|') {
+         const char *hash = NULL;
+         size_t saltlen = p - salt;
+-        if(saltlen >= (sizeof(saltbuf) - 1)) /* weird length */
++        if(saltlen > sizeof(saltbuf)) /* weird length */
+             return ssh2_err(hosts->session, LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                             "Failed to parse known_hosts line "
+                             "(unexpectedly long salt)");
+diff --git a/src/openssl.c b/src/openssl.c
+index 6a38b55b91440c1c188472dde05a9770ea3a3f73..0614f68d01899f6e3fb6a528e27a3c993d990363 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -953,6 +953,11 @@ int ssh2_cipher_crypt(ssh2_cipher_ctx *ctx, SSH2_CIPHER_T(algo), int encrypt,
+     assert(blocksize <= sizeof(buf));
+     assert(cryptlen >= 0);
+ 
++    /* A malicious peer may advertise a block larger than our scratch buffer;
++       enforce the bound at runtime so asserts are not the only guard. */
++    if(blocksize > sizeof(buf) || cryptlen < 0)
++        return 1;
++
+ #if LIBSSH2_AES_GCM
+     /* First block */
+     if(IS_FIRST(firstlast)) {

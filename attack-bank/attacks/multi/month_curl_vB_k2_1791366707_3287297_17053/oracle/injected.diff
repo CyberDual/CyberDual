@@ -1,0 +1,23 @@
+diff --git a/lib/parsedate.c b/lib/parsedate.c
+index 3c11d76..bee90e4 100644
+--- a/lib/parsedate.c
++++ b/lib/parsedate.c
+@@ -110,7 +110,9 @@ struct tzinfo {
+ 
+ #define DST (-60)     /* offset for daylight savings time */
+ 
+-/* alpha-sorted list of single-letter time zones, A - Z */
++/* alpha-sorted list of single-letter time zones, A - Z. "J" is never a
++   valid zone letter and is rejected before lookup, so it gets no slot
++   here. */
+ static const int16_t tzone[] = {
+   -1 * 60,            /* Alpha */
+   -2 * 60,            /* Bravo */
+@@ -121,7 +123,6 @@ static const int16_t tzone[] = {
+   -7 * 60,            /* Golf */
+   -8 * 60,            /* Hotel */
+   -9 * 60,            /* India */
+-  -1,                 /* J - not a timezone */
+   -10 * 60,           /* Kilo */
+   -11 * 60,           /* Lima */
+   -12 * 60,           /* Mike */

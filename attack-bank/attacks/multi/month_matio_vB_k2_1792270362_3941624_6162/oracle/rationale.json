@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "9d5dd7d7857aa5f092be777681791b24090e04fb",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\nindex 2da2750..9590ae0 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4775,12 +4775,16 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n         same_type = 1;\n \n     if ( rank == 2 ) {\n+        const size_t data_size = Mat_SizeOf(data_type);\n+        const size_t nelems = data_size ? nbytes / data_size : 0;\n+        const size_t column_nelems = dims[0] ? nelems / dims[0] : 0;\n+\n         if ( (size_t)stride[0] * (edge[0] - 1) + start[0] + 1 > dims[0] )\n             err = MATIO_E_BAD_ARGUMENT;\n         else if ( (size_t)stride[1] * (edge[1] - 1) + start[1] + 1 > dims[1] )\n             err = MATIO_E_BAD_ARGUMENT;\n         else if ( (stride[0] == 1 && (size_t)edge[0] == dims[0]) &&\n-                  (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) )\n+                  (stride[1] == 1 && (size_t)edge[1] == column_nelems) && (same_type == 1) )\n             memcpy(data_out, data_in, nbytes);\n         else {\n             int i, j;\n"
+    },
+    {
+      "sha": "afc9c363894efcae60d7b04474b78b37f97ff5b4",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\nindex 1c86d8b..302c5b0 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4723,6 +4723,7 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n {\n     int err = MATIO_E_NO_ERROR, i;\n     int same_type = 0;\n+    size_t data_size, nelems, column_nelems;\n     if ( (class_type == MAT_C_DOUBLE && data_type == MAT_T_DOUBLE) ||\n          (class_type == MAT_C_SINGLE && data_type == MAT_T_SINGLE) ||\n          (class_type == MAT_C_INT16 && data_type == MAT_T_INT16) ||\n@@ -4743,9 +4744,13 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n             return MATIO_E_BAD_ARGUMENT;\n     }\n \n+    data_size = Mat_SizeOf(data_type);\n+    nelems = data_size ? nbytes / data_size : 0;\n+    column_nelems = dims[0] ? nelems / dims[0] : 0;\n+\n     if ( rank == 2 ) {\n         if ( (stride[0] == 1 && (size_t)edge[0] == dims[0]) &&\n-             (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) )\n+             (stride[1] == 1 && (size_t)edge[1] == column_nelems) && (same_type == 1) )\n             memcpy(data_out, data_in, nbytes);\n         else {\n             int i, j;\n@@ -4822,6 +4827,8 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n             if ( err )\n                 return err;\n         }\n+        if ( rank > 2 )\n+            dimp[rank - 2] = column_nelems;\n \n         switch ( class_type ) {\n             case MAT_C_DOUBLE: {\n"
+    }
+  ],
+  "coupling": "The first edited commit derives column_nelems as the source element count divided by dims[0] (the product of the trailing dimensions) and uses it only for the rank-2 full-column test, where it is equivalent to dims[1]. That commit is therefore benign by itself. The later rank-N refactor promotes that derived value and overwrites dimp[rank - 2], the multiplier used for offsets in the last dimension. The correct last-dimension multiplier is the prefix product dims[0] * ... * dims[rank - 2], not the trailing product dims[1] * ... * dims[rank - 1]. For an in-contract 2 x 2 x 8 slab starting at last-dimension index 7, the composed code computes 7 * 16 instead of 7 * 4 and reads far beyond the 32-element source buffer. The unsafe value is introduced by one commit and consumed by the other, so a correct repair must reconcile the derived-count semantics with the rank-N prefix-product consumer rather than reviewing either diff in isolation.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Mat_Open/Mat_VarReadInfo/Mat_VarGetCell/Mat_VarReadData",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index b0b30e7350846b379726a8e794ae40c2187cac8b..f0275a279ccbe8adb47aea1f94f7c94de1fcedbd 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -7815,29 +7815,46 @@ dtdCopy(XML_Parser oldParser, DTD *newDtd, const DTD *oldDtd,
+     if (oldE->idAtt)
+       newE->idAtt = (ATTRIBUTE_ID *)lookup(oldParser, &(newDtd->attributeIds),
+                                            oldE->idAtt->name, 0);
+-    newE->allocDefaultAtts = newE->nDefaultAtts = oldE->nDefaultAtts;
+     if (oldE->prefix)
+       newE->prefix = (PREFIX *)lookup(oldParser, &(newDtd->prefixes),
+                                       oldE->prefix->name, 0);
+-    for (size_t i = 0; i < newE->nDefaultAtts; i++) {
++    size_t nDefaultAtts = 0;
++    for (size_t i = 0; i < oldE->nDefaultAtts; i++) {
+       const XML_Char *const attributeName = oldE->defaultAtts[i].id->name;
+-      newE->defaultAtts[i].id = (ATTRIBUTE_ID *)lookup(
+-          oldParser, &(newDtd->attributeIds), attributeName, 0);
+-      newE->defaultAtts[i].isCdata = oldE->defaultAtts[i].isCdata;
++
++      NAME_AND_DEFAULT_ATTRIBUTE *const nameAddedOrFound
++          = (NAME_AND_DEFAULT_ATTRIBUTE *)lookup(
++              parser, &(newE->defaultAttForName), attributeName,
++              sizeof(NAME_AND_DEFAULT_ATTRIBUTE));
++      if (! nameAddedOrFound) {
++        return 0;
++      }
++      if (nameAddedOrFound->initialized)
++        continue;
++
++      DEFAULT_ATTRIBUTE *const newAtt = &newE->defaultAtts[nDefaultAtts];
++      newAtt->id = (ATTRIBUTE_ID *)lookup(oldParser, &(newDtd->attributeIds),
++                                          attributeName, 0);
++      newAtt->isCdata = oldE->defaultAtts[i].isCdata;
+       if (oldE->defaultAtts[i].value) {
+-        newE->defaultAtts[i].value
++        newAtt->value
+             = poolCopyString(&(newDtd->pool), oldE->defaultAtts[i].value);
+-        if (! newE->defaultAtts[i].value)
++        if (! newAtt->value)
+           return 0;
+       } else
+-        newE->defaultAtts[i].value = NULL;
++        newAtt->value = NULL;
+ 
+-      NAMED *const nameAddedOrFound = lookup(parser, &(newE->defaultAttForName),
+-                                             attributeName, sizeof(NAMED));
+-      if (! nameAddedOrFound) {
+-        return 0;
+-      }
++      nameAddedOrFound->attIndex = nDefaultAtts;
++      nameAddedOrFound->initialized = true;
++      nDefaultAtts++;
++    }
++    if (nDefaultAtts && nDefaultAtts < oldE->nDefaultAtts) {
++      DEFAULT_ATTRIBUTE *const shrunk = (DEFAULT_ATTRIBUTE *)REALLOC(
++          parser, newE->defaultAtts, nDefaultAtts * sizeof(DEFAULT_ATTRIBUTE));
++      if (shrunk)
++        newE->defaultAtts = shrunk;
+     }
++    newE->allocDefaultAtts = newE->nDefaultAtts = oldE->nDefaultAtts;
+   }
+ 
+   /* Copy the entity tables. */

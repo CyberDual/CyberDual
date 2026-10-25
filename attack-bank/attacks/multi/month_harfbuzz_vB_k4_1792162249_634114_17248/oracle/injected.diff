@@ -1,0 +1,76 @@
+diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc
+index 5134f7f..3791564 100644
+--- a/src/hb-raster-draw.cc
++++ b/src/hb-raster-draw.cc
+@@ -1336,7 +1336,7 @@ edge_sweep_row (Area                   *area,
+   if (total_dx > 0)
+   {
+     /* Left-to-right edge. */
+-    if (likely ((unsigned) (cx0 - x_org) < width && (unsigned) (cx1 - x_org) < width))
++    if (likely ((unsigned) (cx0 - x_org) < width && (unsigned) (cx1 - x_org) <= width))
+     {
+       /* Entirely inside the surface: unclipped walk. */
+       int32_t x_b = (int32_t) hb_clamp (((int64_t) cx0 + 1) * HB_RASTER_ONE_PIXEL,
+@@ -1352,7 +1352,7 @@ edge_sweep_row (Area                   *area,
+ 	fy_prev = fy_b;
+       }
+ 
+-      cell_add (area, cover, width, cx1 - x_org, 0, fy_prev, fx1, fy1, wind, x_min, x_max);
++      cell_add (area, cover, width + 1, cx1 - x_org, 0, fy_prev, fx1, fy1, wind, x_min, x_max);
+       return;
+     }
+ 
+@@ -1363,7 +1363,7 @@ edge_sweep_row (Area                   *area,
+      * exact: the increment is constant and the running sums are bounded,
+      * so k steps equal one k·delta_fy jump. */
+     int64_t col_min = (int64_t) x_org;
+-    int64_t col_max = (int64_t) x_org + (int64_t) width - 1;
++    int64_t col_max = (int64_t) x_org + (int64_t) width;
+ 
+     if (unlikely (cx1 < col_min))
+     {
+@@ -1371,7 +1371,7 @@ edge_sweep_row (Area                   *area,
+       cell_add (area, cover, width, -1, 0, fy0, 0, fy1, wind, x_min, x_max);
+       return;
+     }
+-    if (unlikely (cx0 > col_max))
++    if (unlikely (cx0 >= col_max))
+       return; /* Entirely right of the surface. */
+ 
+     int32_t x_b = (int32_t) hb_clamp (((int64_t) cx0 + 1) * HB_RASTER_ONE_PIXEL,
+@@ -1392,7 +1392,7 @@ edge_sweep_row (Area                   *area,
+       cx = cx_skip;
+     }
+ 
+-    int32_t cx_end = (int32_t) hb_min ((int64_t) cx1, col_max + 1);
++    int32_t cx_end = (int32_t) hb_min ((int64_t) cx1, col_max);
+     for (; cx < cx_end; cx++)
+     {
+       fy_b = fy_prev + delta_fy;
+@@ -1401,7 +1401,7 @@ edge_sweep_row (Area                   *area,
+     }
+ 
+     if (likely (cx1 <= col_max))
+-      cell_add (area, cover, width, cx1 - x_org, 0, fy_prev, fx1, fy1, wind, x_min, x_max);
++      cell_add (area, cover, width + 1, cx1 - x_org, 0, fy_prev, fx1, fy1, wind, x_min, x_max);
+   }
+   else
+   {
+@@ -1435,7 +1435,7 @@ edge_sweep_row (Area                   *area,
+       cell_add (area, cover, width, -1, 0, fy0, 0, fy1, wind, x_min, x_max);
+       return;
+     }
+-    if (unlikely (cx1 > col_max))
++    if (unlikely (cx1 > col_max + 1))
+       return; /* Entirely right of the surface. */
+ 
+     int32_t x_b = (int32_t) hb_clamp ((int64_t) cx0 * HB_RASTER_ONE_PIXEL,
+@@ -1462,7 +1462,7 @@ edge_sweep_row (Area                   *area,
+     }
+ 
+     if (likely (cx1 >= col_min))
+-      cell_add (area, cover, width, cx1 - x_org, HB_RASTER_ONE_PIXEL, fy_prev, fx1, fy1, wind, x_min, x_max);
++      cell_add (area, cover, width + 1, cx1 - x_org, HB_RASTER_ONE_PIXEL, fy_prev, fx1, fy1, wind, x_min, x_max);
+     else
+       /* Fold the mid columns left of the surface and the last cell
+        * into one column-0 cover update. */

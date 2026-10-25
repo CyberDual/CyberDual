@@ -1,0 +1,65 @@
+diff --git a/src/liblzma/common/lzip_decoder.c b/src/liblzma/common/lzip_decoder.c
+index d6f929d..5630039 100644
+--- a/src/liblzma/common/lzip_decoder.c
++++ b/src/liblzma/common/lzip_decoder.c
+@@ -237,12 +237,8 @@ lzip_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 			}
+ 		};
+ 
+-		const lzma_ret ret = lzma_next_filter_init(
+-				&coder->lzma_decoder, allocator, filters);
+-		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->lzma_decoder, allocator);
+-			return ret;
+-		}
++		return_if_error(lzma_next_filter_init(&coder->lzma_decoder,
++				allocator, filters));
+ 
+ 		coder->crc32 = 0;
+ 		coder->sequence = SEQ_LZMA_STREAM;
+diff --git a/src/liblzma/common/microlzma_decoder.c b/src/liblzma/common/microlzma_decoder.c
+index a7720cc..882cb2c 100644
+--- a/src/liblzma/common/microlzma_decoder.c
++++ b/src/liblzma/common/microlzma_decoder.c
+@@ -108,12 +108,8 @@ microlzma_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 			}
+ 		};
+ 
+-		const lzma_ret ret = lzma_next_filter_init(&coder->lzma,
+-				allocator, filters);
+-		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->lzma, allocator);
+-			return ret;
+-		}
++		return_if_error(lzma_next_filter_init(&coder->lzma,
++				allocator, filters));
+ 
+ 		// Pass one dummy 0x00 byte to the LZMA decoder since that
+ 		// is what it expects the first byte to be.
+diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c
+index 6dc4cef..4314a06 100644
+--- a/src/liblzma/lz/lz_decoder.c
++++ b/src/liblzma/lz/lz_decoder.c
+@@ -277,8 +277,12 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 			= lz_options.dict_size + 2 * LZ_DICT_REPEAT_MAX;
+ 
+ 	// Allocate and initialize the dictionary.
++	//
++	// NOTE: If this allocation fails, the caller must clean up the
++	// whole coder with lzma_next_end(). A coder that was initialized
++	// via lzma_next_filter_init() must not be reused after a failed
++	// initialization attempt.
+ 	if (coder->dict.size != alloc_size) {
+-		coder->dict.size = 0;
+ 		lzma_free(coder->dict.buf, allocator);
+ 
+ 		// The LZ_DICT_EXTRA bytes at the end of the buffer aren't
+@@ -296,7 +300,7 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 		coder->dict.size = alloc_size;
+ 	}
+ 
+-	lz_decoder_reset(next->coder);
++	lz_decoder_reset(coder);
+ 
+ 	// Use the preset dictionary if it was given to us.
+ 	if (lz_options.preset_dict != NULL

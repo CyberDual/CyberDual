@@ -1,0 +1,52 @@
+diff --git a/js/src/vm/ArrayBufferObject.cpp b/js/src/vm/ArrayBufferObject.cpp
+index 8afe8823b3..8b5002c011 100644
+--- a/js/src/vm/ArrayBufferObject.cpp
++++ b/js/src/vm/ArrayBufferObject.cpp
+@@ -3252,13 +3252,12 @@ size_t ArrayBufferObject::objectMoved(JSObject* obj, JSObject* old) {
+ }
+ 
+ JSObject* ArrayBufferObject::firstView() {
+-  return getFixedSlotTyped(FIRST_VIEW_SLOT).isObject()
+-             ? &getFixedSlotTyped(FIRST_VIEW_SLOT).toObject()
+-             : nullptr;
++  const Value& view = getFixedSlotTyped(FIRST_VIEW_SLOT);
++  return view.isUndefined() ? nullptr : static_cast<JSObject*>(view.toPrivate());
+ }
+ 
+ void ArrayBufferObject::setFirstView(ArrayBufferViewObject* view) {
+-  setFixedSlotTyped(FIRST_VIEW_SLOT, ObjectOrNullValue(view));
++  setFixedSlotTyped(FIRST_VIEW_SLOT, PrivateValue(view));
+ }
+ 
+ bool ArrayBufferObject::addView(JSContext* cx, ArrayBufferViewObject* view) {
+diff --git a/js/src/vm/ArrayBufferObject.h b/js/src/vm/ArrayBufferObject.h
+index 84761cdc4f..387052122b 100644
+--- a/js/src/vm/ArrayBufferObject.h
++++ b/js/src/vm/ArrayBufferObject.h
+@@ -211,7 +211,7 @@ class ArrayBufferObject : public ArrayBufferObjectMaybeShared {
+  public:
+   JS_DEFINE_TYPED_SLOT(0, DATA_SLOT, Private, Undefined);
+   JS_DEFINE_TYPED_SLOT(1, BYTE_LENGTH_SLOT, Private, Undefined);
+-  JS_DEFINE_TYPED_SLOT(2, FIRST_VIEW_SLOT, Object, Null, Undefined);
++  JS_DEFINE_TYPED_SLOT(2, FIRST_VIEW_SLOT, Private, Undefined);
+   JS_DEFINE_TYPED_SLOT(3, FLAGS_SLOT, Int32, Undefined);
+ 
+   static const uint8_t RESERVED_SLOTS = 4;
+@@ -763,7 +763,7 @@ class ResizableArrayBufferObject : public ArrayBufferObject {
+                   BufferContents contents) {
+     MOZ_ASSERT(contents.isAligned(byteLength));
+     setByteLength(byteLength);
+-    setMaxByteLength(maxByteLength);
++    initFixedSlotTyped(MAX_BYTE_LENGTH_SLOT, PrivateValue(maxByteLength));
+     setFlags(RESIZABLE);
+     setFirstView(nullptr);
+     setDataPointer(contents);
+@@ -779,7 +779,7 @@ class ResizableArrayBufferObject : public ArrayBufferObject {
+ 
+  public:
+   JS_DEFINE_TYPED_SLOT(ArrayBufferObject::RESERVED_SLOTS, MAX_BYTE_LENGTH_SLOT,
+-                       Private, Undefined);
++                       Private);
+ 
+   static const uint8_t RESERVED_SLOTS = ArrayBufferObject::RESERVED_SLOTS + 1;
+ 

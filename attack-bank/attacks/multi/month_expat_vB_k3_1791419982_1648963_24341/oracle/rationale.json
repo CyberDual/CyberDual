@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "92d4775760f06ebad80ff697ce9e8362969a788d",
+      "edited_message": null,
+      "patch": "diff --git a/expat/lib/xcs.c b/expat/lib/xcs.c\nindex 66ebbd2..85e57db 100644\n--- a/expat/lib/xcs.c\n+++ b/expat/lib/xcs.c\n@@ -70,6 +70,6 @@ xcsncmp(const XML_Char *a, const XML_Char *b, size_t len) {\n   return a[0] - b[0];\n #  endif\n #else\n-  return strncmp(a, b, len);\n+  return memcmp(a, b, len);\n #endif\n }\n"
+    },
+    {
+      "sha": "03701122f22c2f2f5dd3859d2545b081b49eb8af",
+      "edited_message": null,
+      "patch": "diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c\nindex bcbeb0b..47b67ac 100644\n--- a/expat/lib/xmlparse.c\n+++ b/expat/lib/xmlparse.c\n@@ -8199,7 +8199,7 @@ keyeq(KEY s1, size_t s1len, KEY s2) {\n   return ((s1len == 0) && (*s2 == 0)) ? XML_TRUE : XML_FALSE;\n #  endif\n #else\n-  return (strncmp(s1, s2, s1len) == 0 && s2[s1len] == '\\0') ? XML_TRUE\n+  return (xcsncmp(s1, s2, s1len) == 0 && s2[s1len] == '\\0') ? XML_TRUE\n                                                             : XML_FALSE;\n #endif\n }\n"
+    }
+  ],
+  "coupling": "The xcsncmp implementation introduced in the first edited commit reads the full requested byte count. At that point the parser still uses strncmp for hash keys, so the changed helper is not on the public parsing path. The second edited commit replaces that parser comparison with xcsncmp. Hash lookup compares a long candidate name with a shorter NUL-terminated stored name; when their hash buckets collide, the full-length read crosses the stored name allocation. Neither edit alone exposes the fault through XML_Parse. Repair requires checking the bounded helper semantics against the hash-key comparison contract across both commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "XML_ParserCreate / XML_SetHashSalt16Bytes / XML_Parse",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+diff --git a/src/heap/factory-base.cc b/src/heap/factory-base.cc
+index debbaae2..9e04bf3b 100644
+--- a/src/heap/factory-base.cc
++++ b/src/heap/factory-base.cc
+@@ -4,6 +4,8 @@
+ 
+ #include "src/heap/factory-base.h"
+ 
++#include <limits>
++
+ #include "src/ast/ast-source-ranges.h"
+ #include "src/ast/ast.h"
+ #include "src/base/strong-alias.h"
+@@ -20,6 +22,7 @@
+ #include "src/heap/read-only-heap.h"
+ #include "src/logging/log.h"
+ #include "src/objects/arguments-inl.h"
++#include "src/objects/code.h"
+ #include "src/objects/instance-type.h"
+ #include "src/objects/js-regexp-inl.h"
+ #include "src/objects/literal-objects-inl.h"
+@@ -355,6 +358,14 @@ Handle<BytecodeArray> FactoryBase<Impl>::NewBytecodeArray(
+                                 length);
+     UNREACHABLE();
+   }
++  if (parameter_count < kJSArgcReceiverSlots ||
++      parameter_count > Code::kMaxArguments + kJSArgcReceiverSlots ||
++      max_arguments > Code::kMaxArguments || frame_size < 0 ||
++      frame_size > std::numeric_limits<int32_t>::max() -
++                       max_arguments * kSystemPointerSize) {
++    base::FatalNoSecurityImpact("Fatal JavaScript invalid frame size error");
++    UNREACHABLE();
++  }
+   DirectHandle<BytecodeWrapper> wrapper = NewBytecodeWrapper();
+   int size = BytecodeArray::SizeFor(length);
+   Tagged<HeapObject> result = AllocateRawWithImmortalMap(
+diff --git a/src/runtime/runtime-test.cc b/src/runtime/runtime-test.cc
+index d0d013c6..226b11d4 100644
+--- a/src/runtime/runtime-test.cc
++++ b/src/runtime/runtime-test.cc
+@@ -2823,7 +2823,7 @@ RUNTIME_FUNCTION(Runtime_InstallBytecode) {
+   uint8_t* ht_data = static_cast<uint8_t*>(ht_buffer->backing_store());
+   DirectHandle<TrustedByteArray> handler_table =
+       isolate->factory()->NewTrustedByteArray(ht_length);
+-  memcpy(handler_table->begin(), ht_data, ht_length);
++  memcpy(handler_table->begin(), ht_data, ht_length + 1);
+ 
+   int frame_size;
+   ASSIGN_RETURN_FAILURE_ON_EXCEPTION(isolate, frame_size,

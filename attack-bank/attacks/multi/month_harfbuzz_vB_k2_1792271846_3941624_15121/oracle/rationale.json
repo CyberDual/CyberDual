@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "3cf1c637f58312d3f771e991929a477a6e69536d",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\nindex c39583daf..16b00e23b 100644\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1634,7 +1634,7 @@ hb_raster_draw_render (hb_raster_draw_t *draw)\n \n   /* \u2500\u2500 2. Compute stride \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */\n   if (ext.stride == 0)\n-    ext.stride = (ext.width + 3u) & ~3u;\n+    ext.stride = ext.width;\n \n   /* \u2500\u2500 3. Allocate or reuse image \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */\n   /* Reset one-shot state on every exit path. */\ndiff --git a/src/hb-raster-image.cc b/src/hb-raster-image.cc\nindex 14b7089eb..64664ec60 100644\n--- a/src/hb-raster-image.cc\n+++ b/src/hb-raster-image.cc\n@@ -527,7 +527,7 @@ hb_raster_image_t::configure (hb_raster_format_t format,\n   size_t buf_size = (size_t) extents.stride * extents.height;\n   if (buf_size > HB_RASTER_MAX_BUFFER_SIZE)\n     return false;\n-  if (unlikely (!buffer.resize_dirty (buf_size)))\n+  if (unlikely (!buffer.resize_exact (buf_size)))\n     return false;\n \n   this->format = format;\n"
+    },
+    {
+      "sha": "8d1d10b12db4df1c385ac83377dc8e4c9cd93789",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\nindex 5134f7f83..172c7ff4b 100644\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1772,6 +1772,10 @@ hb_raster_draw_render (hb_raster_draw_t *draw)\n \t\t\t      draw->row_area.arrayZ, draw->row_cover.arrayZ,\n \t\t\t      x_min, x_max);\n \n+\tuint8_t *row_buf = image->buffer.arrayZ + row * ext.stride;\n+\tunsigned aligned_end = (x_max + 4) & ~3u;\n+\thb_memset (row_buf + x_max + 1, 0, aligned_end - x_max - 1);\n+\n \t/* If cover doesn't cancel, memset the constant-alpha tail. */\n \tif (cover_accum != 0)\n \t{\n@@ -1780,7 +1784,6 @@ hb_raster_draw_render (hb_raster_draw_t *draw)\n \t  if (alpha > HB_RASTER_FULL_COVERAGE) alpha = HB_RASTER_FULL_COVERAGE;\n \t  uint8_t byte = (uint8_t) (((unsigned) alpha * 255 + HB_RASTER_FULL_COVERAGE / 2) >> (2 * HB_RASTER_PIXEL_BITS + 1));\n \n-\t  uint8_t *row_buf = image->buffer.arrayZ + row * ext.stride;\n \t  hb_memset (row_buf + x_max + 1, byte, ext.width - 1 - x_max);\n \t}\n       }\n"
+    }
+  ],
+  "coupling": "The first commit changes auto-sized A8 images to use a tight row stride and exact backing allocation. That is memory-safe by itself. The later commit clears each row through the next four-byte boundary, which is safe with the original padded stride but writes past the tight allocation when the two commits are combined. A correct fix must either preserve the stride/allocation invariant consumed by the later tail clear or bound that clear to the actual row stride; reverting either commit alone leaves the other change valid and does not expose the overflow.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "public C API: hb_raster_draw_create_or_fail(), hb_draw_*(), hb_raster_draw_render()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

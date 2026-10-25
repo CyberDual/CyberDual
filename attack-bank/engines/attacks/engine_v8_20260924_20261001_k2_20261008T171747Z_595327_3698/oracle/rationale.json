@@ -1,0 +1,20 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "cc01490a61d23abc53273f0f20662d5c72490694",
+      "patch": "diff --git a/src/objects/string-table.cc b/src/objects/string-table.cc\n--- a/src/objects/string-table.cc\n+++ b/src/objects/string-table.cc\n@@ -623,7 +623,7 @@\n   }\n \n  private:\n-  static constexpr size_t kInlinedBufferSize = 256;\n+  static constexpr size_t kInlinedBufferSize = 128;\n   Char inlined_[kInlinedBufferSize];\n   std::unique_ptr<Char[]> outofline_;\n };\n"
+    },
+    {
+      "sha": "d2456f2a5440582c4f0fbd7b6455cec979491549",
+      "patch": "diff --git a/src/objects/string-table.cc b/src/objects/string-table.cc\n--- a/src/objects/string-table.cc\n+++ b/src/objects/string-table.cc\n@@ -610,11 +610,13 @@\n class CharBuffer {\n  public:\n   std::span<Char> Reset(size_t length) V8_LIFETIME_BOUND {\n+    Char* chars = inlined_;\n     if (length >= kInlinedBufferSize) {\n       outofline_ = std::make_unique<Char[]>(length);\n-      return {outofline_.get(), length};\n-    }\n-    return {inlined_, length};\n+      chars = outofline_.get();\n+    }\n+    if (length < 256) chars[length] = 0;\n+    return {chars, length};\n   }\n \n  private:\n"
+    }
+  ],
+  "coupling": "The earlier script-name internalization change reduces the inline CharBuffer capacity from 256 to 128. The later span refactor writes a terminator for strings shorter than 256, retaining the old inline-capacity assumption. A 200-character cons-string property key therefore selects an exact-size heap buffer and writes one character past it. With either edit alone, the probe remains in bounds.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "command": "out/x64.asan/d8 pocs/probe.js"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index 3fbb5b1..ec62055 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -312,7 +312,7 @@ index_tree_append(index_tree *tree, index_tree_node *node, bool prepend)
+ 		pivot->parent = node->parent;
+ 
+ 		if (prepend) {
+-			node->left = pivot->right;
++			node->left = pivot->left;
+ 			if (node->left != NULL)
+ 				node->left->parent = node;
+ 
+@@ -1046,9 +1046,10 @@ lzma_index_dup(const lzma_index *src, const lzma_allocator *allocator)
+ 	dest->checks = src->checks;
+ 
+ 	// Copy the Streams and the groups in them.
+-	const index_stream *srcstream
++	for (const index_stream *srcstream
+ 			= (const index_stream *)(src->streams.rightmost);
+-	do {
++			srcstream != NULL;
++			srcstream = index_tree_prev(&srcstream->node)) {
+ 		index_stream *deststream = index_dup_stream(
+ 				srcstream, allocator);
+ 		if (deststream == NULL) {
+@@ -1057,9 +1058,7 @@ lzma_index_dup(const lzma_index *src, const lzma_allocator *allocator)
+ 		}
+ 
+ 		index_tree_append(&dest->streams, &deststream->node, true);
+-
+-		srcstream = index_tree_prev(&srcstream->node);
+-	} while (srcstream != NULL);
++	}
+ 
+ 	return dest;
+ }

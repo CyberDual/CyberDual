@@ -1,0 +1,25 @@
+diff --git a/lib/mprintf.c b/lib/mprintf.c
+index 571c417..83b0c54 100644
+--- a/lib/mprintf.c
++++ b/lib/mprintf.c
+@@ -673,7 +673,7 @@ static bool stream_run(void *userp,
+                        mp_streamn streamn,
+                        const unsigned char *buf, size_t len, int *donep)
+ {
+-  if(!len)
++  if(!len && !streamn)
+     return FALSE;
+   if(streamn) {
+     size_t n = streamn(buf, len, userp);
+@@ -1468,6 +1468,11 @@ static size_t fwrite_wrapper(const unsigned char *buf, size_t len, void *f)
+   struct ioprintf *i = f;
+   size_t n;
+   FILE *s = i->fd;
++  if(len <= 1) {
++    int rc = fputc(buf[len - 1], s);
++    i->error = (rc == EOF);
++    return i->error ? 0 : len;
++  }
+   n = fwrite(buf, 1, len, s);
+   i->error = (n != len);
+   return n;

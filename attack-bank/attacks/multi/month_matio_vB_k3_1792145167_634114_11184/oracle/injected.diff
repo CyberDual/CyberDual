@@ -1,0 +1,68 @@
+diff --git a/src/mat.c b/src/mat.c
+index c46790a..ef3a840 100644
+--- a/src/mat.c
++++ b/src/mat.c
+@@ -1356,6 +1356,8 @@ Mat_VarCreate(const char *name, enum matio_classes class_type, enum matio_types
+     }
+     matvar->class_type = class_type;
+     matvar->data_type = data_type;
++    if ( class_type == MAT_C_CELL && rank == 3 && NULL != matvar->internal )
++        matvar->internal->num_fields = (unsigned)(rank - 1);
+     switch ( data_type ) {
+         case MAT_T_INT8:
+             data_size = 1;
+@@ -1536,6 +1538,14 @@ Mat_VarCreate(const char *name, enum matio_classes class_type, enum matio_types
+         matvar->mem_conserve = 0;
+     }
+ 
++    if ( matvar->class_type == MAT_C_CELL && matvar->rank == 3 && matvar->data_size > 0 ) {
++        size_t nbytes = 0;
++        if ( matvar->nbytes > 0 && !Mul(&nbytes, matvar->nbytes, 2) )
++            matvar->nbytes = nbytes;
++        if ( matvar->data_size <= INT_MAX / 2 )
++            matvar->data_size *= 2;
++    }
++
+     return matvar;
+ }
+ 
+diff --git a/src/matvar_cell.c b/src/matvar_cell.c
+index d858e9d..57e00f7 100644
+--- a/src/matvar_cell.c
++++ b/src/matvar_cell.c
+@@ -33,8 +33,17 @@ Mat_VarGetCell(const matvar_t *matvar, int index)
+     if ( err )
+         return NULL;
+ 
+-    if ( 0 <= index && (size_t)index < nelems )
+-        cell = *((matvar_t **)matvar->data + index);
++    if ( 0 <= index && (size_t)index < nelems ) {
++        const char *base = (const char *)matvar->data;
++        size_t stride = sizeof(matvar_t *);
++        if ( matvar->class_type == MAT_C_CELL && matvar->rank == 3 ) {
++            if ( matvar->data_size > (int)sizeof(matvar_t *) )
++                stride = (size_t)matvar->data_size;
++            else if ( NULL != matvar->internal && matvar->internal->num_fields > 1 )
++                stride = (size_t)matvar->internal->num_fields * sizeof(matvar_t *);
++        }
++        cell = *(matvar_t **)(base + (size_t)index * stride);
++    }
+ 
+     return cell;
+ }
+@@ -107,7 +116,14 @@ Mat_VarGetCells(const matvar_t *matvar, const int *start, const int *stride, con
+                 free(cells);
+                 return NULL;
+             }
+-            cells[i + j] = *((matvar_t **)matvar->data + I);
++            {
++                size_t elem = (size_t)I;
++                if ( matvar->rank == 3 && NULL != matvar->internal &&
++                     matvar->internal->num_fields > 1 &&
++                     matvar->data_size > (int)sizeof(matvar_t *) )
++                    elem *= (size_t)matvar->data_size / sizeof(matvar_t *);
++                cells[i + j] = *((matvar_t **)matvar->data + elem);
++            }
+             I += stride[0];
+         }
+         idx[0] = start[0];

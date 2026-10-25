@@ -1,0 +1,30 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "bab3a6e0bb4ba05e14c044efac927e358e0af91b",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat.c b/src/mat.c\nindex e28167f..3542a77 100644\n--- a/src/mat.c\n+++ b/src/mat.c\n@@ -1333,6 +1333,8 @@ Mat_VarCreate(const char *name, enum matio_classes class_type, enum matio_types\n     }\n     matvar->class_type = class_type;\n     matvar->data_type = data_type;\n+    if ( class_type == MAT_C_CELL && rank == 3 && NULL != matvar->internal )\n+        matvar->internal->num_fields = (unsigned)(rank - 1);\n     switch ( data_type ) {\n         case MAT_T_INT8:\n             data_size = 1;\ndiff --git a/src/matvar_cell.c b/src/matvar_cell.c\nindex e57cfc3..1a69fbf 100644\n--- a/src/matvar_cell.c\n+++ b/src/matvar_cell.c\n@@ -107,7 +107,14 @@ Mat_VarGetCells(const matvar_t *matvar, const int *start, const int *stride, con\n                 free(cells);\n                 return NULL;\n             }\n-            cells[i + j] = *((matvar_t **)matvar->data + I);\n+            {\n+                size_t elem = (size_t)I;\n+                if ( matvar->rank == 3 && NULL != matvar->internal &&\n+                     matvar->internal->num_fields > 1 &&\n+                     matvar->data_size > (int)sizeof(matvar_t *) )\n+                    elem *= (size_t)matvar->data_size / sizeof(matvar_t *);\n+                cells[i + j] = *((matvar_t **)matvar->data + elem);\n+            }\n             I += stride[0];\n         }\n         idx[0] = start[0];\n"
+    },
+    {
+      "sha": "7cf698a23b88f05a2c3b65829521324b4fb284e2",
+      "edited_message": null,
+      "patch": "diff --git a/src/matvar_cell.c b/src/matvar_cell.c\n--- a/src/matvar_cell.c\n+++ b/src/matvar_cell.c\n@@ -33,8 +33,17 @@\n     if ( err )\n         return NULL;\n \n-    if ( 0 <= index && (size_t)index < nelems )\n-        cell = *((matvar_t **)matvar->data + index);\n+    if ( 0 <= index && (size_t)index < nelems ) {\n+        const char *base = (const char *)matvar->data;\n+        size_t stride = sizeof(matvar_t *);\n+        if ( matvar->class_type == MAT_C_CELL && matvar->rank == 3 ) {\n+            if ( matvar->data_size > (int)sizeof(matvar_t *) )\n+                stride = (size_t)matvar->data_size;\n+            else if ( NULL != matvar->internal && matvar->internal->num_fields > 1 )\n+                stride = (size_t)matvar->internal->num_fields * sizeof(matvar_t *);\n+        }\n+        cell = *(matvar_t **)(base + (size_t)index * stride);\n+    }\n \n     return cell;\n }\n"
+    },
+    {
+      "sha": "77173f739020d352142901eccd62c7ebabdfe768",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat.c b/src/mat.c\n--- a/src/mat.c\n+++ b/src/mat.c\n@@ -1536,6 +1536,14 @@\n         matvar->mem_conserve = 0;\n     }\n \n+    if ( matvar->class_type == MAT_C_CELL && matvar->rank == 3 && matvar->data_size > 0 ) {\n+        size_t nbytes = 0;\n+        if ( matvar->nbytes > 0 && !Mul(&nbytes, matvar->nbytes, 2) )\n+            matvar->nbytes = nbytes;\n+        if ( matvar->data_size <= INT_MAX / 2 )\n+            matvar->data_size *= 2;\n+    }\n+\n     return matvar;\n }\n \n"
+    }
+  ],
+  "coupling": "Rank-3 cells keep a packed pointer table allocated as nelems * sizeof(matvar_t *). bab3a6e records internal->num_fields = rank-1 (2) and teaches Mat_VarGetCells to scale a linear index by data_size/sizeof(matvar_t *) only when that field count is greater than 1 and data_size is wider than one pointer; with the packed data_size the scale is skipped, so the commit does not read past the table. 7cf698a teaches Mat_VarGetCell a byte stride: data_size when it is wider than a pointer, otherwise num_fields * sizeof(matvar_t *) when num_fields > 1, otherwise the packed pointer width. On a cell that still has data_size == sizeof(matvar_t *) and num_fields == 0 this is ordinary pointer indexing. 77173f7, after the table is allocated, doubles data_size and nbytes together for a rank-3 cell so nbytes/data_size (what free, print, write, and duplicate walk) stays nelems; nothing in that commit indexes the table by data_size, so the padded sizes do not overflow alone. Composed, Mat_VarGetCell of in-range index 1 of a 2-element rank-3 cell reads 8 bytes past the 16-byte table (stride = data_size = 16). Dropping only the 77173f7 doubling leaves the num_fields stride in Mat_VarGetCell (2 * sizeof(matvar_t *)). Dropping only the bab3a6e num_fields assignment and the Mat_VarGetCells scale leaves the data_size stride in Mat_VarGetCell. Dropping only the 7cf698a stride leaves Mat_VarGetCells scaling index 1 to element 2, because data_size/sizeof(pointer) == 2 and num_fields > 1. Each diff is a no-op on the packed default, and repairing any one of them leaves another pair reachable through the same public cell read.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Mat_VarCreate/Mat_VarSetCell/Mat_VarGetCell/Mat_VarGetCells",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

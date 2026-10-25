@@ -1,0 +1,157 @@
+diff --git a/src/d8/d8-test.cc b/src/d8/d8-test.cc
+index 425f48a1166..ca7cb591ce5 100644
+--- a/src/d8/d8-test.cc
++++ b/src/d8/d8-test.cc
+@@ -5,6 +5,7 @@
+ #include "src/d8/d8.h"
+ 
+ #include "include/v8-fast-api-calls.h"
++#include "include/v8-container.h"
+ #include "include/v8-function.h"
+ #include "include/v8-template.h"
+ #include "src/api/api-inl.h"
+@@ -2144,6 +2145,28 @@ Local<FunctionTemplate> Shell::CreateLeafInterfaceTypeTemplate(
+ 
+ namespace {
+ 
++v8::Intercepted D8IndexedGetter(uint32_t index,
++                                const v8::PropertyCallbackInfo<v8::Value>& info) {
++  if (index < 3) {
++    info.GetReturnValue().Set(static_cast<int32_t>(index + 11));
++    return v8::Intercepted::kYes;
++  }
++  return v8::Intercepted::kNo;
++}
++
++void D8IndexedIterableToListCallback(
++    const v8::PropertyCallbackInfo<v8::Value>& info) {
++  v8::Isolate* isolate = info.GetIsolate();
++  v8::Local<v8::Value> elements[3] = {
++      v8::Integer::New(isolate, 11), v8::Integer::New(isolate, 22),
++      v8::Integer::New(isolate, 33)};
++  info.GetReturnValue().Set(v8::Array::New(isolate, elements, 3));
++}
++
++void D8LengthGetter(const v8::FunctionCallbackInfo<v8::Value>& info) {
++  info.GetReturnValue().Set(static_cast<uint32_t>(3));
++}
++
+ v8::Intercepted D8InterceptCallback(Local<Name> property,
+                                     const PropertyCallbackInfo<Value>& info) {
+   Isolate* isolate = info.GetIsolate();
+@@ -2251,6 +2274,36 @@ void Shell::CreateInterceptorObject(const FunctionCallbackInfo<Value>& info) {
+   info.GetReturnValue().Set(instance);
+ }
+ 
++void Shell::CreateIterableInterceptorObject(
++    const FunctionCallbackInfo<Value>& info) {
++  Isolate* isolate = info.GetIsolate();
++  Local<Context> context = isolate->GetCurrentContext();
++  Local<FunctionTemplate> ctor = FunctionTemplate::New(isolate);
++  Local<ObjectTemplate> templ = ctor->InstanceTemplate();
++  templ->SetHandler(IndexedPropertyHandlerConfiguration(
++      D8IndexedGetter, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
++      nullptr, D8IndexedIterableToListCallback));
++
++  Local<FunctionTemplate> length_getter =
++      FunctionTemplate::New(isolate, &D8LengthGetter);
++  ctor->PrototypeTemplate()->SetAccessorProperty(
++      String::NewFromUtf8Literal(isolate, "bar"), length_getter);
++  ctor->PrototypeTemplate()->Set(String::NewFromUtf8Literal(isolate, "foo"),
++                                  Integer::New(isolate, 42));
++  ctor->PrototypeTemplate()->Set(String::NewFromUtf8Literal(isolate, "answer"),
++                                  Integer::New(isolate, 7));
++  ctor->PrototypeTemplate()->SetIntrinsicDataProperty(
++      Symbol::GetIterator(isolate), Intrinsic::kArrayProto_values);
++  ctor->PrototypeTemplate()->SetAccessorProperty(
++      String::NewFromUtf8Literal(isolate, "length"), length_getter);
++
++  Local<Function> fn;
++  if (!ctor->GetFunction(context).ToLocal(&fn)) return;
++  Local<Object> instance;
++  if (!fn->NewInstance(context).ToLocal(&instance)) return;
++  info.GetReturnValue().Set(instance);
++}
++
+ void Shell::CreateAccessCheckedObject(const FunctionCallbackInfo<Value>& info) {
+   Isolate* isolate = info.GetIsolate();
+   if (info.Length() == 0) {
+diff --git a/src/d8/d8.cc b/src/d8/d8.cc
+index 351d9151d1f..3f0da379e11 100644
+--- a/src/d8/d8.cc
++++ b/src/d8/d8.cc
+@@ -5028,6 +5028,9 @@ Local<ObjectTemplate> Shell::CreateD8Template(Isolate* isolate) {
+     test_template->Set(
+         isolate, "createInterceptorObject",
+         FunctionTemplate::New(isolate, Shell::CreateInterceptorObject));
++    test_template->Set(
++        isolate, "createIterableInterceptorObject",
++        FunctionTemplate::New(isolate, Shell::CreateIterableInterceptorObject));
+     test_template->Set(
+         isolate, "createAccessCheckedObject",
+         FunctionTemplate::New(isolate, Shell::CreateAccessCheckedObject));
+diff --git a/src/d8/d8.h b/src/d8/d8.h
+index 573f5128e1f..7940114c5f0 100644
+--- a/src/d8/d8.h
++++ b/src/d8/d8.h
+@@ -1009,6 +1009,8 @@ class Shell : public i::AllStatic {
+       Isolate* isolate);
+   static void CreateInterceptorObject(
+       const v8::FunctionCallbackInfo<v8::Value>& info);
++  static void CreateIterableInterceptorObject(
++      const v8::FunctionCallbackInfo<v8::Value>& info);
+   static void CreateAccessCheckedObject(
+       const v8::FunctionCallbackInfo<v8::Value>& info);
+   static void CreateAccessCheckedInterceptorObject(
+diff --git a/src/runtime/runtime-object.cc b/src/runtime/runtime-object.cc
+index dc73915c363..451e91e540d 100644
+--- a/src/runtime/runtime-object.cc
++++ b/src/runtime/runtime-object.cc
+@@ -21,6 +21,8 @@
+ #include "src/objects/swiss-name-dictionary-inl.h"
+ #include "src/runtime/runtime.h"
+ 
++#include <vector>
++
+ namespace v8 {
+ namespace internal {
+ 
+@@ -1821,6 +1823,10 @@ RUNTIME_FUNCTION(Runtime_CheckFastIterableToListPrototype) {
+     DCHECK(IsArrayList(proto_template->property_list()));
+     Tagged<ArrayList> properties =
+         Cast<ArrayList>(proto_template->property_list());
++    std::vector<Tagged<Object>> property_entries(properties->length());
++    for (int i = 0; i < properties->length(); ++i) {
++      property_entries[i] = properties->get(i);
++    }
+ 
+     // The properties list consists of tuples describing each property:
+     //  - <name, property details, property value> (data property),
+@@ -1828,19 +1834,20 @@ RUNTIME_FUNCTION(Runtime_CheckFastIterableToListPrototype) {
+     //  - <name, intrinsic marker, property details, property value>
+     //    (intrinsic data property).
+     // See ApiNatives::AddDataProperty()/AddAccessorProperty() for details.
+-    int properties_length = properties->length();
+-    for (int i = 0; i < properties_length;) {
+-      Tagged<Name> name = Cast<Name>(properties->get(i++));
+-      Tagged<Object> intrinsic_marker_or_details = properties->get(i++);
++    size_t properties_length = property_entries.size();
++    for (size_t i = 0; i < properties_length; i += 2) {
++      Tagged<Object>* entries = property_entries.data();
++      Tagged<Name> name = Cast<Name>(entries[i]);
++      Tagged<Object> intrinsic_marker_or_details = entries[i + 1];
+       if (IsSmi(intrinsic_marker_or_details)) {
+         PropertyDetails details(Cast<Smi>(intrinsic_marker_or_details));
+         if (details.kind() == PropertyKind::kData) {
+           // This is a data property.
+-          i++;  // skip value
++          i += 1;  // skip value
+         } else {
+           // This is an accessor property.
+-          Tagged<Object> getter = properties->get(i++);
+-          i++;  // skip setter
++          Tagged<Object> getter = entries[i + 2];
++          i += 3;  // skip getter and setter
+ 
+           if (name == *length_string) {
+             // Found "length" property, check if the getter template matches.

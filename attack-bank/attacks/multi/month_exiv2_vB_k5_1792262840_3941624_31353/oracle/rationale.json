@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "d8f3b262d0595815e6d0307ac7587a9332f365e3",
+      "edited_message": "Limit AI7 thumbnail expansion\n\nBound the decoded RGB allocation and reject encoded data that is too large relative to the declared output size.",
+      "patch": "diff --git a/src/preview.cpp b/src/preview.cpp\nindex e8d199b3..28ccd636 100644\n--- a/src/preview.cpp\n+++ b/src/preview.cpp\n@@ -38,6 +38,9 @@ constexpr size_t maxAi7ThumbnailSize = 256UL * 1024UL * 1024UL;\n /// @brief Calculate and bound-check the decoded RGB size for an AI7 thumbnail.\n bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize);\n \n+/// @brief Check that encoded AI7 thumbnail data cannot exceed the decoded size.\n+bool ai7ThumbnailEncodedSizeFits(const DataBuf& src, size_t expectedSize);\n+\n /// @brief Decode an Illustrator thumbnail that follows after %AI7_Thumbnail.\n DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize);\n \n@@ -417,6 +420,12 @@ DataBuf LoaderNative::getData() const {\n       return {};\n     }\n     const DataBuf ai7thumbnail = decodeHex(data + nativePreview_.position_, nativePreview_.size_);\n+    if (!ai7ThumbnailEncodedSizeFits(ai7thumbnail, expectedSize)) {\n+#ifndef SUPPRESS_WARNINGS\n+      EXV_WARNING << \"Invalid size of AI7 thumbnail data.\\n\";\n+#endif\n+      return {};\n+    }\n     const DataBuf rgb = decodeAi7Thumbnail(ai7thumbnail, expectedSize);\n     return makePnm(width_, height_, rgb);\n   }\n@@ -843,6 +852,15 @@ bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize) {\n   return rgbSize <= maxAi7ThumbnailSize;\n }\n \n+bool ai7ThumbnailEncodedSizeFits(const DataBuf& src, size_t expectedSize) {\n+  constexpr size_t colorTableSize = 256 * 3;\n+  if (src.size() < colorTableSize)\n+    return true;\n+\n+  const size_t imageDataSize = src.size() - colorTableSize;\n+  return imageDataSize <= expectedSize / 128;\n+}\n+\n DataBuf decodeHex(const byte* src, size_t srcSize) {\n   // create decoding table\n   byte invalid = 16;\n"
+    },
+    {
+      "sha": "99a8d947784845151958b6f5ac80cfcd5c144b7e",
+      "edited_message": "Improve performance of decodeAi7Thumbnail.\n\nUse a preallocated buffer for decoded pixels and avoid rechecking each run; the encoded-size check in getData() already bounds expansion.",
+      "patch": "diff --git a/src/preview.cpp b/src/preview.cpp\n--- a/src/preview.cpp\n+++ b/src/preview.cpp\n@@ -955,7 +955,6 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {\n         value = imageData[i++];\n       }\n     }\n-    Internal::enforce(expectedSize - destPos >= num * 3, ErrorCode::kerCorruptedMetadata);\n     const auto c0 = colorTable[value * 3];\n     const auto c1 = colorTable[value * 3 + 1];\n     const auto c2 = colorTable[value * 3 + 2];\n"
+    }
+  ],
+  "coupling": "The first edited commit adds an encoded-size preflight that permits one encoded byte per 128 bytes of declared RGB output. On its own, that commit remains safe because the decoder still has an append-time bound. The second edited commit switches to a fixed-size DataBuf and removes that append-time bound as redundant under the new preflight. AI7 RLE escapes are three encoded bytes and can expand to 765 output bytes (a 255x ratio), so the preflight underestimates expansion. The probe declares 1024x1 (3072 bytes), supplies 24 encoded image bytes, and uses seven 255-pixel runs; the preflight accepts 24 <= 3072/128, after which the unchecked writer emits 5355 bytes. A correct repair must reconcile the preflight expansion factor with the decoder write contract rather than treating the two commits as independent maintenance changes.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Exiv2::ImageFactory::open(const byte*, size_t), Exiv2::Image::readMetadata(), Exiv2::PreviewManager::getPreviewProperties()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+diff --git a/libarchive/archive_read_support_format_ar.c b/libarchive/archive_read_support_format_ar.c
+index 2445e7b..41c3b89 100644
+--- a/libarchive/archive_read_support_format_ar.c
++++ b/libarchive/archive_read_support_format_ar.c
+@@ -268,6 +268,8 @@ _ar_read_header(struct archive_read *a, struct archive_entry *entry,
+ 		char *st;
+ 		int64_t entry_size;
+ 		size_t strtab_size;
++		int r;
++		char saved;
+ 
+ 		/* This is not a file entry. Ignore. */
+ 		archive_entry_copy_pathname(entry, NULL);
+@@ -309,8 +311,29 @@ _ar_read_header(struct archive_read *a, struct archive_entry *entry,
+ 		if (archive_read_format_ar_skip(a) != ARCHIVE_OK)
+ 			return (ARCHIVE_FATAL);
+ 
++		/*
++		 * skip() consumes an odd table's alignment byte and clears
++		 * entry_padding. Put that fact back so the filename parser
++		 * can keep a trailing Windows payload byte instead of
++		 * rewriting it: the consumed pad is the terminator.
++		 */
++		if (ar->strtab_size & 1) {
++			ar->entry_padding = 1;
++			ar->entry_offset = 1;
++		}
++
+ 		/* Parse the filename table. */
+-		return (ar_parse_gnu_filename_table(a));
++		saved = st[strtab_size - 1];
++		r = ar_parse_gnu_filename_table(a);
++		/*
++		 * Parser rewrites the last byte as a terminator. When an
++		 * odd table's alignment byte is the terminator, that stored
++		 * byte is Windows payload and has to be put back.
++		 */
++		if (r == ARCHIVE_OK && (ar->strtab_size & 1) &&
++		    ar->entry_offset != 0 && ar->entry_padding != 0)
++			ar->strtab[ar->strtab_size - 1] = saved;
++		return (r);
+ 	}
+ 
+ 	/*
+@@ -548,8 +571,27 @@ ar_parse_gnu_filename_table(struct archive_read *a)
+ 	if (p != ar->strtab + size && *p != '\n' && *p != '`' && *p != '\0')
+ 		goto bad_string_table;
+ 
+-	/* Enforce zero termination. */
+-	ar->strtab[size - 1] = '\0';
++	/*
++	 * An even-sized table stores its pad in the last byte, and that
++	 * byte is rewritten as the terminator below. An odd-sized table
++	 * has a separate alignment byte. Once the reader has consumed
++	 * that byte it records the fact with entry_offset and
++	 * entry_padding both set; the pad is then the terminator and the
++	 * last stored byte is Windows payload, so it must be kept.
++	 * Until the reader records it, entry_offset stays 0 and the
++	 * historical rewrite still applies.
++	 */
++	if (ar->entry_offset == 0 || ar->entry_padding == 0)
++		ar->strtab[size - 1] = '\0';
++	/*
++	 * Remember an odd-sized table for the caller. The alignment
++	 * byte is not stored; entry_offset and entry_padding both set
++	 * means that byte, not the last stored byte, is the terminator.
++	 */
++	if (size & 1) {
++		ar->entry_offset = 1;
++		ar->entry_padding = 1;
++	}
+ 
+ 	return (ARCHIVE_OK);
+ 

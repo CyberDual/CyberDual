@@ -1,0 +1,29 @@
+diff --git a/src/crwimage_int.cpp b/src/crwimage_int.cpp
+index 9c20d7d2d4d8ecbea92ed5f1d4f8667fe83eaee5..125e6da3e0fc6690346111f2b59fd37295c2e84b 100644
+--- a/src/crwimage_int.cpp
++++ b/src/crwimage_int.cpp
+@@ -982,20 +982,20 @@ void CrwMap::encode0x2008(const Image& image, const CrwMapping& pCrwMapping, Cif
+ // *************************************************************************
+ // free functions
+ DataBuf packIfdId(const ExifData& exifData, IfdId ifdId, ByteOrder byteOrder) {
+-  const uint16_t size = 1024;
++  constexpr size_t size = 1024;
+   DataBuf buf(size);
+ 
+-  uint16_t len = 0;
++  size_t len = 0;
+ 
+   for (auto&& exif : exifData) {
+     if (exif.ifdId() != ifdId)
+       continue;
+-    const uint16_t s = (exif.tag() * 2) + static_cast<uint16_t>(exif.size());
++    const size_t s = (exif.tag() * 2) + exif.count();
+     if (s <= size) {
+       len = std::max(len, s);
+       exif.copy(buf.data(exif.tag() * 2), byteOrder);
+     } else {
+-      EXV_ERROR << "packIfdId out-of-bounds error: s = " << std::dec << s << "\n";
++      throw Error(ErrorCode::kerCorruptedMetadata);
+     }
+   }
+   // Round the size to make it even.

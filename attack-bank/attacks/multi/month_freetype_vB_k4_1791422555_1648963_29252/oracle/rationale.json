@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "43468db09102679ea1766873089f0836b53a8ca8",
+      "edited_message": null,
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 6947b3d..6690605 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -281,11 +281,20 @@\n         if ( error )\n           goto Fail;\n \n-        if ( tag != 0x8002U )\n+        if ( tag != 0x8002U || size > stream->size - stream->pos )\n           break;\n \n-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||\n-             FT_STREAM_READ( priv_dict + priv_len, size )        )\n+        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) )\n+          goto Fail;\n+\n+        if ( !stream->read )\n+        {\n+          FT_MEM_COPY( priv_dict + priv_len, stream->base + stream->pos,\n+                       size );\n+          if ( FT_STREAM_SKIP( size ) )\n+            goto Fail;\n+        }\n+        else if ( FT_STREAM_READ( priv_dict + priv_len, size ) )\n           goto Fail;\n \n         priv_len += size;\n"
+    },
+    {
+      "sha": "c39e6723a6b6c6715329310bc841d0d591b720a7",
+      "edited_message": null,
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 151aeac..2db4a9c 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -281,7 +281,7 @@\n         if ( error )\n           break;\n \n-        if ( tag != 0x8002U || size > stream->size - stream->pos )\n+        if ( tag != 0x8002U || size > stream->size - stream->pos + 1 )\n           break;\n \n         if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||\n"
+    }
+  ],
+  "coupling": "The segment-merging commit adds a direct copy for memory streams, guarded by an exact remaining-byte check. The later size-check commit permits a declared segment to exceed the remaining bytes by one. Either edit alone remains memory-safe: the unchanged exact check protects the direct copy, while the original FT_STREAM_READ rejects an overlong segment even with the relaxed check. Together they copy one byte beyond the caller-owned PFB buffer. Repair requires checking the later length rule against the earlier memory-stream copy path, not reviewing either diff in isolation.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "FT_New_Memory_Face",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

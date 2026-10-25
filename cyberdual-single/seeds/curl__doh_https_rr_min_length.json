@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "717ebe4d0af0959ef26fbdf0b6d8c54dcdc32509",
+  "parent_sha": "717ebe4d0af0959ef26fbdf0b6d8c54dcdc32509",
+  "project": "curl",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/curl/curl",
+  "repo_url": "https://github.com/curl/curl",
+  "source": "reuse",
+  "target": "curl",
+  "task": "libcurl DoH resolve whose HTTPS (type 65) answer has RDATA too short for the 2-byte SvcPriority+TargetName; decoder must reject vs. store a malformed HTTPS RR (feature/behaviour).",
+  "task_iid": "curl__doh_https_rr_min_length",
+  "vuln_desc": "libcurl DoH resolve whose HTTPS (type 65) answer has RDATA too short for the 2-byte SvcPriority+TargetName; decoder must reject vs. store a malformed HTTPS RR (feature/behaviour)."
+}

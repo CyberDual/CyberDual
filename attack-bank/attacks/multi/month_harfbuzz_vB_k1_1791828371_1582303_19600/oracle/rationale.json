@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "3cf1c637f58312d3f771e991929a477a6e69536d",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1259,7 +1259,7 @@\n       int32_t dy = fy1 - fy0;\n       cover[0] += (int16_t) (dy * wind);\n       x_min = hb_min (x_min, 0u);\n-      x_max = hb_max (x_max, 0u);\n+      x_max = hb_max (x_max, 1u);\n     }\n     return;\n   }\n@@ -1267,7 +1267,7 @@\n   area[col]  += (fx0 + fx1) * dy * wind;\n   cover[col] += (int16_t) (dy * wind);\n   x_min = hb_min (x_min, (unsigned) col);\n-  x_max = hb_max (x_max, (unsigned) col);\n+  x_max = hb_max (x_max, (unsigned) col + 1);\n }\n \n /* Walk one edge through the pixel cells of a single pixel row,\n@@ -1478,7 +1478,7 @@\n   int32x4_t bias_v  = vdupq_n_s32 (HB_RASTER_FULL_COVERAGE / 2);\n   int32x4_t zero32  = vdupq_n_s32 (0);\n   int16x8_t zero16  = vdupq_n_s16 (0);\n-  for (; x + 7 <= x_max; x += 8)\n+  for (; x + 8 <= x_max; x += 8)\n   {\n     int32_t ctmp[8];\n     for (unsigned i = 0; i < 8; i++)\n@@ -1515,7 +1515,7 @@\n   __m128i clamp_v = _mm_set1_epi32 (HB_RASTER_FULL_COVERAGE);\n   __m128i bias_v  = _mm_set1_epi32 (HB_RASTER_FULL_COVERAGE / 2);\n   __m128i zero_v  = _mm_setzero_si128 ();\n-  for (; x + 7 <= x_max; x += 8)\n+  for (; x + 8 <= x_max; x += 8)\n   {\n     int32_t ctmp[8];\n     for (unsigned i = 0; i < 8; i++)\n@@ -1555,7 +1555,7 @@\n   }\n #endif\n \n-  for (; x <= x_max; x++)\n+  for (; x < x_max; x++)\n   {\n     cover_accum += cover[x];\n     int32_t val   = cover_accum * cover_scale - area[x];\n@@ -1713,7 +1713,7 @@\n       }\n       draw->active_edges.resize (write);\n \n-      if (x_min <= x_max)\n+      if (x_min < x_max)\n       {\n \tint32_t cover_accum = sweep_row_to_alpha (image->buffer.arrayZ + row * ext.stride,\n \t\t\t\t\t\t   draw->row_area.arrayZ, draw->row_cover.arrayZ,\n@@ -1728,7 +1728,7 @@\n \t  uint8_t byte = (uint8_t) (((unsigned) alpha * 255 + HB_RASTER_FULL_COVERAGE / 2) >> (2 * HB_RASTER_PIXEL_BITS + 1));\n \n \t  uint8_t *row_buf = image->buffer.arrayZ + row * ext.stride;\n-\t  hb_memset (row_buf + x_max + 1, byte, ext.width - 1 - x_max);\n+\t  hb_memset (row_buf + x_max, byte, ext.width - x_max);\n \t}\n       }\n     }\n"
+    },
+    {
+      "sha": "8d1d10b12db4df1c385ac83377dc8e4c9cd93789",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1735,7 +1735,7 @@\n       unsigned x_min = ext.width, x_max = 0;\n       unsigned write = 0;\n       unsigned active_len = draw->active_edges.length;\n-      bool use_wide = active_len > HB_RASTER_NARROW_MAX_ACTIVE_EDGES;\n+      bool use_wide = active_len >= HB_RASTER_NARROW_MAX_ACTIVE_EDGES;\n       if (unlikely (use_wide && !wide_initialized))\n       {\n \tif (unlikely (!draw->row_area_wide.resize_dirty (ext.width) ||\n"
+    }
+  ],
+  "coupling": "The edge-sweep commit changes x_max from an inclusive last touched column to an exclusive end and updates its narrow SIMD/scalar consumer and trailing fill. The later wide-accumulator commit adds a separate consumer that still iterates through x_max inclusively; its edited conservative threshold selects that path at 127 active edges. The probe supplies exactly 127 in-contract edges clipped at the final surface column, making x_max equal width and causing the wide consumer to read beyond its area and cover arrays. The earlier edit is safe with its then-only narrow consumer, and the later threshold edit is safe with the original inclusive producer. The repair requires carrying the bound convention across both commits and both consumers.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "hb_raster_draw_render via hb_raster_draw_get_funcs and public draw callbacks",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

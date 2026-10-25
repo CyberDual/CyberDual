@@ -1,0 +1,108 @@
+diff --git a/src/lib/OpenEXRCore/internal_dwa_compressor.h b/src/lib/OpenEXRCore/internal_dwa_compressor.h
+index 1fe256e4b511fc0f7e0d6b1925973d32774b6387..2cb772b560a34df2d3fe9b231201f8f2ffdc9053 100644
+--- a/src/lib/OpenEXRCore/internal_dwa_compressor.h
++++ b/src/lib/OpenEXRCore/internal_dwa_compressor.h
+@@ -688,6 +688,45 @@ DwaCompressor_compress (DwaCompressor* me)
+ 
+ /**************************************/
+ 
++static exr_result_t
++validate_size (
++    DwaCompressor*   me,
++    CompressorScheme compression,
++    uint64_t         compressedSize,
++    uint64_t         uncompressedSize,
++    uint64_t         extraSize)
++{
++    uint64_t requiredSize = 0;
++
++    for (int c = 0; c < me->_numChannels; ++c)
++    {
++        if (me->_channelData[c].compression == compression)
++        {
++            uint64_t chanSize = (uint64_t) me->_channelData[c].planarUncSize;
++
++            /* guard against wraparound when accumulating attacker-influenced
++             * per-channel sizes; a wrap would understate requiredSize and
++             * defeat the validation below */
++            if (chanSize > UINT64_MAX - requiredSize)
++                return EXR_ERR_CORRUPT_CHUNK;
++
++            requiredSize += chanSize;
++        }
++    }
++
++    if (requiredSize > 0)
++    {
++        if (compressedSize == 0 || uncompressedSize < requiredSize - 1)
++        { return EXR_ERR_CORRUPT_CHUNK; }
++    }
++    else if (uncompressedSize > 0 || compressedSize > 0 || extraSize > 0)
++    {
++        return EXR_ERR_CORRUPT_CHUNK;
++    }
++
++    return EXR_ERR_SUCCESS;
++}
++
+ exr_result_t
+ DwaCompressor_uncompress (
+     DwaCompressor* me,
+@@ -867,27 +906,47 @@ DwaCompressor_uncompress (
+     rv = DwaCompressor_setupChannelData (me);
+     if (rv != EXR_ERR_SUCCESS) { return rv; }
+ 
++    rv = validate_size (
++        me, UNKNOWN, unknownCompressedSize, unknownUncompressedSize, 0);
++    if (rv != EXR_ERR_SUCCESS) { return rv; }
++
++    rv = validate_size (
++        me, RLE, rleCompressedSize, rleRawSize, rleUncompressedSize);
++    if (rv != EXR_ERR_SUCCESS) { return rv; }
++
++    // The planar scratch is sized for the worst-case encoder output. Once the
++    // declared raw size is known to cover the channels, fit the RLE buffer to
++    // that stream so decode does not retain the extra scratch.
++    if (rleRawSize > 0 && me->_planarUncBuffer[RLE] &&
++        rleRawSize < me->_planarUncBufferSize[RLE])
++    {
++        uint8_t* fitted = me->alloc_fn ((size_t) rleRawSize);
++        if (!fitted) { return EXR_ERR_OUT_OF_MEMORY; }
++        me->free_fn (me->_planarUncBuffer[RLE]);
++        me->_planarUncBuffer[RLE]     = fitted;
++        me->_planarUncBufferSize[RLE] = rleRawSize;
++        rv                            = DwaCompressor_setupChannelData (me);
++        if (rv != EXR_ERR_SUCCESS) { return rv; }
++    }
++
+     //
+     // Uncompress the UNKNOWN data into _planarUncBuffer[UNKNOWN]
+     //
+ 
+     if (unknownCompressedSize > 0)
+     {
+-        size_t actualUnknown;
+-
+         if (unknownUncompressedSize > me->_planarUncBufferSize[UNKNOWN])
+         {
+             return EXR_ERR_CORRUPT_CHUNK;
+         }
+ 
+-        rv = exr_uncompress_buffer (
+-            me->_decode->context,
+-            compressedUnknownBuf,
+-            unknownCompressedSize,
+-            me->_planarUncBuffer[UNKNOWN],
+-            unknownUncompressedSize,
+-            &actualUnknown);
+-        if (rv != EXR_ERR_SUCCESS || actualUnknown != unknownUncompressedSize)
++        if (EXR_ERR_SUCCESS != exr_uncompress_buffer (
++                                   me->_decode->context,
++                                   compressedUnknownBuf,
++                                   unknownCompressedSize,
++                                   me->_planarUncBuffer[UNKNOWN],
++                                   unknownUncompressedSize,
++                                   NULL))
+         {
+             return EXR_ERR_CORRUPT_CHUNK;
+         }

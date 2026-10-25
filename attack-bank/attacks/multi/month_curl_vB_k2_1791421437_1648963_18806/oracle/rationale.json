@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "3c77c5da0e8407e2ee620f0fd877bbe03c8100c4",
+      "edited_message": null,
+      "patch": "diff --git a/lib/mprintf.c b/lib/mprintf.c\n--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -31,7 +31,7 @@\n #define BUFFSIZE 326 /* buffer for long-to-str and float-to-str calcs, should\n                         fit negative DBL_MAX (317 letters) */\n #define MAX_PARAMETERS 128 /* number of input arguments */\n-#define MAX_SEGMENTS   128 /* number of output segments */\n+#define MAX_SEGMENTS   129 /* number of output segments */\n \n /* Lower-case digits. */\n const unsigned char Curl_ldigits[] = \"0123456789abcdef\";\n"
+    },
+    {
+      "sha": "a3a269cba84935e98becab273bf3af491630f762",
+      "edited_message": null,
+      "patch": "diff --git a/lib/mprintf.c b/lib/mprintf.c\n--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -1102,7 +1102,7 @@\n   int ocount = 0; /* number of output segments */\n   int icount = 0; /* number of input arguments */\n \n-  struct outsegment output[MAX_SEGMENTS];\n+  struct outsegment output[MAX_PARAMETERS];\n   struct va_input input[MAX_PARAMETERS];\n   char work[BUFFSIZE + 2];\n \n"
+    }
+  ],
+  "coupling": "The first edit raises the number of permitted output segments from 128 to 129; at that commit the formatf output array still uses MAX_SEGMENTS and grows with the limit. The later edit sizes that array using MAX_PARAMETERS, which is 128. Considered alone against the original limit, the later edit leaves the array size unchanged. Together, parsefmt accepts a 129th segment and writes it into a 128-element stack array. The repair must reconcile the parser's accepted segment count with formatf's storage capacity across the two commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "curl_maprintf",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

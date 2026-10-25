@@ -1,0 +1,42 @@
+{
+  "task_iid": "v8__4d21392dd1a4",
+  "project": "v8",
+  "engine": "v8",
+  "repo": "https://github.com/v8/v8",
+  "repo_url": "https://github.com/v8/v8",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "family": "collect_seeds",
+  "source": "mined",
+  "parent_commit": "c7962867e5eca31b2ee228c3b4923d9f29fb2ca1",
+  "parent_sha": "c7962867e5eca31b2ee228c3b4923d9f29fb2ca1",
+  "fix_sha": "4d21392dd1a42370df609ed21f44524dece2534d",
+  "date": "2026-09-07T15:48:41+00:00",
+  "cwe": "",
+  "vuln_type": "Use-after-free (external-pointer tag mismatch during GC)",
+  "vuln_desc": "Cross-tag external-pointer handles can leave a dangling ArrayBufferExtension during GC.",
+  "task": "Cross-tag external-pointer handles can leave a dangling ArrayBufferExtension during GC.",
+  "grading": "engine",
+  "selection_criteria": [
+    "upstream fix in [2026-07-01, 2026-10-01), before the shared maintenance cutoff",
+    "mined from the upstream engine repository via collect_seeds, not SEC-bench-Pro",
+    "not AI-authored; parent and fix SHA independently verified",
+    "distinct upstream repair commit with engine source changes"
+  ],
+  "selection_reason": "Prospectively added for the ten-task engine cohort: Use-after-free (external-pointer tag mismatch during GC); upstream fix 4d21392dd1a4 dated 2026-09-07.",
+  "source_files": [
+    "src/heap/heap-write-barrier.cc",
+    "src/heap/mark-compact.cc",
+    "src/heap/marking-visitor-inl.h",
+    "src/heap/minor-mark-sweep.cc",
+    "src/heap/minor-mark-sweep.h",
+    "src/heap/scavenger.cc",
+    "src/heap/young-generation-marking-visitor-inl.h",
+    "src/objects/embedder-data-slot-inl.h",
+    "src/sandbox/external-pointer-table-inl.h",
+    "src/sandbox/external-pointer-table.h",
+    "src/sandbox/testing.cc",
+    "test/mjsunit/sandbox/regress-540033151.js",
+    "test/unittests/sandbox/pointer-table-unittest.cc"
+  ]
+}

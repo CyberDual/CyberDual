@@ -1,0 +1,74 @@
+diff --git a/src/pcre2_match.c b/src/pcre2_match.c
+index 25cbda42..401f2fce 100644
+--- a/src/pcre2_match.c
++++ b/src/pcre2_match.c
+@@ -8984,7 +8984,6 @@ ENDLOOP:
+ 
+   else if (match_partial != NULL)
+   {
+-    match_data->subject = original_subject;
+     match_data->subject_length = length;
+     match_data->start_offset = start_offset;
+     match_data->ovector[0] = match_partial - subject;
+@@ -8993,6 +8992,33 @@ ENDLOOP:
+     match_data->leftchar = start_partial - subject;
+     match_data->rightchar = end_subject - subject;
+     match_data->rc = PCRE2_ERROR_PARTIAL;
++
++    /* A partial match always ends at the end of the subject, and nothing
++    before the start offset can complete it, so the copy that is made when
++    PCRE2_COPY_MATCHED_SUBJECT is set need retain only the tail of the
++    subject from the start offset. */
++
++    if ((options & PCRE2_COPY_MATCHED_SUBJECT) != 0)
++    {
++      PCRE2_SIZE copy_length = length - start_offset;
++
++      match_data->subject =
++          match_data->memctl.malloc(CU2BYTES(copy_length + 1), match_data->memctl.memory_data);
++      if (match_data->subject == NULL)
++      {
++        match_data->subject_length = 0;
++        return match_data->rc = PCRE2_ERROR_NOMEMORY;
++      }
++
++      memcpy((void *)match_data->subject, subject + start_offset, CU2BYTES(copy_length));
++      ((PCRE2_UCHAR *)match_data->subject)[copy_length] = 0;
++      match_data->subject_length = copy_length;
++      match_data->flags |= PCRE2_MD_COPIED_SUBJECT;
++    }
++    else
++    {
++      match_data->subject = original_subject;
++    }
+   }
+ 
+   /* Else this is the classic nomatch case. */
+diff --git a/src/pcre2_substring.c b/src/pcre2_substring.c
+index ae43dbbe..f8eee6b7 100644
+--- a/src/pcre2_substring.c
++++ b/src/pcre2_substring.c
+@@ -320,7 +320,6 @@ Returns:         if successful: 0
+                    PCRE2_ERROR_NOSUBSTRING: no such substring
+                    PCRE2_ERROR_UNAVAILABLE: ovector is too small
+                    PCRE2_ERROR_UNSET: substring is not set
+-                   PCRE2_ERROR_INVALIDOFFSET: internal error, should not occur
+ */
+ 
+ PCRE2_EXP_DEFN int PCRE2_CALL_CONVENTION
+@@ -359,15 +358,6 @@ pcre2_substring_length_bynumber(pcre2_match_data *match_data, uint32_t stringnum
+ 
+   left = match_data->ovector[stringnumber * 2];
+   right = match_data->ovector[stringnumber * 2 + 1];
+-  /* LCOV_EXCL_START - this appears to be unreachable, as the ovector and
+-  subject_length should always be set consistently, no matter what misbehaviour
+-  the caller has committed. */
+-  if (left > match_data->subject_length || right > match_data->subject_length)
+-  {
+-    PCRE2_DEBUG_UNREACHABLE();
+-    return PCRE2_ERROR_INVALIDOFFSET;
+-  }
+-  /* LCOV_EXCL_STOP */
+   if (sizeptr != NULL)
+     *sizeptr = (left > right) ? 0 : right - left;
+   return 0;

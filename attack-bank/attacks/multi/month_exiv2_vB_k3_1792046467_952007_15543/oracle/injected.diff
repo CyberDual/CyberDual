@@ -1,0 +1,44 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 513f94b..a820fa9 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -575,8 +575,7 @@ void QuickTimeVideo::readMetadata() {
+ void QuickTimeVideo::decodeBlock(size_t recursion_depth, std::string const& entered_from) {
+   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);
+ 
+-  const long bufMinSize = 4;
+-  DataBuf buf(bufMinSize + 1);
++  DataBuf buf(4 + 1);  // atom type + nul terminator
+   uint64_t size = 0;
+   buf.data()[4] = '\0';
+ 
+@@ -627,7 +626,6 @@ static std::string readString(BasicIo& io, size_t size) {
+ 
+ void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size, size_t recursion_depth) {
+   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);
+-  assert(buf.size() > 4);
+ 
+   if (ignoreList(buf))
+     discard(size);
+@@ -695,7 +693,9 @@ void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size, size_t recursi
+   }
+ 
+   else if (equalsQTimeTag(buf, "dcom")) {
+-    xmpData_["Xmp.video.Compressor"] = readString(*io_, size);
++    io_->readOrThrow(buf.data(), size);
++    buf.write_uint8(size, 0);  // nul-terminate string
++    xmpData_["Xmp.video.Compressor"] = buf.data();
+   }
+ 
+   else if (equalsQTimeTag(buf, "smhd")) {
+@@ -903,7 +903,9 @@ void QuickTimeVideo::userDataDecoder(size_t outer_size, size_t recursion_depth)
+ 
+     else if (tv) {
+       io_->readOrThrow(buf.data(), 4);
+-      xmpData_[_(tv->label_)] = readString(*io_, size - 12);
++      io_->readOrThrow(buf.data(), size - 12);
++      buf.write_uint8(size - 12, 0);  // nul-terminate string
++      xmpData_[_(tv->label_)] = buf.data();
+     }
+ 
+     else if (td)

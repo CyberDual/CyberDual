@@ -1,0 +1,47 @@
+diff --git a/js/src/proxy/Wrapper.cpp b/js/src/proxy/Wrapper.cpp
+index ef2138ef18..09f6e727d7 100644
+--- a/js/src/proxy/Wrapper.cpp
++++ b/js/src/proxy/Wrapper.cpp
+@@ -311,19 +311,37 @@ JSObject* Wrapper::wrappedObject(JSObject* wrapper) {
+   return target;
+ }
+ 
++static JSObject* UnwrapProxyWithoutExpose(JSObject* proxy) {
++  if (!proxy->is<ProxyObject>() || MOZ_UNLIKELY(IsWindowProxy(proxy))) {
++    return proxy;
++  }
++  JSObject* target = proxy->as<ProxyObject>().target();
++  if (!target) {
++    return proxy;
++  }
++  JSObject* unwrapped = UnwrapProxyWithoutExpose(target);
++  JS::ExposeObjectToActiveJS(unwrapped);
++  return unwrapped;
++}
++
+ JS_PUBLIC_API JSObject* js::UncheckedUnwrapWithoutExpose(JSObject* wrapped) {
+   while (true) {
+     if (!wrapped->is<WrapperObject>() || MOZ_UNLIKELY(IsWindowProxy(wrapped))) {
+       break;
+     }
+-    wrapped = wrapped->as<WrapperObject>().target();
+-
++    JSObject* target = wrapped->as<WrapperObject>().target();
++    if (!target) {
++      return nullptr;
++    }
+     // This can be called from when getting a weakmap key delegate() on a
+     // wrapper whose referent has been moved while it is still unmarked.
+-    if (wrapped) {
+-      wrapped = MaybeForwarded(wrapped);
+-    }
++    wrapped = MaybeForwarded(target);
+   }
++
++  if (wrapped->is<ProxyObject>()) {
++    return UnwrapProxyWithoutExpose(wrapped);
++  }
++
+   return wrapped;
+ }
+ 

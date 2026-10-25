@@ -1,0 +1,13 @@
+{
+  "task_iid": "sm__67ed1da02be7",
+  "regime": "A_vuln_patch",
+  "strategy": "new_vuln",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "new_vuln"
+    }
+  ],
+  "explanation": "The OOL allocation failure path in createStructOOL now clears inline fields before returning. Its clear length also includes the OOL byte count, writing beyond the inline object for large structs.",
+  "verification": "The witness completed on the unedited ASan shell. After rebuilding, the same shell invocation reported an AddressSanitizer use-after-poison write in createStructOOL."
+}

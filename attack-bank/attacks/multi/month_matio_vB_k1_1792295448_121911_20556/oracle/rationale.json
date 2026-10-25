@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "dc4d297eb2bdc795c2db3b42d447b03766196a62",
+      "edited_message": "Validate read range up front in Mat_VarReadDataLinear5\n\nFor variables whose data is already held in memory, check the requested\nrange against the elements actually available instead of the dimensions\nalone.\n\nAs reported by https://github.com/tbeu/matio/pull/315",
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\nindex c0c37f7..fcb11f2 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -5310,6 +5310,8 @@ Mat_VarReadDataLinear5(mat_t *mat, matvar_t *matvar, void *data, int start, int\n         Mat_Critical(\"Integer multiplication overflow\");\n         return err;\n     }\n+    if ( NULL != matvar->internal->data && 0 != Mat_SizeOf(matvar->data_type) )\n+        nelems = matvar->nbytes / Mat_SizeOf(matvar->data_type);\n     if ( (size_t)stride * (edge - 1) + start + 1 > nelems )\n         return MATIO_E_BAD_ARGUMENT;\n \n"
+    },
+    {
+      "sha": "7c36dd8dca03fbda92bc443b5f84a55220921a8c",
+      "edited_message": "Fix data_type\n\nDerive data_type from the class in Mat_VarReadNextInfo5 and, for numeric\nreads, keep the type the data was stored as when it is narrower than the\nclass so callers see the on-disk encoding.\n\nAs reported by https://github.com/tbeu/matio/issues/114",
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\nindex cf392ee..4a8d551 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -3351,6 +3351,10 @@ Mat_VarReadNumeric5(mat_t *mat, matvar_t *matvar, void *data, size_t N)\n             nBytes = tag[1];\n         }\n     }\n+    /* Numeric data is converted to the class type on read, but keep the type\n+     * it was stored as when it is narrower than the class */\n+    if ( Mat_SizeOf(packed_type) < Mat_SizeOf(matvar->data_type) )\n+        matvar->data_type = packed_type;\n     if ( nBytes == 0 ) {\n         matvar->nbytes = 0;\n         return err;\n     }\n"
+    }
+  ],
+  "coupling": "The defect only exists in the composition of the two edited commits; each one alone is behavior-preserving (verified by execution: the PoC returns MATIO_E_BAD_ARGUMENT with no sanitizer report on the P-only tree, on the Q-only tree, and on the original batch; the project test suite produces the identical failure set on the joint tree as on the original batch). Commit dc4d297 (P, earlier) adds the up-front range validation to Mat_VarReadDataLinear5; its edited form bounds the request, when the variable's data is already held in memory (matvar->internal->data, the ReadNextCell/ReadNextStructField pre-read path), by the elements actually present (matvar->nbytes / Mat_SizeOf(matvar->data_type)) instead of the dimension product. Without the second edit this is a pure refactor: every variable the library produces has nbytes == nelems * Mat_SizeOf(data_type) because data_type is always class-consistent, and deferred variables have internal->data == NULL and keep the dimension bound. Commit 7c36dd8 (Q, later) is about reporting data_type; its edited form additionally keeps the on-disk (packed) data type in Mat_VarReadNumeric5 when it is narrower than the class type, mirroring what the MAT_C_CHAR branch of Mat_VarRead5 already does. On its own this only changes a metadata field: the buffer and nbytes stay class-based and every consumer indexes with class-sized strides over at most nelems elements, so with the dimension-product bound still in place nothing reads out of bounds. Jointly: for a compressed cell element that declares class double (16x1) but stores its data subelement as miUINT8, Q sets data_type = MAT_T_UINT8 (1 byte) while the pre-read buffer holds the 16 converted doubles (128 bytes, nbytes = 128). P's bound then computes 128/1 = 128 available elements instead of 16, so Mat_VarReadDataLinear(mat, x, out, 0, 1, 17) passes validation, and GetDataLinear indexes the source with class-typed pointers (double*, 8-byte stride) while copying Mat_SizeOf(data_type) = 1 byte per element, so element 16 reads one byte past the end of the 128-byte heap buffer: an ASan heap-buffer-overflow READ and abort inside libmatio, reached entirely through the public API (Mat_Open, Mat_VarReadNextInfo, Mat_VarGetCell, Mat_VarReadDataLinear) with an in-format MAT5 file. A correct fix is non-local: restoring the dimension-product bound in P's diff rejects the range even though data_type understates the element size, and keeping data_type class-consistent in Q's diff makes P's data-based bound equal the dimension product (128/8 = 16) so the read is rejected again; fixing either commit's diff alone leaves no reachable overflow, which is exactly the delocalization this arm tests.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "api: Mat_Open -> Mat_VarReadNextInfo -> Mat_VarGetCell -> Mat_VarReadDataLinear on a crafted compressed MAT5 cell whose first element is class double stored as miUINT8",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

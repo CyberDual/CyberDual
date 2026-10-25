@@ -1,0 +1,125 @@
+diff --git a/src/liblzma/common/alone_decoder.c b/src/liblzma/common/alone_decoder.c
+index 174b3b1..8ebbbe8 100644
+--- a/src/liblzma/common/alone_decoder.c
++++ b/src/liblzma/common/alone_decoder.c
+@@ -152,12 +152,8 @@ alone_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 			}
+ 		};
+ 
+-		const lzma_ret ret = lzma_next_filter_init(&coder->next,
+-				allocator, filters);
+-		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->next, allocator);
+-			return ret;
+-		}
++		return_if_error(lzma_next_filter_init(&coder->next,
++				allocator, filters));
+ 
+ 		coder->sequence = SEQ_CODE;
+ 		break;
+diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c
+index 6dc4cef..08088c2 100644
+--- a/src/liblzma/lz/lz_decoder.c
++++ b/src/liblzma/lz/lz_decoder.c
+@@ -278,8 +278,11 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 
+ 	// Allocate and initialize the dictionary.
+ 	if (coder->dict.size != alloc_size) {
+-		coder->dict.size = 0;
++		// Free the old dictionary and clear the pointer so that the
++		// coder isn't left referring to a stale buffer if a later
++		// reinitialization is attempted after an allocation failure.
+ 		lzma_free(coder->dict.buf, allocator);
++		coder->dict.buf = NULL;
+ 
+ 		// The LZ_DICT_EXTRA bytes at the end of the buffer aren't
+ 		// included in alloc_size. These extra bytes allow
+diff --git a/tests/test_alone_decoder.c b/tests/test_alone_decoder.c
+index 63c3271..3833bc8 100644
+--- a/tests/test_alone_decoder.c
++++ b/tests/test_alone_decoder.c
+@@ -13,65 +13,33 @@
+ 
+ 
+ #define MEMLIMIT (16U << 20)
+-#define TOO_BIG_ALLOC (1U << 20)
+ 
+ 
+ #ifdef HAVE_DECODERS
+-static void *
+-my_alloc(void *opaque, size_t nmemb, size_t size)
+-{
+-	(void)opaque;
+-	(void)nmemb;
+-
+-	if (size >= TOO_BIG_ALLOC)
+-		return NULL;
+-
+-	return malloc(size);
+-}
+-
+-
+-static lzma_allocator my_allocator = { &my_alloc, NULL, NULL };
+-
+-
+ static void
+-test_reuse_after_failure(void)
++test_reuse(void)
+ {
+-	// 4 KiB dictionary
+-	size_t small_dict_size;
+-	uint8_t *small_dict = tuktest_file_from_srcdir(
+-			"files/good-unknown_size-with_eopm.lzma",
+-			&small_dict_size);
+-
+-	// 8 MiB dictionary
+-	size_t big_dict_size;
+-	uint8_t *big_dict = tuktest_file_from_srcdir(
++	size_t dict_size;
++	uint8_t *dict = tuktest_file_from_srcdir(
+ 			"files/good-unknown_size-with_eopm.lzma",
+-			&big_dict_size);
+-	big_dict[2] = 0x00;
+-	big_dict[3] = 0x80;
++			&dict_size);
+ 
+ 	uint8_t out[256];
+ 
+ 	lzma_stream strm = LZMA_STREAM_INIT;
+-	strm.allocator = &my_allocator;
+ 
++	// Decode the stream once and then reuse the same lzma_stream to
++	// decode it again. Both runs must succeed.
+ 	assert_lzma_ret(lzma_alone_decoder(&strm, MEMLIMIT), LZMA_OK);
+-	strm.next_in = small_dict;
+-	strm.avail_in = small_dict_size;
++	strm.next_in = dict;
++	strm.avail_in = dict_size;
+ 	strm.next_out = out;
+ 	strm.avail_out = sizeof(out);
+ 	assert_lzma_ret(lzma_code(&strm, LZMA_FINISH), LZMA_STREAM_END);
+ 
+ 	assert_lzma_ret(lzma_alone_decoder(&strm, MEMLIMIT), LZMA_OK);
+-	strm.next_in = big_dict;
+-	strm.avail_in = big_dict_size;
+-	strm.next_out = out;
+-	strm.avail_out = sizeof(out);
+-	assert_lzma_ret(lzma_code(&strm, LZMA_FINISH), LZMA_MEM_ERROR);
+-
+-	assert_lzma_ret(lzma_alone_decoder(&strm, MEMLIMIT), LZMA_OK);
+-	strm.next_in = small_dict;
+-	strm.avail_in = small_dict_size;
++	strm.next_in = dict;
++	strm.avail_in = dict_size;
+ 	strm.next_out = out;
+ 	strm.avail_out = sizeof(out);
+ 	assert_lzma_ret(lzma_code(&strm, LZMA_FINISH), LZMA_STREAM_END);
+@@ -89,7 +57,7 @@ main(int argc, char **argv)
+ #ifndef HAVE_DECODERS
+ 	tuktest_early_skip("Decoder support is disabled");
+ #else
+-	tuktest_run(test_reuse_after_failure);
++	tuktest_run(test_reuse);
+ #endif
+ 
+ 	return tuktest_end();

@@ -1,0 +1,118 @@
+diff --git a/libarchive/archive_read_support_format_zip.c b/libarchive/archive_read_support_format_zip.c
+index 7fa0f52bec6c5503c669f4b8211e95c63a7ed6ad..ea89499eaccdb48e09d588a89344f7b78a0fbab0 100644
+--- a/libarchive/archive_read_support_format_zip.c
++++ b/libarchive/archive_read_support_format_zip.c
+@@ -97,6 +97,10 @@ struct zip_entry {
+ 	time_t			mtime;
+ 	time_t			atime;
+ 	time_t			ctime;
++	time_t			birthtime;
++	long			mtime_nsec;
++	long			atime_nsec;
++	long			birthtime_nsec;
+ 	uint32_t		crc32;
+ 	uint16_t		mode;
+ 	uint16_t		zip_flags; /* From GP Flags Field */
+@@ -136,6 +140,7 @@ struct trad_enc_ctx {
+ /* Bits used in flags. */
+ #define LA_USED_ZIP64	(1 << 0)
+ #define LA_FROM_CENTRAL_DIRECTORY (1 << 1)
++#define LA_USED_NTFS_TIMES (1 << 2)
+ 
+ /*
+  * See "WinZip - AES Encryption Information"
+@@ -667,6 +672,25 @@ to_time_t(uint32_t raw)
+ 	    ? (time_t)t : (time_t)raw;
+ }
+ 
++/*
++ * A Windows FILETIME is a 64-bit count of 100-nanosecond intervals
++ * since 1601-01-01T00:00:00Z, which is 11644473600 seconds before the
++ * Unix epoch.  Convert one to a time_t, returning the sub-second part
++ * as nanoseconds.
++ */
++static time_t
++ntfs_filetime_to_time_t(uint64_t filetime, long *nsec)
++{
++	const uint64_t epoch_difference = UINT64_C(11644473600);
++	uint64_t sec = filetime / 10000000;
++
++	*nsec = (long)(filetime % 10000000) * 100;
++	if (sec >= epoch_difference)
++		return (time_t)(sec - epoch_difference);
++	else
++		return -(time_t)(epoch_difference - sec);
++}
++
+ /*
+  * The extra data is stored as a list of
+  *	id1+size1+data1 + id2+size2+data2 ...
+@@ -776,6 +800,51 @@ process_extra(struct archive_read *a, struct archive_entry *entry,
+ 			 * on which file starts, but we don't handle
+ 			 * multi-volume Zip files. */
+ 			break;
++		case 0x000a:
++		{
++			/* NTFS extra field.  After 4 reserved bytes this
++			 * carries a sequence of tagged attributes, each
++			 * with a 2-byte tag and a 2-byte size.  Attribute
++			 * tag 0x0001 holds the modification, access and
++			 * creation times as Windows FILETIME values. */
++			if (datasize < 4)
++				break;
++			/* Skip the reserved bytes. */
++			offset += 4;
++			datasize -= 4;
++
++			while (datasize >= 4) {
++				unsigned attribute_tag =
++				    archive_le16dec(p + offset);
++				unsigned attribute_size =
++				    archive_le16dec(p + offset + 2);
++
++				if (attribute_size > datasize)
++					break;
++				offset += 4;
++				datasize -= 4;
++
++				if (attribute_tag == 0x0001
++				    && attribute_size >= 24) {
++					zip_entry->mtime =
++					    ntfs_filetime_to_time_t(
++						archive_le64dec(p + offset),
++						&zip_entry->mtime_nsec);
++					zip_entry->atime =
++					    ntfs_filetime_to_time_t(
++						archive_le64dec(p + offset + 8),
++						&zip_entry->atime_nsec);
++					zip_entry->birthtime =
++					    ntfs_filetime_to_time_t(
++						archive_le64dec(p + offset + 16),
++						&zip_entry->birthtime_nsec);
++					zip_entry->flags |= LA_USED_NTFS_TIMES;
++				}
++				offset += attribute_size;
++				datasize -= attribute_size;
++			}
++			break;
++		}
+ 		case 0x000d:
+ 			/* PKWARE Unix Extra Field fixed metadata. */
+ 			if (datasize >= 12) {
+@@ -1381,9 +1450,14 @@ zip_read_local_file_header(struct archive_read *a, struct archive_entry *entry,
+ 	archive_entry_set_mode(entry, zip_entry->mode);
+ 	archive_entry_set_uid(entry, zip_entry->uid);
+ 	archive_entry_set_gid(entry, zip_entry->gid);
+-	archive_entry_set_mtime(entry, zip_entry->mtime, 0);
++	archive_entry_set_mtime(entry, zip_entry->mtime,
++	    zip_entry->mtime_nsec);
+ 	archive_entry_set_ctime(entry, zip_entry->ctime, 0);
+-	archive_entry_set_atime(entry, zip_entry->atime, 0);
++	archive_entry_set_atime(entry, zip_entry->atime,
++	    zip_entry->atime_nsec);
++	if (zip_entry->flags & LA_USED_NTFS_TIMES)
++		archive_entry_set_birthtime(entry, zip_entry->birthtime,
++		    zip_entry->birthtime_nsec);
+ 
+ 	if ((zip->entry->mode & AE_IFMT) == AE_IFLNK) {
+ 		size_t linkname_length;

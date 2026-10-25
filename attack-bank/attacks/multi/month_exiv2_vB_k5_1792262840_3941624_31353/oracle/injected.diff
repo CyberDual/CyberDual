@@ -1,0 +1,51 @@
+diff --git a/src/preview.cpp b/src/preview.cpp
+index eda5c1a3..b9372bd9 100644
+--- a/src/preview.cpp
++++ b/src/preview.cpp
+@@ -38,6 +38,9 @@ constexpr size_t maxAi7ThumbnailSize = 256UL * 1024UL * 1024UL;
+ /// @brief Calculate and bound-check the decoded RGB size for an AI7 thumbnail.
+ bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize);
+ 
++/// @brief Check that encoded AI7 thumbnail data cannot exceed the decoded size.
++bool ai7ThumbnailEncodedSizeFits(const DataBuf& src, size_t expectedSize);
++
+ /// @brief Decode an Illustrator thumbnail that follows after %AI7_Thumbnail.
+ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize);
+ 
+@@ -417,6 +420,12 @@ DataBuf LoaderNative::getData() const {
+       return {};
+     }
+     const DataBuf ai7thumbnail = decodeHex(data + nativePreview_.position_, nativePreview_.size_);
++    if (!ai7ThumbnailEncodedSizeFits(ai7thumbnail, expectedSize)) {
++#ifndef SUPPRESS_WARNINGS
++      EXV_WARNING << "Invalid size of AI7 thumbnail data.\n";
++#endif
++      return {};
++    }
+     const DataBuf rgb = decodeAi7Thumbnail(ai7thumbnail, expectedSize);
+     return makePnm(width_, height_, rgb);
+   }
+@@ -843,6 +852,15 @@ bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize) {
+   return rgbSize <= maxAi7ThumbnailSize;
+ }
+ 
++bool ai7ThumbnailEncodedSizeFits(const DataBuf& src, size_t expectedSize) {
++  constexpr size_t colorTableSize = 256 * 3;
++  if (src.size() < colorTableSize)
++    return true;
++
++  const size_t imageDataSize = src.size() - colorTableSize;
++  return imageDataSize <= expectedSize / 128;
++}
++
+ DataBuf decodeHex(const byte* src, size_t srcSize) {
+   // create decoding table
+   byte invalid = 16;
+@@ -955,7 +973,6 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {
+         value = imageData[i++];
+       }
+     }
+-    Internal::enforce(expectedSize - destPos >= static_cast<size_t>(num) * 3, ErrorCode::kerCorruptedMetadata);
+     const auto c0 = colorTable[value * 3];
+     const auto c1 = colorTable[value * 3 + 1];
+     const auto c2 = colorTable[value * 3 + 2];

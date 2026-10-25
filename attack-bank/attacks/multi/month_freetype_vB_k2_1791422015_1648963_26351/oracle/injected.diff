@@ -1,0 +1,31 @@
+diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c
+index 151aeac..f909fda 100644
+--- a/src/type1/t1parse.c
++++ b/src/type1/t1parse.c
+@@ -273,6 +273,7 @@
+       FT_UShort  tag;
+       FT_Byte*   priv_dict = NULL;
+       FT_ULong   priv_len  = 0;
++      FT_Bool    merged    = 0;
+ 
+ 
+       for (;;)
+@@ -288,6 +289,8 @@
+              FT_STREAM_READ( priv_dict + priv_len, size )        )
+           break;
+ 
++        if ( priv_len )
++          merged = 1;
+         priv_len += size;
+       }
+ 
+@@ -300,6 +303,9 @@
+         goto Fail;
+       }
+ 
++      if ( merged )
++        priv_dict[priv_len] = '\0';
++
+       parser->private_dict = priv_dict;
+       parser->private_len  = priv_len;
+     }

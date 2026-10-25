@@ -1,0 +1,12 @@
+diff --git a/lib/parsedate.c b/lib/parsedate.c
+index 3c11d76ad9..e02c0d889e 100644
+--- a/lib/parsedate.c
++++ b/lib/parsedate.c
+@@ -121,7 +121,6 @@ static const int16_t tzone[] = {
+   -7 * 60,            /* Golf */
+   -8 * 60,            /* Hotel */
+   -9 * 60,            /* India */
+-  -1,                 /* J - not a timezone */
+   -10 * 60,           /* Kilo */
+   -11 * 60,           /* Lima */
+   -12 * 60,           /* Mike */

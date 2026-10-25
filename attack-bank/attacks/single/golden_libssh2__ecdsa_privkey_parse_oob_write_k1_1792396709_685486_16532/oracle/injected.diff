@@ -1,0 +1,17 @@
+diff --git a/src/openssl.c b/src/openssl.c
+index ad67f5cba9cb304771ced217d2ff8b2c46ea51b3..464cb56d2a8bec858bd2eecbd6383b8006c83116 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -2598,6 +2598,12 @@ static int ossl_ecdsa_openssh_priv_to_pubkey(LIBSSH2_SESSION *session,
+         return -1;
+     }
+ 
++    if(!pointbuf || !pointbuf_len || !exponent) {
++        ssh2_err(session, LIBSSH2_ERROR_PROTO,
++                 "ECDSA invalid private key");
++        return -1;
++    }
++
+ #ifdef USE_OPENSSL_3
+     if(!n)
+         return -1;

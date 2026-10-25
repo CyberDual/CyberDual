@@ -1,0 +1,16 @@
+{
+  "task_iid": "v8__342410146633",
+  "regime": "A_vuln_patch",
+  "strategy": "new_defect",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "residual_vuln"
+    }
+  ],
+  "explanation": "The patch dynamically reads the shared-memory backing-store length with sequential consistency, while leaving the broader implementation incomplete. The witness reaches a shared-memory helper through a self-contained WebAssembly module.",
+  "local_verification": {
+    "edited_tree": "out/x64.asan/d8 --allow-natives-syntax pocs/probe.js exits 139 with SIGSEGV in __asan_memset.",
+    "parent_plus_golden": "out/x64.asan/d8 --allow-natives-syntax pocs/probe.js catches the Wasm out-of-bounds trap and exits 0."
+  }
+}

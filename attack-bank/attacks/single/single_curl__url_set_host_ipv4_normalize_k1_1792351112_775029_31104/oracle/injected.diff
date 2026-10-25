@@ -1,0 +1,129 @@
+diff --git a/docs/libcurl/curl_url_set.md b/docs/libcurl/curl_url_set.md
+index 35ed109fcd534c4ff9d140d627a9ff557283edec..020fae0e66fd3a2fac00e5fb213783e070b6bed0 100644
+--- a/docs/libcurl/curl_url_set.md
++++ b/docs/libcurl/curl_url_set.md
+@@ -126,6 +126,10 @@ encoded as your locale says or UTF-8 (when WinIDN is used). If it is a
+ bracketed IPv6 numeric address it may contain a zone id (or you can use
+ *CURLUPART_ZONEID*).
+ 
++A numerical IPv4 address, for example "2130706433", "0177.1" or "0x7f.1",
++gets normalized to dotted decimal form the same way it does when the address
++is provided in a full URL.
++
+ Note that if you set an IPv6 address, it gets ruined and causes an error if
+ you also set the CURLU_URLENCODE flag.
+ 
+diff --git a/lib/urlapi.c b/lib/urlapi.c
+index 1c4db04e46388df390e037b5147724b62e40d809..4a06d7971c97562e66c731e588d48e35c2fee5b0 100644
+--- a/lib/urlapi.c
++++ b/lib/urlapi.c
+@@ -2053,11 +2053,38 @@ static CURLUcode url_sethost(CURLU *u, struct dynbuf *encp,
+        encoded so we need to decode it to check */
+     size_t dlen;
+     char *decoded = NULL;
+-    CURLcode result = Curl_urldecode(newp, n, &decoded, &dlen, REJECT_CTRL);
++    CURLcode result;
++    if(*newp == '[')
++      /* a bracketed IPv6 address gets its zone id parsed, clear the one
++         belonging to the previous host name */
++      curlx_safefree(u->zoneid);
++    result = Curl_urldecode(newp, n, &decoded, &dlen, REJECT_CTRL);
+     if(result || hostname_check6(u, decoded, dlen))
+       bad = TRUE;
++    else if(*newp != '[') {
++      /* a numerical IPv4 address gets normalized to dotted decimal form */
++      int type = ipv4_normalize(encp);
++      if(type == HOST_ERROR) {
++        curlx_free(decoded);
++        return CURLUE_OUT_OF_MEMORY;
++      }
++      else if(type == HOST_IPV4)
++        /* a numerical IPv4 address cannot have a zone id */
++        curlx_free(u->zoneid);
++    }
+     curlx_free(decoded);
+   }
++  else if(*newp != '[') {
++    /* a numerical IPv4 address gets normalized to dotted decimal form */
++    int type = ipv4_normalize(encp);
++    if(type == HOST_ERROR)
++      return CURLUE_OUT_OF_MEMORY;
++    else if(type == HOST_IPV4)
++      /* a numerical IPv4 address cannot have a zone id */
++      curlx_free(u->zoneid);
++    else if(hostname_check6(u, newp, n))
++      bad = TRUE;
++  }
+   else if(hostname_check6(u, newp, n))
+     bad = TRUE;
+   if(bad) {
+@@ -2110,7 +2137,6 @@ CURLUcode curl_url_set(CURLU *u, CURLUPart what,
+     break;
+   case CURLUPART_HOST:
+     storep = &u->host;
+-    curlx_safefree(u->zoneid);
+     break;
+   case CURLUPART_ZONEID:
+     storep = &u->zoneid;
+@@ -2143,7 +2169,10 @@ CURLUcode curl_url_set(CURLU *u, CURLUPart what,
+     const char *newp = NULL;
+     struct dynbuf enc;
+     CURLUcode status;
+-    curlx_dyn_init(&enc, (nalloc * 3) + 1 + leadingslash);
++    /* when a numerical IPv4 address gets normalized it can grow to fifteen
++       bytes, make sure there is room for that */
++    curlx_dyn_init(&enc, (nalloc * 3) + 1 + leadingslash +
++                   ((what == CURLUPART_HOST) ? 15 : 0));
+ 
+     if(leadingslash && (part[0] != '/')) {
+       CURLcode result = curlx_dyn_addn(&enc, "/", 1);
+diff --git a/tests/data/test1560 b/tests/data/test1560
+index a710c8a683b5b4f350d9b678b8ae9d5ad1ee5b62..49903ded338cb207a8f71732e16a5a445fd703c7 100644
+--- a/tests/data/test1560
++++ b/tests/data/test1560
+@@ -36,7 +36,7 @@ lib%TESTNUMBER
+ success
+ </stdout>
+ <limits>
+-Allocations: 3650
++Allocations: 3850
+ </limits>
+ </verify>
+ </testcase>
+diff --git a/tests/libtest/lib1560.c b/tests/libtest/lib1560.c
+index 03d99ccbbf3b9444aa6e316eeeeea7fb5c50476d..0d8a0db1c8fa0e7a2cd38c8008c9287a064256e4 100644
+--- a/tests/libtest/lib1560.c
++++ b/tests/libtest/lib1560.c
+@@ -1297,7 +1297,31 @@ static const struct setcase set_parts_list[] = {
+   {"https://example.com/",
+    "host=0xff,", /* '++' there is no automatic URL decode when setting this
+                   part */
+-   "https://0xff/",
++   "https://0.0.0.255/",
++   0, /* get */
++   0, /* set */
++   CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=2130706433,", /* a 32 bit decimal number */
++   "https://127.0.0.1/",
++   0, /* get */
++   0, /* set */
++   CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=0177.1,", /* octal */
++   "https://127.0.0.1/",
++   0, /* get */
++   0, /* set */
++   CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=0x7f.1,", /* hex */
++   "https://127.0.0.1/",
++   0, /* get */
++   0, /* set */
++   CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=0,", /* zero */
++   "https://0.0.0.0/",
+    0, /* get */
+    0, /* set */
+    CURLUE_OK, CURLUE_OK},

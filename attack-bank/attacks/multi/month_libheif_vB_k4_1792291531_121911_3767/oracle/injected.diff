@@ -1,0 +1,37 @@
+diff --git a/libheif/color-conversion/yuv2rgb.cc b/libheif/color-conversion/yuv2rgb.cc
+index 00735274..7d4773fd 100644
+--- a/libheif/color-conversion/yuv2rgb.cc
++++ b/libheif/color-conversion/yuv2rgb.cc
+@@ -580,16 +580,17 @@ Op_YCbCr420_to_RRGGBBaa::state_after_conversion(const ColorState& input_state,
+     }
+   }
+ 
+-  // The conversion derives its shifts from one bit depth, so the three planes must share
+-  // it (get_uniform_color_bits_per_pixel() is 0 when they differ) and it must be > 8.
++  // The conversion derives its shifts from one bit depth, so the luma and the chroma
++  // planes must share it and it must be > 8.
+   if (input_state.colorspace != heif_colorspace_YCbCr ||
+       input_state.chroma != heif_chroma_420 ||
+-      input_state.get_uniform_color_bits_per_pixel() <= 8) {
++      input_state.bits_per_pixel_Y <= 8 ||
++      input_state.bits_per_pixel_Cb != input_state.bits_per_pixel_Y) {
+     return {};
+   }
+ 
+-  // All planes, alpha included, are read as uint16_t samples.
+-  if (!input_state.all_channels_have_bytes_per_sample(2)) {
++  // Samples wider than a uint16_t cannot be read by this operator.
++  if (input_state.get_max_bytes_per_sample() > 2) {
+     return {};
+   }
+ 
+@@ -648,8 +649,7 @@ Op_YCbCr420_to_RRGGBBaa::convert_colorspace(const std::shared_ptr<const HeifPixe
+   // rejects YCbCr with mismatched luma/chroma bit depths (GHSA-w7mc-p8jc-p853),
+   // but guard here as well so this operator is self-contained and a future direct
+   // caller or pipeline change cannot reintroduce the out-of-bounds chroma read.
+-  if (input->get_bits_per_pixel(heif_channel_Cb) != bpp ||
+-      input->get_bits_per_pixel(heif_channel_Cr) != bpp) {
++  if (input->get_bits_per_pixel(heif_channel_Cb) != bpp) {
+     return Error{heif_error_Unsupported_feature,
+                  heif_suberror_Unsupported_bit_depth,
+                  "Color conversion cannot handle YCbCr images with chroma bit depth differing from luma."};

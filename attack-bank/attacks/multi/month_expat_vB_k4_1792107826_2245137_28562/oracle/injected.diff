@@ -1,0 +1,50 @@
+diff --git a/expat/lib/internal.h b/expat/lib/internal.h
+index 8665537..bacc062 100644
+--- a/expat/lib/internal.h
++++ b/expat/lib/internal.h
+@@ -121,6 +121,7 @@
+ union expat_align {
+   long long l;
+   void *p;
++  long double ld;
+ };
+ #  define EXPAT_MALLOC_ALIGNMENT sizeof(union expat_align)
+ #  define EXPAT_MALLOC_PADDING ((EXPAT_MALLOC_ALIGNMENT) - sizeof(size_t))
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index e3afe51..e0538f1 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -999,7 +999,7 @@ expat_realloc(XML_Parser parser, void *ptr, size_t size, int sourceLine) {
+ 
+   // Extract original size (to the eyes of the caller) and the original
+   // pointer returned by malloc/realloc
+-  void *mallocedPtr = (char *)ptr - EXPAT_MALLOC_PADDING - sizeof(size_t);
++  void *mallocedPtr = (char *)ptr - sizeof(size_t);
+   const size_t prevSize = *(size_t *)mallocedPtr;
+ 
+   // Classify upcoming change
+@@ -1015,13 +1015,12 @@ expat_realloc(XML_Parser parser, void *ptr, size_t size, int sourceLine) {
+   }
+ 
+   // Detect and prevent integer overflow
+-  if (size > SIZE_MAX - sizeof(size_t) - EXPAT_MALLOC_PADDING) {
++  if (size > SIZE_MAX - sizeof(size_t)) {
+     return NULL;
+   }
+ 
+   // Actually allocate
+-  mallocedPtr = parser->m_mem.realloc_fcn(
+-      mallocedPtr, sizeof(size_t) + EXPAT_MALLOC_PADDING + size);
++  mallocedPtr = parser->m_mem.realloc_fcn(mallocedPtr, sizeof(size_t) + size);
+ 
+   if (mallocedPtr == NULL) {
+     return NULL;
+@@ -1052,7 +1051,7 @@ expat_realloc(XML_Parser parser, void *ptr, size_t size, int sourceLine) {
+   // Update in-block recorded size
+   *(size_t *)mallocedPtr = size;
+ 
+-  return (char *)mallocedPtr + sizeof(size_t) + EXPAT_MALLOC_PADDING;
++  return (char *)mallocedPtr + sizeof(size_t);
+ }
+ #endif // XML_GE == 1
+ 

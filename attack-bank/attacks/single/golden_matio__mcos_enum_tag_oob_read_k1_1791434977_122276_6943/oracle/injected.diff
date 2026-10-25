@@ -1,0 +1,14 @@
+diff --git a/src/mcos.c b/src/mcos.c
+index 5b7582866920c4b9ada50d1488fe8312baaab62a..0d484a7a897bfeb5d6a1740a3942bedf7c3f3bf6 100644
+--- a/src/mcos.c
++++ b/src/mcos.c
+@@ -1564,7 +1564,8 @@ IsEnumStruct(const matvar_t *matvar)
+         return 0;
+ 
+     tag = Mat_VarGetStructFieldByName(matvar, "EnumerationInstanceTag", 0);
+-    if ( tag == NULL || tag->class_type != MAT_C_UINT32 || tag->data == NULL )
++    if ( tag == NULL || tag->class_type != MAT_C_UINT32 || tag->data == NULL ||
++         tag->dims == NULL || tag->dims[0] == 0 )
+         return 0;
+ 
+     return ((const mat_uint32_t *)tag->data)[0] == MCOS_REF_VALUE;

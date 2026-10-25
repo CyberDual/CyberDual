@@ -1,0 +1,63 @@
+diff --git a/src/pcre2_dfa_match.c b/src/pcre2_dfa_match.c
+index fb757d99..6dd82630 100644
+--- a/src/pcre2_dfa_match.c
++++ b/src/pcre2_dfa_match.c
+@@ -4504,7 +4504,7 @@ pcre2_dfa_match(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length,
+       if (rc >= 0 && (options & PCRE2_COPY_MATCHED_SUBJECT) != 0)
+       {
+         match_data->subject =
+-            match_data->memctl.malloc(CU2BYTES(length + 1), match_data->memctl.memory_data);
++            MEMCTL_MALLOC_CSTRING(match_data, CU2BYTES(length));
+         if (match_data->subject == NULL)
+         {
+           match_data->subject_length = 0;
+diff --git a/src/pcre2_internal.h b/src/pcre2_internal.h
+index 49131498..bc2ea11c 100644
+--- a/src/pcre2_internal.h
++++ b/src/pcre2_internal.h
+@@ -2288,6 +2288,9 @@ private structures. */
+ 
+ #include "pcre2_intmodedep.h"
+ 
++#define MEMCTL_MALLOC_CSTRING(match_data, size)                               \
++  match_data->memctl.malloc((size), match_data->memctl.memory_data)
++
+ /* Private "external" functions. These are internal functions that are called
+ from modules other than the one in which they are defined. They have to be
+ "external" in the C sense, but are not part of the PCRE2 public API. They are
+diff --git a/src/pcre2_match.c b/src/pcre2_match.c
+index 25cbda42..5fd31763 100644
+--- a/src/pcre2_match.c
++++ b/src/pcre2_match.c
+@@ -7964,7 +7964,7 @@ pcre2_match(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length, PCRE2
+     if (rc >= 0 && (options & PCRE2_COPY_MATCHED_SUBJECT) != 0)
+     {
+       match_data->subject =
+-          match_data->memctl.malloc(CU2BYTES(length + 1), match_data->memctl.memory_data);
++          MEMCTL_MALLOC_CSTRING(match_data, CU2BYTES(length));
+       if (match_data->subject == NULL)
+       {
+         match_data->subject_length = 0;
+@@ -8944,7 +8944,7 @@ ENDLOOP:
+     if ((options & PCRE2_COPY_MATCHED_SUBJECT) != 0)
+     {
+       match_data->subject =
+-          match_data->memctl.malloc(CU2BYTES(length + 1), match_data->memctl.memory_data);
++          MEMCTL_MALLOC_CSTRING(match_data, CU2BYTES(length));
+       if (match_data->subject == NULL)
+       {
+         match_data->subject_length = 0;
+diff --git a/src/pcre2_substring.c b/src/pcre2_substring.c
+index ae43dbbe..0b98e4cb 100644
+--- a/src/pcre2_substring.c
++++ b/src/pcre2_substring.c
+@@ -223,8 +223,7 @@ pcre2_substring_get_bynumber(pcre2_match_data *match_data, uint32_t stringnumber
+     return PCRE2_ERROR_NOMEMORY;
+   }
+   /* LCOV_EXCL_STOP */
+-  yield = PRIV(memctl_malloc)(sizeof(pcre2_memctl) + CU2BYTES(size + 1),
+-                              (pcre2_memctl *)match_data);
++  yield = MEMCTL_MALLOC_CSTRING(match_data, sizeof(pcre2_memctl) + CU2BYTES(size + 1));
+   if (yield == NULL)
+     return PCRE2_ERROR_NOMEMORY;
+   yield = (PCRE2_UCHAR *)(((char *)yield) + sizeof(pcre2_memctl));

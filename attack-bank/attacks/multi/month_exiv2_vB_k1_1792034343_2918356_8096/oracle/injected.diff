@@ -1,0 +1,44 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 513f94b..97f24bb 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -480,7 +480,14 @@ enum imageDescTags {
+   CompressorName = 10,
+   BitDepth
+ };
+-enum audioDescTags { AudioFormat, AudioVendorID = 4, AudioChannels, AudioSampleRate = 7, MOV_AudioFormat = 13 };
++enum audioDescTags {
++  AudioFormat,
++  AudioVendorID = 4,
++  AudioChannels,
++  AudioSampleRate = 7,
++  AudioV1Extension,
++  MOV_AudioFormat = 13
++};
+ 
+ /*!
+   @brief Function used to check equality of a Tags with a
+@@ -1199,7 +1206,7 @@ void QuickTimeVideo::sampleDesc(size_t size) {
+ }  // QuickTimeVideo::sampleDesc
+ 
+ void QuickTimeVideo::audioDescDecoder() {
+-  DataBuf buf(40);
++  DataBuf buf(5);
+   std::memset(buf.data(), 0x0, buf.size());
+   buf.data()[4] = '\0';
+   io_->readOrThrow(buf.data(), 4);
+@@ -1230,6 +1237,14 @@ void QuickTimeVideo::audioDescDecoder() {
+         xmpData_["Xmp.audio.SampleRate"] =
+             buf.read_uint16(0, bigEndian) + ((buf.data()[2] * 256 + buf.data()[3]) * 0.01);
+         break;
++      case AudioV1Extension:
++        // Version 1 sound descriptions append samples per packet and bytes
++        // per packet to the version 0 fields; read the pair as one block.
++        io_->readOrThrow(buf.data(), 8);
++        size -= 8;
++        xmpData_["Xmp.audio.SamplesPerPacket"] = buf.read_uint32(0, bigEndian);
++        xmpData_["Xmp.audio.BytesPerPacket"] = buf.read_uint32(4, bigEndian);
++        break;
+       default:
+         break;
+     }

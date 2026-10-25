@@ -1,0 +1,39 @@
+diff --git a/lib/mime.c b/lib/mime.c
+index 11eb66207de747a24d7ca5e8d4b69882377938ba..ac0c30f3bca269c82bd81264325108cf7f332000 100644
+--- a/lib/mime.c
++++ b/lib/mime.c
+@@ -365,7 +365,7 @@ static size_t encoder_base64_read(char *buffer, size_t size, bool ateof,
+     }
+ 
+     /* Be sure there is enough space and input data for a base64 group. */
+-    if(size < 4) {
++    if(size < 3) {
+       if(!cursize)
+         return STOP_FILLING;
+       break;
+@@ -422,15 +422,23 @@ static size_t encoder_base64_read(char *buffer, size_t size, bool ateof,
+ static curl_off_t encoder_base64_size(curl_mimepart *part)
+ {
+   curl_off_t size = part->datasize;
++  curl_off_t groups;
++  curl_off_t breaks;
+ 
+   if(size <= 0)
+     return size;    /* Unknown size or no data. */
+ 
+   /* Compute base64 character count. */
+-  size = 4 * (1 + ((size - 1) / 3));
++  groups = 1 + ((size - 1) / 3);
++  if(groups > CURL_OFF_T_MAX / 4)
++    return -1;
++  size = 4 * groups;
+ 
+   /* Effective character count must include CRLFs. */
+-  return size + (2 * ((size - 1) / MAX_ENCODED_LINE_LENGTH));
++  breaks = (size - 1) / MAX_ENCODED_LINE_LENGTH;
++  if(breaks > (CURL_OFF_T_MAX - size) / 2)
++    return -1;
++  return size + 2 * breaks;
+ }
+ 
+ /* Quoted-printable lookahead.

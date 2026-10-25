@@ -1,0 +1,38 @@
+diff --git a/src/truetype/ttvarc.c b/src/truetype/ttvarc.c
+index 50d08bcb9..507dc7f77 100644
+--- a/src/truetype/ttvarc.c
++++ b/src/truetype/ttvarc.c
+@@ -753,8 +753,9 @@
+         FT_UInt  j;
+ 
+ 
+-        /* use caller's stack buffer for small arrays, heap for large */
+-        if ( axis_count <= axis_values_buffer_size )
++        /* use the stack buffer for small arrays, heap for large; */
++        /* the buffer always holds VARC_STACK_AXIS_COUNT entries  */
++        if ( axis_count <= VARC_STACK_AXIS_COUNT )
+         {
+           component->axis_values         = axis_values_buffer;
+           component->axis_values_on_heap = FALSE;
+@@ -3007,7 +3008,11 @@
+ 
+     FT_Fixed  stack_new_coords[VARC_STACK_COORD_COUNT];
+     FT_UInt   stack_axis_indices[VARC_STACK_INDICES_COUNT];
+-    FT_Fixed  stack_axis_values[VARC_STACK_AXIS_COUNT];
++
++    /* 32 axis values cover all real-world components; a zeros run in  */
++    /* the axis-indices tuple can inflate the count from a single byte */
++    /* now, so anything larger goes to the heap                        */
++    FT_Fixed  stack_axis_values[32];
+ 
+     FT_Matrix  saved_transform_matrix;
+     FT_Vector  saved_transform_delta;
+@@ -3193,7 +3198,7 @@
+                                        &p, limit,
+                                        &component,
+                                        stack_axis_values,
+-                                       VARC_STACK_AXIS_COUNT );
++                                       32 );
+       if ( error )
+       {
+         /* skip malformed component and continue with others */

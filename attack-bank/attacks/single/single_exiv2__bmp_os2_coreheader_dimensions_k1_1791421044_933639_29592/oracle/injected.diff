@@ -1,0 +1,51 @@
+diff --git a/src/bmpimage.cpp b/src/bmpimage.cpp
+index e3377b62895585ac9c1f2ae4780ab52382feaaaf..d49807e79d240233ed7298798d7db47e9a967e02 100644
+--- a/src/bmpimage.cpp
++++ b/src/bmpimage.cpp
+@@ -81,9 +81,19 @@ void BmpImage::readMetadata() {
+     meter) 46      4 bytes  color count 50      4 bytes  important colors       number of "important" colors
+   */
+   byte buf[26];
+-  if (io_->read(buf, sizeof(buf)) == sizeof(buf)) {
+-    pixelWidth_ = getULong(buf + 18, littleEndian);
+-    pixelHeight_ = getULong(buf + 22, littleEndian);
++  if (io_->read(buf, 18) != 18)
++    return;
++
++  const uint32_t headerSize = getULong(buf + 14, littleEndian);
++  const uint32_t remaining = headerSize == 12 || headerSize == 16 ? headerSize - 4 : 8;
++  if (io_->read(buf + 18, remaining) == remaining) {
++    if (headerSize == 12) {
++      pixelWidth_ = getUShort(buf + 18, littleEndian);
++      pixelHeight_ = getUShort(buf + 20, littleEndian);
++    } else {
++      pixelWidth_ = getULong(buf + 18, littleEndian);
++      pixelHeight_ = getULong(buf + 22, littleEndian);
++    }
+   }
+ }
+ 
+diff --git a/unitTests/test_bmpimage.cpp b/unitTests/test_bmpimage.cpp
+index 0c3eab0650482baf3d9dfbb5e0d7dbaa1d4095dc..644071c43caf754d9aad8fedf5b90120f7d751fa 100644
+--- a/unitTests/test_bmpimage.cpp
++++ b/unitTests/test_bmpimage.cpp
+@@ -94,6 +94,19 @@ TEST(BmpImage, readMetadataReadsImageDimensionsWhenDataIsAvailable) {
+   ASSERT_EQ(800u, bmp.pixelHeight());
+ }
+ 
++TEST(BmpImage, readMetadataReadsCoreHeaderDimensions) {
++  const std::array<unsigned char, 26> header{
++      'B',  'M', 0x1a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1a, 0x00, 0x00,
++      0x00, 0x0c, 0x00, 0x00, 0x00, 0x00, 0x05, 0x20, 0x03, 0x01, 0x00, 0x18, 0x00,
++  };
++
++  auto memIo = std::make_unique<MemIo>(header.data(), header.size());
++  BmpImage bmp(std::move(memIo), defaultImageCtorParams(false));
++  ASSERT_NO_THROW(bmp.readMetadata());
++  ASSERT_EQ(1280u, bmp.pixelWidth());
++  ASSERT_EQ(800u, bmp.pixelHeight());
++}
++
+ TEST(BmpImage, readMetadataThrowsWhenImageIsNotBMP) {
+   const std::array<unsigned char, 26> header{
+       'B',  'A',               // Signature                                                         off:0   size:2

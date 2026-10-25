@@ -1,0 +1,87 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index b758e0eff234b2233567ff901fc7458a3f975b8d..3951717969a03a66d11cf68c8647d8ce85c19c9d 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -719,7 +719,7 @@ static int knownhost_line_hashed(LIBSSH2_KNOWNHOSTS *hosts,
+     if((size_t)(p - salt) < hostlen && *p == '|') {
+         const char *hash = NULL;
+         size_t saltlen = p - salt;
+-        if(saltlen >= (sizeof(saltbuf) - 1)) /* weird length */
++        if(saltlen > sizeof(saltbuf)) /* weird length */
+             return ssh2_err(hosts->session, LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                             "Failed to parse known_hosts line "
+                             "(unexpectedly long salt)");
+diff --git a/src/openssl.c b/src/openssl.c
+index 6a38b55b91440c1c188472dde05a9770ea3a3f73..c449047b22236d61d8a3bf5d045038d01e34153c 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -38,6 +38,7 @@
+ 
+ #include <stdlib.h>
+ #include <assert.h>
++#include <limits.h>
+ 
+ void ssh2_crypto_init(void)
+ {
+@@ -929,8 +930,10 @@ int ssh2_cipher_crypt(ssh2_cipher_ctx *ctx, SSH2_CIPHER_T(algo), int encrypt,
+                       unsigned char *block, size_t blocksize, int firstlast)
+ {
+     unsigned char buf[EVP_MAX_BLOCK_LENGTH];
++    unsigned char *cryptbuf = buf;
+     int ret = 1;
+     int rc = 1;
++    int cryptlen;
+ 
+ #if LIBSSH2_AES_GCM
+     const int is_aesgcm = (algo == EVP_aes_128_gcm) ||
+@@ -945,13 +948,21 @@ int ssh2_cipher_crypt(ssh2_cipher_ctx *ctx, SSH2_CIPHER_T(algo), int encrypt,
+     const int aadlen = (is_aesgcm && IS_FIRST(firstlast)) ? 4 : 0;
+     /* size of AT, if present */
+     const int authenticationtag = IS_LAST(firstlast) ? authlen : 0;
+-    /* length to encrypt */
+-    const int cryptlen = (unsigned int)blocksize - aadlen - authenticationtag;
+ 
+     (void)algo;
+ 
+-    assert(blocksize <= sizeof(buf));
+-    assert(cryptlen >= 0);
++    if(blocksize < (size_t)(aadlen + authenticationtag) ||
++       blocksize > INT_MAX)
++        return 1;
++
++    /* length to encrypt */
++    cryptlen = (int)blocksize - aadlen - authenticationtag;
++
++    if(blocksize > sizeof(buf)) {
++        cryptbuf = malloc(blocksize);
++        if(!cryptbuf)
++            return 1;
++    }
+ 
+ #if LIBSSH2_AES_GCM
+     /* First block */
+@@ -976,7 +987,8 @@ int ssh2_cipher_crypt(ssh2_cipher_ctx *ctx, SSH2_CIPHER_T(algo), int encrypt,
+ #endif /* LIBSSH2_AES_GCM */
+ 
+     if(cryptlen > 0)
+-        ret = EVP_Cipher(*ctx, buf + aadlen, block + aadlen, cryptlen);
++        ret = EVP_Cipher(*ctx, cryptbuf + aadlen,
++                         block + aadlen, cryptlen);
+ 
+ #if defined(USE_OPENSSL_3) || defined(LIBSSH2_WOLFSSL)
+     if(ret != -1)
+@@ -1017,10 +1029,13 @@ int ssh2_cipher_crypt(ssh2_cipher_ctx *ctx, SSH2_CIPHER_T(algo), int encrypt,
+         /* Copy en/decrypted data back to the caller.
+            The first aadlen should not be touched because they were not
+            encrypted and are unmodified. */
+-        memcpy(block + aadlen, buf + aadlen, cryptlen);
++        memcpy(block + aadlen, cryptbuf + aadlen, cryptlen);
+         rc = !ret;
+     }
+ 
++    if(cryptbuf != buf)
++        free(cryptbuf);
++
+     /* TODO: the return code should distinguish between decryption errors and
+        invalid MACs */
+     return rc;

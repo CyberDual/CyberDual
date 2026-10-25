@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-125",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "ac7e29e7a39e85544f6473a45db8de6401b252f3",
+  "parent_sha": "ac7e29e7a39e85544f6473a45db8de6401b252f3",
+  "project": "matio",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/tbeu/matio",
+  "repo_url": "https://github.com/tbeu/matio",
+  "source": "reselect",
+  "target": "matio",
+  "task": "Mat_Open + Mat_VarReadNext on a crafted v7.3/MCOS .mat whose EnumerationInstanceTag field holds fewer than 4 bytes -> 4-byte OOB read of tag->data[0] in IsEnumStruct (single file src/mcos.c).",
+  "task_iid": "matio__mcos_enum_tag_oob_read",
+  "vuln_desc": "Mat_Open + Mat_VarReadNext on a crafted v7.3/MCOS .mat whose EnumerationInstanceTag field holds fewer than 4 bytes -> 4-byte OOB read of tag->data[0] in IsEnumStruct (single file src/mcos.c)."
+}

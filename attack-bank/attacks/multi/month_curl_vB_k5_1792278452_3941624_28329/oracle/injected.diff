@@ -1,0 +1,47 @@
+diff --git a/lib/parsedate.c b/lib/parsedate.c
+index 3c11d76ad9..70c219dd2c 100644
+--- a/lib/parsedate.c
++++ b/lib/parsedate.c
+@@ -110,9 +110,8 @@ struct tzinfo {
+ 
+ #define DST (-60)     /* offset for daylight savings time */
+ 
+-/* alpha-sorted list of single-letter time zones, A - Z */
++/* alpha-sorted list of single-letter time zones */
+ static const int16_t tzone[] = {
+-  -1 * 60,            /* Alpha */
+   -2 * 60,            /* Bravo */
+   -3 * 60,            /* Charlie */
+   -4 * 60,            /* Delta */
+@@ -121,7 +120,6 @@ static const int16_t tzone[] = {
+   -7 * 60,            /* Golf */
+   -8 * 60,            /* Hotel */
+   -9 * 60,            /* India */
+-  -1,                 /* J - not a timezone */
+   -10 * 60,           /* Kilo */
+   -11 * 60,           /* Lima */
+   -12 * 60,           /* Mike */
+@@ -135,9 +133,7 @@ static const int16_t tzone[] = {
+    8 * 60,            /* Uniform */
+    9 * 60,            /* Victor */
+   10 * 60,            /* Whiskey */
+-  11 * 60,            /* X-ray */
+-  12 * 60,            /* Yankee */
+-  0                   /* Zulu, zero meridian, a.k.a. UTC */
++  11 * 60             /* X-ray */
+ };
+ 
+ /* two-letter time zones
+@@ -346,6 +342,12 @@ UNITTEST int checktz(const char *check, size_t len)
+     /* short-cut single letter names */
+     if((first > 'Z') || (first == 'J'))
+       return -1; /* no such tz */
++    if(first == 'A')
++      return -1 * 60 * 60;
++    if(first == 'Y')
++      return 12 * 60 * 60;
++    if(first == 'Z')
++      return 0;
+     return tzone[first - 'A'] * 60;
+   }
+   else if(len == 2) {

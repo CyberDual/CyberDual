@@ -1,0 +1,133 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 9726ba2b9bd6c8e0b690100e98a46b3b961e60d9..4809f6b712a2322dcc639e6f95b7c0e9d5e7c7dc 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -3453,6 +3453,65 @@ Mat_VarReadNumeric5(mat_t *mat, matvar_t *matvar, void *data, size_t N)
+     return err;
+ }
+ 
++/* Bytes claimed by a UTF-8 lead. Invalid leads count as a single byte. */
++static size_t
++Utf8SeqLen(mat_uint8_t lead)
++{
++    if ( lead <= 0x7F )
++        return 1;
++    if ( (lead & 0xE0) == 0xC0 )
++        return 2;
++    if ( (lead & 0xF0) == 0xE0 )
++        return 3;
++    if ( (lead & 0xF8) == 0xF0 )
++        return 4;
++    return 1;
++}
++
++/* Reject a UTF-8 payload whose coded sequences run past the stored bytes. */
++static int
++Utf8PayloadStored(const void *data, size_t nbytes)
++{
++    const mat_uint8_t *bytes = (const mat_uint8_t *)data;
++    size_t k = 0;
++
++    if ( bytes == NULL )
++        return MATIO_E_BAD_ARGUMENT;
++
++    while ( k < nbytes ) {
++        size_t need = Utf8SeqLen(bytes[k]);
++        if ( need > 1 ) {
++            size_t i;
++            for ( i = 1; i < need; i++ ) {
++                if ( (bytes[k + i] & 0xC0) != 0x80 || k + i >= nbytes )
++                    return MATIO_E_FILE_FORMAT_VIOLATION;
++            }
++        }
++        k += need;
++    }
++    return MATIO_E_NO_ERROR;
++}
++
++/* Uncompressed bytes still in the file from the current position. */
++static int
++FileBytesRemaining(FILE *fp, size_t *remaining)
++{
++    mat_off_t cur, end;
++
++    cur = ftello(fp);
++    if ( cur < 0 )
++        return MATIO_E_GENERIC_READ_ERROR;
++    if ( fseeko(fp, 0, SEEK_END) != 0 )
++        return MATIO_E_GENERIC_READ_ERROR;
++    end = ftello(fp);
++    if ( fseeko(fp, cur, SEEK_SET) != 0 )
++        return MATIO_E_GENERIC_READ_ERROR;
++    if ( end < cur )
++        return MATIO_E_GENERIC_READ_ERROR;
++    *remaining = (size_t)(end - cur);
++    return MATIO_E_NO_ERROR;
++}
++
+ /** @if mat_devman
+  * @brief Reads the data of a version 5 MAT variable
+  *
+@@ -3640,10 +3699,30 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                 }
+             }
+             if ( matvar->data_type == MAT_T_UTF8 ) {
++                /* Small elements carry at most four payload bytes. */
++                if ( data_in_tag && matvar->nbytes > 4 ) {
++                    free(matvar->data);
++                    matvar->data = NULL;
++                    matvar->nbytes = 0;
++                    err = MATIO_E_FILE_FORMAT_VIOLATION;
++                    break;
++                }
+                 nelems = matvar->nbytes;
+             }
+             if ( matvar->compression == MAT_COMPRESSION_NONE ) {
+                 size_t nBytes;
++                if ( matvar->data_type == MAT_T_UTF8 ) {
++                    size_t remaining = 0;
++                    err = FileBytesRemaining((FILE *)mat->fp, &remaining);
++                    if ( err || remaining < matvar->nbytes ) {
++                        free(matvar->data);
++                        matvar->data = NULL;
++                        matvar->nbytes = 0;
++                        if ( !err )
++                            err = MATIO_E_FILE_FORMAT_VIOLATION;
++                        break;
++                    }
++                }
+                 err = ReadCharData(mat, matvar->data, matvar->data_type, nelems);
+                 if ( err ) {
+                     free(matvar->data);
+@@ -3651,6 +3730,15 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                     matvar->nbytes = 0;
+                     break;
+                 }
++                if ( matvar->data_type == MAT_T_UTF8 ) {
++                    err = Utf8PayloadStored(matvar->data, matvar->nbytes);
++                    if ( err ) {
++                        free(matvar->data);
++                        matvar->data = NULL;
++                        matvar->nbytes = 0;
++                        break;
++                    }
++                }
+                 err = Mul(&nBytes, nelems, Mat_SizeOf(matvar->data_type));
+                 if ( err ) {
+                     free(matvar->data);
+@@ -3677,6 +3765,15 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                     matvar->nbytes = 0;
+                     break;
+                 }
++                if ( matvar->data_type == MAT_T_UTF8 ) {
++                    err = Utf8PayloadStored(matvar->data, matvar->nbytes);
++                    if ( err ) {
++                        free(matvar->data);
++                        matvar->data = NULL;
++                        matvar->nbytes = 0;
++                        break;
++                    }
++                }
+                 err = Mul(&nBytes, nelems, Mat_SizeOf(matvar->data_type));
+                 if ( err ) {
+                     free(matvar->data);

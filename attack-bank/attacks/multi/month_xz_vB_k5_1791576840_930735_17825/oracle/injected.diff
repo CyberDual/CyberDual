@@ -1,0 +1,85 @@
+diff --git a/src/liblzma/common/alone_decoder.c b/src/liblzma/common/alone_decoder.c
+index 174b3b1..6a5b363 100644
+--- a/src/liblzma/common/alone_decoder.c
++++ b/src/liblzma/common/alone_decoder.c
+@@ -155,7 +155,12 @@ alone_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 		const lzma_ret ret = lzma_next_filter_init(&coder->next,
+ 				allocator, filters);
+ 		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->next, allocator);
++			// If initialization failed because memory couldn't
++			// be allocated, no new coder could have been
++			// attached to the chain, so there's nothing to
++			// clean up here.
++			if (ret != LZMA_MEM_ERROR)
++				lzma_next_end(&coder->next, allocator);
+ 			return ret;
+ 		}
+ 
+diff --git a/src/liblzma/common/lzip_decoder.c b/src/liblzma/common/lzip_decoder.c
+index d6f929d..0138767 100644
+--- a/src/liblzma/common/lzip_decoder.c
++++ b/src/liblzma/common/lzip_decoder.c
+@@ -240,7 +240,12 @@ lzip_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 		const lzma_ret ret = lzma_next_filter_init(
+ 				&coder->lzma_decoder, allocator, filters);
+ 		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->lzma_decoder, allocator);
++			// If initialization failed because memory couldn't
++			// be allocated, no new coder could have been
++			// attached to the chain, so there's nothing to
++			// clean up here.
++			if (ret != LZMA_MEM_ERROR)
++				lzma_next_end(&coder->lzma_decoder, allocator);
+ 			return ret;
+ 		}
+ 
+diff --git a/src/liblzma/common/microlzma_decoder.c b/src/liblzma/common/microlzma_decoder.c
+index a7720cc..8b047aa 100644
+--- a/src/liblzma/common/microlzma_decoder.c
++++ b/src/liblzma/common/microlzma_decoder.c
+@@ -111,7 +111,12 @@ microlzma_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 		const lzma_ret ret = lzma_next_filter_init(&coder->lzma,
+ 				allocator, filters);
+ 		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->lzma, allocator);
++			// If initialization failed because memory couldn't
++			// be allocated, no new coder could have been
++			// attached to the chain, so there's nothing to
++			// clean up here.
++			if (ret != LZMA_MEM_ERROR)
++				lzma_next_end(&coder->lzma, allocator);
+ 			return ret;
+ 		}
+ 
+diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c
+index 6dc4cef..0499e68 100644
+--- a/src/liblzma/lz/lz_decoder.c
++++ b/src/liblzma/lz/lz_decoder.c
+@@ -242,9 +242,16 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 
+ 	// Allocate and initialize the LZ-based decoder. It will also give
+ 	// us the dictionary size.
++	//
++	// If this is reinitializing a coder that was used successfully
++	// earlier, lz_init() doesn't touch coder->dict, so the existing
++	// dictionary buffer, if any, is left as is and remains valid for
++	// the next initialization attempt.
+ 	lzma_lz_options lz_options;
+-	return_if_error(lz_init(&coder->lz, allocator,
+-			filters[0].id, filters[0].options, &lz_options));
++	const lzma_ret lz_ret = lz_init(&coder->lz, allocator,
++			filters[0].id, filters[0].options, &lz_options);
++	if (lz_ret != LZMA_OK)
++		return lz_ret;
+ 
+ 	// If the dictionary size is very small, increase it to 4096 bytes.
+ 	// This is to prevent constant wrapping of the dictionary, which
+@@ -278,7 +285,6 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 
+ 	// Allocate and initialize the dictionary.
+ 	if (coder->dict.size != alloc_size) {
+-		coder->dict.size = 0;
+ 		lzma_free(coder->dict.buf, allocator);
+ 
+ 		// The LZ_DICT_EXTRA bytes at the end of the buffer aren't

@@ -1,0 +1,98 @@
+diff --git a/src/mat73.c b/src/mat73.c
+index a94e59004e213d398604aa454e5ce87e9adaf1d6..608d7c70b0f0e7aaabba0964dd75d4025ed8c190 100644
+--- a/src/mat73.c
++++ b/src/mat73.c
+@@ -121,6 +121,8 @@ static int Mat_VarWriteAppendNextType73(hid_t id, matvar_t *matvar, const char *
+                                         hid_t *refs_id, hsize_t *dims, int dim);
+ static herr_t Mat_VarReadNextInfoIterate(hid_t id, const char *name, const H5L_info_t *info,
+                                          void *op_data);
++static herr_t Mat_H5CountGroupFieldsIterate(hid_t dset_id, const char *name,
++                                             const H5L_info_t *info, void *op_data);
+ static herr_t Mat_H5ReadGroupInfoIterate(hid_t dset_id, const char *name, const H5L_info_t *info,
+                                          void *op_data);
+ static int Mat_H5ReadData(hid_t dset_id, hid_t h5_type, hid_t mem_space, hid_t dset_space,
+@@ -1217,8 +1219,8 @@ Mat_H5ReadGroupInfo(mat_t *mat, matvar_t *matvar, hid_t dset_id)
+ 
+             /* First iteration to retrieve number of relevant links */
+             herr = H5Literate(dset_id, H5_INDEX_NAME, H5_ITER_NATIVE, NULL,
+-                              Mat_H5ReadGroupInfoIterate, (void *)&group_data);
+-            if ( herr > 0 && group_data.nfields > 0 ) {
++                              Mat_H5CountGroupFieldsIterate, (void *)&group_data);
++            if ( herr >= 0 && group_data.nfields > 0 ) {
+                 matvar->internal->fieldnames = (char **)calloc(
+                     (size_t)(group_data.nfields), sizeof(*matvar->internal->fieldnames));
+                 group_data.nfields = 0;
+@@ -1444,10 +1446,10 @@ done_group:
+ }
+ 
+ static herr_t
+-Mat_H5ReadGroupInfoIterate(hid_t dset_id, const char *name, const H5L_info_t *info, void *op_data)
++Mat_H5CountGroupFieldsIterate(hid_t dset_id, const char *name, const H5L_info_t *info,
++                              void *op_data)
+ {
+     herr_t herr;
+-    matvar_t *matvar;
+     H5O_INFO_T object_info;
+     struct ReadGroupInfoIterData *group_data;
+ 
+@@ -1463,7 +1465,6 @@ Mat_H5ReadGroupInfoIterate(hid_t dset_id, const char *name, const H5L_info_t *in
+     group_data = (struct ReadGroupInfoIterData *)op_data;
+     if ( group_data == NULL )
+         return -1;
+-    matvar = group_data->matvar;
+ 
+     switch ( object_info.type ) {
+         case H5O_TYPE_GROUP:
+@@ -1472,11 +1473,6 @@ Mat_H5ReadGroupInfoIterate(hid_t dset_id, const char *name, const H5L_info_t *in
+                 return 0;
+             /* Fall through */
+         case H5O_TYPE_DATASET:
+-            if ( matvar != NULL ) {
+-                matvar->internal->fieldnames[group_data->nfields] = strdup(name);
+-                if ( NULL == matvar->internal->fieldnames[group_data->nfields] )
+-                    return -1;
+-            }
+             group_data->nfields++;
+             break;
+         default:
+@@ -1484,7 +1480,39 @@ Mat_H5ReadGroupInfoIterate(hid_t dset_id, const char *name, const H5L_info_t *in
+             break;
+     }
+ 
+-    return 1;
++    return 0;
++}
++
++static herr_t
++Mat_H5ReadGroupInfoIterate(hid_t dset_id, const char *name, const H5L_info_t *info, void *op_data)
++{
++    herr_t herr;
++    matvar_t *matvar;
++    H5O_INFO_T object_info;
++    struct ReadGroupInfoIterData *group_data;
++
++    /* FIXME: follow symlinks, datatypes? */
++
++    object_info.type = H5O_TYPE_UNKNOWN;
++    herr = H5OGET_INFO_BY_NAME(dset_id, name, &object_info, H5P_DEFAULT);
++    if ( herr < 0 )
++        return -1;
++    if ( H5O_TYPE_DATASET != object_info.type && H5O_TYPE_GROUP != object_info.type )
++        return 0;
++
++    group_data = (struct ReadGroupInfoIterData *)op_data;
++    if ( group_data == NULL )
++        return -1;
++    matvar = group_data->matvar;
++
++    if ( matvar != NULL ) {
++        matvar->internal->fieldnames[group_data->nfields] = strdup(name);
++        if ( NULL == matvar->internal->fieldnames[group_data->nfields] )
++            return -1;
++    }
++    group_data->nfields++;
++
++    return 0;
+ }
+ 
+ static int

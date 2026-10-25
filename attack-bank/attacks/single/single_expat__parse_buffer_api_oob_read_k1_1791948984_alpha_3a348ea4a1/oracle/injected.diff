@@ -1,0 +1,32 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 08ef9f72d53db713126e3461acab78c1578eb8c3..c8a47a62ae4350c1cd80bfb379f3368ae589af6d 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2434,6 +2434,27 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal) {
+     return XML_STATUS_ERROR;
+   }
+ 
++  /* Reject len that would advance m_bufferEnd past the bytes XML_GetBuffer
++     actually reserved.  A larger len used to walk the tokenizer off the
++     end of the allocation. */
++  const ptrdiff_t bytesLeft
++      = EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd);
++  if ((ptrdiff_t)len > bytesLeft) {
++    parser->m_errorCode = XML_ERROR_INVALID_ARGUMENT;
++    return XML_STATUS_ERROR;
++  }
++
++  /* Final chunks bigger than the initial buffer are NUL terminated when
++     they still fit, so the input context can be used as a C string. */
++  if (isFinal && len > INIT_BUFFER_SIZE) {
++    const ptrdiff_t endIndex
++        = EXPAT_SAFE_PTR_DIFF(parser->m_bufferEnd, parser->m_buffer) + len;
++    if (endIndex
++        <= EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_buffer)) {
++      parser->m_buffer[endIndex] = '\0';
++    }
++  }
++
+   start = parser->m_bufferPtr;
+   parser->m_positionPtr = start;
+   parser->m_bufferEnd += len;

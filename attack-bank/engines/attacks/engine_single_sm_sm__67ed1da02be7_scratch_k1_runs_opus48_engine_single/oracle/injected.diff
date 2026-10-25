@@ -1,0 +1,37 @@
+diff --git a/js/src/wasm/WasmGcObject-inl.h b/js/src/wasm/WasmGcObject-inl.h
+index 271b8a5089..5156abde4e 100644
+--- a/js/src/wasm/WasmGcObject-inl.h
++++ b/js/src/wasm/WasmGcObject-inl.h
+@@ -119,12 +119,21 @@ MOZ_ALWAYS_INLINE WasmStructObject* WasmStructObject::createStructOOL(
+   uint8_t* outlineData = AllocateCellBuffer<uint8_t>(
+       cx, structObj, outlineBytes, MaxNurseryTrailerSize);
+   if (MOZ_UNLIKELY(!outlineData)) {
+-    // AllocateCellBuffer will have called ReportOutOfMemory(cx) itself,
+-    // so no need to do that here.
++    // AllocateCellBuffer will have called ReportOutOfMemory(cx) itself, so no
++    // need to do that here.  The half-built struct remains reachable by the GC
++    // until it is discarded, so its inline fields must be left in a defined
++    // state; otherwise tracing would read uninitialized reference fields.
++    if constexpr (ZeroFields) {
++      size_t headerSize = typeDefData->cached.strukt.payloadOffsetIL;
++      memset((uint8_t*)structObj + headerSize, 0,
++             typeDefData->cached.strukt.totalSizeIL - headerSize);
++    }
+     structObj->setOOLPointer(typeDefData, nullptr);
+     return nullptr;
+   }
+ 
++  structObj->setOOLPointer(typeDefData, outlineData);
++
+   // Initialize the inline and outline data fields
+   if constexpr (ZeroFields) {
+     size_t headerSize = typeDefData->cached.strukt.payloadOffsetIL;
+@@ -133,8 +142,6 @@ MOZ_ALWAYS_INLINE WasmStructObject* WasmStructObject::createStructOOL(
+     memset(outlineData, 0, outlineBytes);
+   }
+ 
+-  structObj->setOOLPointer(typeDefData, outlineData);
+-
+   MOZ_ASSERT(typeDefData->clasp->shouldDelayMetadataBuilder());
+   cx->realm()->setObjectPendingMetadata(structObj);
+ 

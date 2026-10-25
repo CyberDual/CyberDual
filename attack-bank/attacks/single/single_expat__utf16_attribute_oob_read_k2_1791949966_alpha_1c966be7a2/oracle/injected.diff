@@ -1,0 +1,62 @@
+diff --git a/expat/Changes b/expat/Changes
+index 7c41a4fc038b37e813f362b02f91b5ae006d2864..30afb68d35b178491cff03e5e1426556f0843f15 100644
+--- a/expat/Changes
++++ b/expat/Changes
+@@ -17,6 +17,14 @@
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ 
+ Release 2.8.3 XXX XXX XX XXXX
++        Security fixes:
++                  CVE-2026-72522 -- Stop `*_toUtf16` from treating a low
++                    surrogate (U+DC00..U+DFFF) as a high surrogate. In
++                    XML_UNICODE builds that misclassification dropped the
++                    trail unit when an attribute value containing a
++                    surrogate pair was converted. High surrogates are now
++                    emitted together with the following low half.
++
+         Special thanks to:
+             City of Munich Open Source Sabbatical
+ 
+diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c
+index 96857da2027f6018f84729554759fb927f8672a9..878e10ec93803d6f98844ec528e4c8e2c1883825 100644
+--- a/expat/lib/xmltok.c
++++ b/expat/lib/xmltok.c
+@@ -704,21 +704,27 @@ unicode_byte_type(char hi, char lo) {
+   static enum XML_Convert_Result PTRCALL E##toUtf16(                           \
+       const ENCODING *enc, const char **fromP, const char *fromLim,            \
+       unsigned short **toP, const unsigned short *toLim) {                     \
+-    enum XML_Convert_Result res = XML_CONVERT_COMPLETED;                       \
+     UNUSED_P(enc);                                                             \
+     fromLim = *fromP + (((fromLim - *fromP) >> 1) << 1); /* shrink to even */  \
+-    /* Avoid copying first half only of surrogate */                           \
+-    if (fromLim - *fromP > ((toLim - *toP) << 1)                               \
+-        && (GET_HI(fromLim - 2) & 0xF8) == 0xD8) {                             \
+-      fromLim -= 2;                                                            \
+-      res = XML_CONVERT_INPUT_INCOMPLETE;                                      \
++    while (*fromP < fromLim && *toP < toLim) {                                 \
++      const unsigned short u                                                   \
++          = (unsigned short)((GET_HI(*fromP) << 8) | GET_LO(*fromP));          \
++      /* High surrogates are U+D800..U+DBFF. 0xF8 also matched low             \
++         surrogates (U+DC00..U+DFFF) and dropped the trail unit. */            \
++      if ((u & 0xFC00) == 0xD800 && (fromLim - *fromP) >= 4) {                 \
++        *(*toP)++ = u;                                                         \
++        *fromP += 2;                                                           \
++        *(*toP)++                                                              \
++            = (unsigned short)((GET_HI(*fromP) << 8) | GET_LO(*fromP));        \
++        *fromP += 2;                                                           \
++        continue;                                                              \
++      }                                                                        \
++      *(*toP)++ = u;                                                           \
++      *fromP += 2;                                                             \
+     }                                                                          \
+-    for (; *fromP < fromLim && *toP < toLim; *fromP += 2)                      \
+-      *(*toP)++ = (GET_HI(*fromP) << 8) | GET_LO(*fromP);                      \
+-    if ((*toP == toLim) && (*fromP < fromLim))                                 \
++    if (*fromP < fromLim)                                                      \
+       return XML_CONVERT_OUTPUT_EXHAUSTED;                                     \
+-    else                                                                       \
+-      return res;                                                              \
++    return XML_CONVERT_COMPLETED;                                              \
+   }
+ 
+ #define GET_LO(ptr) ((unsigned char)(ptr)[0])

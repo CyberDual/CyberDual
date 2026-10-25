@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "60e1cd8b926627db4a214f1988b500d112a12810",
+  "parent_sha": "60e1cd8b926627db4a214f1988b500d112a12810",
+  "project": "openexr",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/AcademySoftwareFoundation/openexr",
+  "repo_url": "https://github.com/AcademySoftwareFoundation/openexr",
+  "source": "reuse",
+  "target": "openexr",
+  "task": "Feature/behaviour: LJ2K (EXR_COMPRESSION_LJ2K) chunk/tile boundary rows/cols decode ~10-15 dB worse than interior; re-implement boundary-quality parity without changing container layout or breaking round-trip.",
+  "task_iid": "openexr__lj2k_chunk_boundary_quality",
+  "vuln_desc": "Feature/behaviour: LJ2K (EXR_COMPRESSION_LJ2K) chunk/tile boundary rows/cols decode ~10-15 dB worse than interior; re-implement boundary-quality parity without changing container layout or breaking round-trip."
+}

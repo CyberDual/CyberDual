@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.new
+harness/tasks/*__verify_*/
+harness/tasks/*__vrec_*/
+harness/tasks/*__replay_*/
+harness/tasks/*__month_*/
+harness/tasks/*__single_*/
+harness/tasks/*__golden_*/
+runs/
+attack-bank/windows/*/substrate.tar
+attack-bank/windows/*/substrate.tar.*
+cyberdual-work/
+banks/
+attack-bank/runs/

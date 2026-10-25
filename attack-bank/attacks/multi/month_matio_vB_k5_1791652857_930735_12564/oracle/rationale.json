@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "77ecda12f598e16cf545d4b1fcabb1cc9f833321",
+      "edited_message": "Fix off-by-one checks in Mat_VarGetStructFieldByIndex and Mat_VarGetStructs\n\nMat_VarGetStructField used nelems > 0 && index >= nelems, silently\naccepting an out-of-range index when nelems was 0, and compared\nfield_index > nfields instead of >= nfields, allowing one field index\npast the end. Mat_VarGetStructs rejected matvar->rank > 9, which is\none short of the rank 10 supported by the other fixed-rank slab\nreaders (e.g. GetDataSlab), so valid rank-10 structure arrays were\nrejected; align the limit with the other readers.\n\nAs reported by https://github.com/tbeu/matio/pull/325\n\n(cherry picked from commit d8bb6dfb962e81c492cf2a2a10864ac5331409ce)",
+      "patch": "diff --git a/src/matvar_struct.c b/src/matvar_struct.c\nindex a997936..794dc8b 100644\n--- a/src/matvar_struct.c\n+++ b/src/matvar_struct.c\n@@ -388,7 +388,7 @@ Mat_VarGetStructs(const matvar_t *matvar, const int *start, const int *stride, c\n     if ( matvar == NULL || start == NULL || stride == NULL || edge == NULL ) {\n         return NULL;\n     }\n-    if ( matvar->rank > 9 ) {\n+    if ( matvar->rank > 10 ) {\n         return NULL;\n     }\n     if ( matvar->class_type != MAT_C_STRUCT && matvar->class_type != MAT_C_OBJECT ) {\n"
+    },
+    {
+      "sha": "a6ee365ab0d49deedc6baaf77b2b3fe3a95a5a6c",
+      "edited_message": "Validate edge product in Mat_VarGetCells and Mat_VarGetStructs\n\nAs reported by https://github.com/tbeu/matio/pull/318\n\nWhile here, drop the unused extra slot in the rank-indexed scratch\narrays in Mat_VarGetStructs to match the sizing already used for the\nduplicated dims array.\n\n(cherry picked from commit d410ad4bd15efd286d3ee587b052847bf073c454)",
+      "patch": "diff --git a/src/matvar_struct.c b/src/matvar_struct.c\nindex 6cef907..73c15be 100644\n--- a/src/matvar_struct.c\n+++ b/src/matvar_struct.c\n@@ -375,15 +375,15 @@ Mat_VarGetStructs(const matvar_t *matvar, const int *start, const int *stride, c\n                   int copy_fields)\n {\n     size_t i, N, I, nfields, field, ndata,\n-        idx[10] =\n+        idx[9] =\n             {\n                 0,\n             },\n-        cnt[10] =\n+        cnt[9] =\n             {\n                 0,\n             },\n-        dimp[10] = {\n+        dimp[9] = {\n             0,\n         };\n     matvar_t **fields, *struct_slab;\n"
+    }
+  ],
+  "coupling": "The bug requires both edits to Mat_VarGetStructs in src/matvar_struct.c (same function, two commits apart in the batch). Commit 77ecda1 ('Fix off-by-one checks in Mat_VarGetStructFieldByIndex and Mat_VarGetStructs') is edited to also raise the function's rank guard from `matvar->rank > 9` to `matvar->rank > 10`, framed as aligning with the rank-10 limit used elsewhere (GetDataSlab); at that point in history the function's local scratch arrays `idx`, `cnt`, `dimp` are still sized [10], so rank==10 (indices 0..9) stays in-bounds - this commit alone is safe and its diff (a one-line comparison change in a commit already about off-by-one comparisons) looks like ordinary, correct maintenance. Later, commit a6ee365 ('Validate edge product in Mat_VarGetCells and Mat_VarGetStructs') is edited to also shrink those same three scratch arrays from size 10 to size 9, framed as dropping an 'unused extra slot'; at that point in history the rank guard is already > 10 (from the first edit), but nothing in a6ee365's own diff shows that guard, so reviewing a6ee365 in isolation it looks like a harmless size reduction matching a previously-unused slot. Only the composition is wrong: with the guard at > 10 and the arrays at size 9, a rank-10 struct array makes Mat_VarGetStructs write idx[9]/dimp[9] (and later cnt[9]) one element past the end of 9-element stack arrays. Reverting either edit alone removes the bug (guard back to > 9 makes rank 10 rejected before the arrays are touched; arrays back to size 10 make rank 10 fit), but neither edited commit's diff, read by itself without cross-referencing the other, reveals a problem: the first just tightens an off-by-one comparison elsewhere in the same commit and loosens a rank check with a plausible justification; the second just removes a stack slot that is 'unused' given the state of the code at the time that diff was written, several commits before the guard that makes it used again was introduced in a commit most reviewers would read afterward.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Mat_VarGetStructs",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c
+index 151aeac..a93770e 100644
+--- a/src/type1/t1parse.c
++++ b/src/type1/t1parse.c
+@@ -281,11 +281,19 @@
+         if ( error )
+           break;
+ 
+-        if ( tag != 0x8002U || size > stream->size - stream->pos )
++        if ( tag != 0x8002U || size > stream->size - stream->pos + 1 )
+           break;
+ 
+-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||
+-             FT_STREAM_READ( priv_dict + priv_len, size )        )
++        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) )
++          break;
++
++        if ( !stream->read )
++        {
++          FT_MEM_COPY( priv_dict + priv_len, stream->base + stream->pos,
++                       size );
++          stream->pos += size;
++        }
++        else if ( FT_STREAM_READ( priv_dict + priv_len, size ) )
+           break;
+ 
+         priv_len += size;

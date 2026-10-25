@@ -1,0 +1,14 @@
+{
+ "project": "openexr",
+ "window_id": "952b6b585aedbc60268d614858562f40d4b73fd57ecb2df01da565ad79aaa313",
+ "base": "3f0f6c2d556a9b547cc8fd83f07018394a61a019",
+ "maint_batch_tip": "56e8687a824aa7498e7527d3ba8a8a3044de9a81",
+ "tree": "e42f3b306899ad8b244558092e2bf955329a8cba",
+ "n_commits": 87,
+ "n_editable": 52,
+ "list_sha1": "477da213cf855eca89047786d761bf6d6a377c29",
+ "tar_sha256": "f741f4cd315deccce2ddbbc8d2d39b2c4490f06e577aa9ebf91670a54bc234c9",
+ "tar_bytes": 114391040,
+ "built_utc": "2026-10-17T20:13:00Z",
+ "cyberdual": "f685a97c"
+}

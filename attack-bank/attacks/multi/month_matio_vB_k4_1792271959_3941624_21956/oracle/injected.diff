@@ -1,0 +1,64 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 5d3bbb2..8e3cb14 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -5081,6 +5081,9 @@ Mat_VarReadData5(mat_t *mat, matvar_t *matvar, void *data, const int *start, con
+     int z_copy = 0;
+ #endif
+ 
++    if ( matvar->rank < 1 || matvar->rank > 20 )
++        return MATIO_E_BAD_ARGUMENT;
++
+     (void)fseeko((FILE *)mat->fp, matvar->internal->datapos, SEEK_SET);
+     if ( matvar->compression == MAT_COMPRESSION_NONE ) {
+         err = Read(tag, 4, 2, (FILE *)mat->fp, NULL);
+diff --git a/src/read_data.c b/src/read_data.c
+index e1fcdb1..3dada1b 100644
+--- a/src/read_data.c
++++ b/src/read_data.c
+@@ -579,11 +579,11 @@ ReadDataSlabN(mat_t *mat, void *data, enum matio_classes class_type, enum matio_
+     int err;
+     int i, j;
+     size_t N, I = 0;
+-    size_t inc[10] =
++    size_t inc[20] =
+         {
+             0,
+         },
+-           dimp[10] = {
++           dimp[20] = {
+                0,
+            };
+     int cnt[10] = {
+@@ -594,8 +594,6 @@ ReadDataSlabN(mat_t *mat, void *data, enum matio_classes class_type, enum matio_
+     if ( (mat == NULL) || (data == NULL) || (mat->fp == NULL) || (start == NULL) ||
+          (stride == NULL) || (edge == NULL) ) {
+         return MATIO_E_BAD_ARGUMENT;
+-    } else if ( rank > 10 ) {
+-        return MATIO_E_BAD_ARGUMENT;
+     }
+ 
+     if ( CheckEdgeOverflow(rank, edge, 1) ) {
+@@ -775,11 +773,11 @@ ReadCompressedDataSlabN(mat_t *mat, z_streamp z, void *data, enum matio_classes
+ {
+     int nBytes = 0, i, j, err;
+     size_t N, I = 0;
+-    size_t inc[10] =
++    size_t inc[20] =
+         {
+             0,
+         },
+-           dimp[10] = {
++           dimp[20] = {
+                0,
+            };
+     int cnt[10] = {
+@@ -792,8 +790,6 @@ ReadCompressedDataSlabN(mat_t *mat, z_streamp z, void *data, enum matio_classes
+     if ( (mat == NULL) || (data == NULL) || (mat->fp == NULL) || (start == NULL) ||
+          (stride == NULL) || (edge == NULL) ) {
+         return -1;
+-    } else if ( rank > 10 ) {
+-        return -1;
+     }
+ 
+     if ( CheckEdgeOverflow(rank, edge, 1) ) {

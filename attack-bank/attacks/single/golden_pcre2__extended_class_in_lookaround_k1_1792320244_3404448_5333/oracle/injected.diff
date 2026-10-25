@@ -1,0 +1,79 @@
+diff --git a/src/pcre2_compile.c b/src/pcre2_compile.c
+index 8393640a60b5f9afcbe8394d7f1efcb2fdbd3ba5..571225884106b8d1c559a4022708e567b2a9a394 100644
+--- a/src/pcre2_compile.c
++++ b/src/pcre2_compile.c
+@@ -9663,8 +9663,23 @@ for (;; pptr++)
+     case META_CLASS:
+     case META_CLASS_NOT:
+     itemlength = itemminlength = 1;
+-    pptr = parsed_skip(pptr, PSKIP_CLASS);
+-    if (pptr == NULL) goto PARSED_SKIP_FAILED;
++
++    /* Skip to the end of the class. When extended classes are in use (the
++    PCRE2_ALT_EXTENDED_CLASS option), classes can themselves be nested, so a
++    nesting level has to be maintained: the first META_CLASS_END that is
++    encountered may terminate an inner class. */
++
++      {
++      uint32_t class_nestlevel = 1;
++      do
++        {
++        pptr++;
++        if (META_CODE(*pptr) == META_CLASS_END) class_nestlevel--;
++        else if (META_CODE(*pptr) == META_CLASS ||
++                 META_CODE(*pptr) == META_CLASS_NOT) class_nestlevel++;
++        }
++      while (class_nestlevel > 0);
++      }
+     break;
+ 
+     case META_CLASS_EMPTY_NOT:
+diff --git a/testdata/testinput2 b/testdata/testinput2
+index 3afa00248250433dafc62336f76008b897805793..413214ca6cb97a6fd0a11badca65eb25c42122fa 100644
+--- a/testdata/testinput2
++++ b/testdata/testinput2
+@@ -7400,6 +7400,16 @@ a)"xI
+ 
+ /[z&/alt_extended_class
+ 
++/(?<=[12[34]])/alt_extended_class
++    1
++    2
++    3
++    4
++    1]
++\= Expect no match
++    5
++    []
++
+ /[[^]~~[^]]/B,alt_extended_class,allow_empty_class
+ \= Expect no match
+     a
+diff --git a/testdata/testoutput2 b/testdata/testoutput2
+index d9eaa30be37c9f3b87f104053bdf1ad9f7380f1b..897c026d948cd006773901689a72b1bcf34b2cbb 100644
+--- a/testdata/testoutput2
++++ b/testdata/testoutput2
+@@ -21773,6 +21773,23 @@ Failed: error 207 at offset 117: extended character class nesting is too deep
+ Failed: error 106 at offset 3: missing terminating ] for character class
+         here: [z& |<--|
+ 
++/(?<=[12[34]])/alt_extended_class
++    1
++ 0: 
++    2
++ 0: 
++    3
++ 0: 
++    4
++ 0: 
++    1]
++ 0: 
++\= Expect no match
++    5
++No match
++    []
++No match
++
+ /[[^]~~[^]]/B,alt_extended_class,allow_empty_class
+ ------------------------------------------------------------------
+         Bra

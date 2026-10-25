@@ -1,0 +1,28 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..8499209 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -521,10 +521,12 @@ static int knownhost_ipv6_part(const char *host, const char **address,
+         const char *close = strchr(host + 1, ']');
+         const char *port;
+ 
+-        if(!close || close == host + 1 || close[1] != ':' || !close[2])
++        if(!close || close == host + 1)
+             return 0;
+ 
+-        port = close + 2;
++        port = close + 1;
++        if(*port == ':')
++            port++;
+         while(*port) {
+             if(*port < '0' || *port > '9')
+                 return 0;
+@@ -533,7 +535,7 @@ static int knownhost_ipv6_part(const char *host, const char **address,
+ 
+         *address = host + 1;
+         *address_len = (size_t)(close - host - 1);
+-        *suffix = close + 1;
++        *suffix = close + 2;
+     }
+     else {
+         *address = host;

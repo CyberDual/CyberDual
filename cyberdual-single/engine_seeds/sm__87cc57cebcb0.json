@@ -1,0 +1,39 @@
+{
+  "task_iid": "sm__87cc57cebcb0",
+  "project": "sm",
+  "engine": "sm",
+  "repo": "https://github.com/mozilla-firefox/firefox",
+  "repo_url": "https://github.com/mozilla-firefox/firefox",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "family": "collect_seeds",
+  "source": "mined",
+  "parent_commit": "dbc4b8c34f9830dd06cfc51b7761559003b47beb",
+  "parent_sha": "dbc4b8c34f9830dd06cfc51b7761559003b47beb",
+  "fix_sha": "87cc57cebcb05fcb9fee16a488009646060109e6",
+  "date": "2026-09-11T00:02:13+00:00",
+  "cwe": "",
+  "vuln_type": "Use-after-free risk (RegExp JIT code discarded during interrupt)",
+  "vuln_desc": "GC can discard RegExp JIT code still active on the stack during an interrupt.",
+  "task": "GC can discard RegExp JIT code still active on the stack during an interrupt.",
+  "grading": "engine",
+  "selection_criteria": [
+    "upstream fix in [2026-07-01, 2026-10-01), before the shared maintenance cutoff",
+    "mined from the upstream engine repository via collect_seeds, not SEC-bench-Pro",
+    "not AI-authored; parent and fix SHA independently verified",
+    "distinct upstream repair commit with engine source changes"
+  ],
+  "selection_reason": "Prospectively added for the ten-task engine cohort: Use-after-free risk (RegExp JIT code discarded during interrupt); upstream fix 87cc57cebcb0 dated 2026-09-11.",
+  "source_files": [
+    "js/src/gc/Zone.cpp",
+    "js/src/irregexp/RegExpAPI.h",
+    "js/src/irregexp/RegExpNativeMacroAssembler.cpp",
+    "js/src/irregexp/RegExpNativeMacroAssembler.h",
+    "js/src/jit-test/tests/regexp/interrupt-regexp-with-gc.js",
+    "js/src/jit-test/tests/regexp/interrupt-regexp-with-nested-regexp.js",
+    "js/src/jit-test/tests/regexp/interrupt-regexp-with-regexp.js",
+    "js/src/jit/ABIFunctionList-inl.h",
+    "js/src/jit/JitZone.h"
+  ],
+  "subtree": "js/src"
+}

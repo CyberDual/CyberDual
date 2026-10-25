@@ -1,0 +1,14 @@
+diff --git a/src/pcre2posix.c b/src/pcre2posix.c
+index 401ad0ab..dc8da5bb 100644
+--- a/src/pcre2posix.c
++++ b/src/pcre2posix.c
+@@ -449,8 +449,7 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t
+   {
+     size_t i;
+     PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(md);
+-    if ((size_t)rc > nmatch)
+-      rc = (int)nmatch;
++
+     for (i = 0; i < (size_t)rc; i++)
+     {
+       if (ovector[i * 2] == PCRE2_UNSET || ovector[i * 2] + so > (PCRE2_SIZE)INT_MAX ||

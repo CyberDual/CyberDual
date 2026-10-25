@@ -1,0 +1,13 @@
+{
+  "task_iid": "v8__7ec754d5fd9d",
+  "regime": "A_vuln_patch",
+  "strategy": "new_vuln",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "new_vuln"
+    }
+  ],
+  "explanation": "TryCopyConsStringDirect now receives a std::span and derives bounded subspans for both cons-string halves. The changed out-of-line character buffer path is reachable from a dynamic property-key lookup on a 256-character direct cons string.",
+  "local_verification": "ASan d8 exits 0 with the changed allocation restored to its parent form and reports a heap-buffer-overflow on the edited tree. Rebuilt with gn gen out/x64.asan and ninja -j8 -C out/x64.asan d8."
+}

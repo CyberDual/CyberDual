@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-787",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "6cbd89052a57695b96546ca44e35d3159c4c5a86",
+  "parent_sha": "6cbd89052a57695b96546ca44e35d3159c4c5a86",
+  "project": "exiv2",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/Exiv2/exiv2",
+  "repo_url": "https://github.com/Exiv2/exiv2",
+  "source": "reuse",
+  "target": "exiv2",
+  "task": "OOB write via public Image::writeMetadata when writing Exif metadata into a Canon CRW image with attacker-influenced values; fix 'Check for integer overflow' (single-parent, committer date in-window).",
+  "task_iid": "exiv2__crw_metadata_write_overflow",
+  "vuln_desc": "OOB write via public Image::writeMetadata when writing Exif metadata into a Canon CRW image with attacker-influenced values; fix 'Check for integer overflow' (single-parent, committer date in-window)."
+}

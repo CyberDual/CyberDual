@@ -1,0 +1,21 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "cdfebc80b32c5befd0b2c23e5454b75cf8be8e3e",
+      "patch": "diff --git a/js/src/jit/MacroAssembler.cpp b/js/src/jit/MacroAssembler.cpp\nindex 5758d9982c21d..393bd189880bb 100644\n--- a/js/src/jit/MacroAssembler.cpp\n+++ b/js/src/jit/MacroAssembler.cpp\n@@ -5955,8 +5955,8 @@ void MacroAssembler::loadParsedRegExpShared(Register regexp, Register result,\n   branchTestUndefined(Assembler::Equal, sharedSlot, unparsed);\n   unboxNonDouble(sharedSlot, result, JSVAL_TYPE_PRIVATE_GCTHING);\n \n-  static_assert(sizeof(RegExpShared::Kind) == sizeof(uint8_t));\n-  branch8(Assembler::Equal, Address(result, RegExpShared::offsetOfKind()),\n+  static_assert(sizeof(RegExpShared::Kind) == sizeof(uint16_t));\n+  branch16(Assembler::Equal, Address(result, RegExpShared::offsetOfKind()),\n           Imm32(int32_t(RegExpShared::Kind::Unparsed)), unparsed);\n }\n \ndiff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h\nindex da485238b18ae..0d448d18c273d 100644\n--- a/js/src/vm/RegExpShared.h\n+++ b/js/src/vm/RegExpShared.h\n@@ -71,7 +71,7 @@ class RegExpShared\n   friend class js::gc::CellAllocator;\n \n  public:\n-  enum class Kind : uint8_t { Unparsed, Atom, RegExp };\n+  enum class Kind : uint16_t { Unparsed, Atom, RegExp };\n   enum class CodeKind { Bytecode, Jitcode, Any };\n \n   using ByteCode = js::irregexp::ByteArrayData;\n"
+    },
+    {
+      "sha": "f261527e7a33168c727f4d48ae2490d3e0a5e891",
+      "patch": "diff --git a/js/src/jit/CodeGenerator.cpp b/js/src/jit/CodeGenerator.cpp\nindex f79cd896fa047..c4acc5388c0dc 100644\n--- a/js/src/jit/CodeGenerator.cpp\n+++ b/js/src/jit/CodeGenerator.cpp\n@@ -2529,9 +2529,9 @@ static bool PrepareAndExecuteRegExp(MacroAssembler& masm, Register regexp,\n   masm.flexibleRshift32(temp2, temp3);\n   masm.branchTest32(Assembler::NonZero, temp3, Imm32(1), notFound);\n \n-  // if (index + sizeof(uint32_t) <= length) {\n+  // Check whether enough characters remain to test the mask.\n   masm.loadStringLength(input, temp2);\n-  masm.sub32(Imm32(4), temp2);\n+  masm.sub32(Imm32(sizeof(uint32_t) / sizeof(RegExpShared::Kind)), temp2);\n   masm.branch32(Assembler::GreaterThan, lastIndex, temp2, &doneQuickCheck);\n \n   // Load 4 bytes into temp2\ndiff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp\nindex 98e89d68844d3..a85c622006417 100644\n--- a/js/src/vm/RegExpObject.cpp\n+++ b/js/src/vm/RegExpObject.cpp\n@@ -735,8 +735,8 @@ bool RegExpShared::quickCheckRejects(const JS::Latin1Char* chars, size_t length,\n     return true;\n   }\n \n-  // If there are at least 4 characters remaining in the string, test the mask.\n-  if (index + sizeof(uint32_t) <= length) {\n+  // If enough characters remain in the string, test the mask.\n+  if (index + sizeof(uint32_t) / sizeof(Kind) <= length) {\n     // We use memcpy here because this load may not be aligned. It will generate\n     // a regular load on every platform we care about.\n     uint32_t word;\n"
+    }
+  ],
+  "coupling": "The first edit keeps the RegExpShared shrink but makes Kind two bytes. The quickcheck edit divides the four-byte input check by sizeof(Kind) while still reading four bytes. Each edit alone requires four remaining input characters; together they admit a two-character suffix and read past the Latin-1 string buffer.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "command": "./obj-debug-asan/dist/bin/js pocs/probe.js",
+      "expected": "AddressSanitizer: heap-buffer-overflow"
+    }
+  ]
+}

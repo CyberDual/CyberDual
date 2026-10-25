@@ -1,0 +1,34 @@
+diff --git a/libarchive/archive_read.c b/libarchive/archive_read.c
+index 8f913c8e1a3ac418155311af97ae8397d75ba011..ef91c6b4ba16cf842bdf37cd9b435901157a7fbd 100644
+--- a/libarchive/archive_read.c
++++ b/libarchive/archive_read.c
+@@ -1458,8 +1458,13 @@ __archive_read_filter_ahead(struct archive_read_filter *f,
+ 				      f->archive->client.nodes - 1) {
+ 					if (client_switch_proxy(f,
+ 					    f->archive->client.cursor + 1)
+-					    == ARCHIVE_OK)
++					    == ARCHIVE_OK) {
++						f->client_total =
++						    f->client_avail = 0;
++						f->client_next =
++						    f->client_buff = NULL;
+ 						continue;
++					}
+ 				}
+ 				/* Premature end-of-file. */
+ 				f->client_total = f->client_avail = 0;
+@@ -1673,8 +1678,13 @@ advance_file_pointer(struct archive_read_filter *f, int64_t request)
+ 			      f->archive->client.nodes - 1) {
+ 				if (client_switch_proxy(f,
+ 				    f->archive->client.cursor + 1)
+-				    == ARCHIVE_OK)
++				    == ARCHIVE_OK) {
++					f->client_total =
++					    f->client_avail = 0;
++					f->client_next =
++					    f->client_buff = NULL;
+ 					continue;
++				}
+ 			}
+ 			f->client_buff = NULL;
+ 			f->end_of_file = 1;

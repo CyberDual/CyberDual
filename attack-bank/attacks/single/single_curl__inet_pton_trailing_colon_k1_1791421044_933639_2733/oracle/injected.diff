@@ -1,0 +1,34 @@
+diff --git a/lib/curlx/inet_pton.c b/lib/curlx/inet_pton.c
+index 3b611890f9c7b4f98bcbb5e390170604464c1208..35c63b726d8a9a671f63cbceaa44b6a5f93c31d5 100644
+--- a/lib/curlx/inet_pton.c
++++ b/lib/curlx/inet_pton.c
+@@ -164,6 +164,9 @@ static int inet_pton6(const char *src, unsigned char *dst)
+     *tp++ = (unsigned char)((val >> 8) & 0xff);
+     *tp++ = (unsigned char)(val & 0xff);
+   }
++  else if(src != curtok && src[-2] == ':' && src[-3] != ':' &&
++          (src[-5] != ':' || colonp))
++    return 0;
+   if(colonp) {
+     /*
+      * Since some memmove()'s erroneously fail to handle
+diff --git a/tests/unit/unit1961.c b/tests/unit/unit1961.c
+index 1aa28a25bf9ffaf058b21d4b24071122a9f64ac9..8aedc9c13be68c7d286fe6d8dcd0a01c403e9a87 100644
+--- a/tests/unit/unit1961.c
++++ b/tests/unit/unit1961.c
+@@ -141,6 +141,15 @@ static int test_pton(void)
+      (ipv6a[7] != 0x0))
+     return 1; /* fail */
+ 
++  if(curlx_inet_pton(AF_INET6, "1:2:3:4:5:6:7:8:", ipv6a) != 0)
++    return 1; /* fail */
++  if(curlx_inet_pton(AF_INET6, "::1:", ipv6a) != 0)
++    return 1; /* fail */
++  if(curlx_inet_pton(AF_INET6, "::1", ipv6a) != 1)
++    return 1; /* fail */
++  if(curlx_inet_pton(AF_INET6, "::", ipv6a) != 1)
++    return 1; /* fail */
++
+   return 0;
+ }
+ 

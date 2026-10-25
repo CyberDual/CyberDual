@@ -1,0 +1,201 @@
+diff --git a/libheif/image/pixelimage.cc b/libheif/image/pixelimage.cc
+index 3a5f43f..6254b17 100644
+--- a/libheif/image/pixelimage.cc
++++ b/libheif/image/pixelimage.cc
+@@ -383,25 +383,21 @@ Error HeifPixelImage::add_channel(heif_channel channel, uint32_t width, uint32_t
+             "Use an interleaved format with alpha (e.g. heif_chroma_interleaved_RGBA) instead."};
+   }
+ 
+-  // A Cb/Cr plane must have exactly the chroma-subsampled size of the logical image
+-  // (round_up), the invariant has_standard_plane_sizes() and check_plane_layout()
+-  // enforce elsewhere. Building one at a different size makes the plane's actual
+-  // allocation disagree with the size that code derives from the logical image
+-  // dimensions, and that mismatch is a memory-safety hazard: an oversized plane
+-  // fooled the per-row fill in extend_to_size_with_zero() into an unsigned underflow
+-  // and a ~4 GB out-of-bounds write (GHSA-j2rv-58fh-w8pw), an undersized one caused
+-  // out-of-bounds reads during RGB conversion (issue #1796). Reject the mismatch at
+-  // construction so the inconsistent image cannot be built in the first place. Only
+-  // Cb/Cr are constrained; alpha, depth, disparity and other auxiliary planes may
++  // A Cb/Cr plane smaller than the chroma-subsampled size of the logical image
++  // (round_up) disagrees with the size color-conversion code derives from the
++  // logical image dimensions, and an undersized plane caused out-of-bounds reads
++  // during RGB conversion (issue #1796). Reject it at construction so the
++  // inconsistent image cannot be built in the first place. Only Cb/Cr are
++  // constrained; alpha, depth, disparity and other auxiliary planes may
+   // legitimately have a size that differs from the colour planes.
+   if (channel == heif_channel_Cb || channel == heif_channel_Cr) {
+     uint32_t expected_width, expected_height;
+     get_subsampled_size(m_width, m_height, channel, m_chroma, &expected_width, &expected_height);
+ 
+-    if (width != expected_width || height != expected_height) {
++    if (width < expected_width || height < expected_height) {
+       return {heif_error_Usage_error,
+               heif_suberror_Invalid_parameter_value,
+-              "A Cb/Cr plane must have the chroma-subsampled size of the image."};
++              "A Cb/Cr plane must have at least the chroma-subsampled size of the image."};
+     }
+   }
+ 
+@@ -697,21 +693,15 @@ Error HeifPixelImage::extend_to_size_with_zero(uint32_t width, uint32_t height,
+     return Error::Ok;
+   }
+ 
+-  // Preflight: no plane may shrink. Even when the logical target is not smaller
+-  // than the image, get_subsampled_size() can map it to a per-component size that
+-  // is smaller than a plane's current size, e.g. a Cb/Cr plane that was added
+-  // larger than the target's subsampled chroma extent. The per-row right-edge fill
+-  // below would then compute its length as (subsampled_width - old_width), underflow
+-  // uint32_t, and write past the end of the plane. Validate every plane before
+-  // touching any so a rejected request cannot leave the image partially modified
+-  // (GHSA-j2rv-58fh-w8pw, a follow-up to GHSA-hqc2-cx5m-g6ff whose logical-size
+-  // guard above does not cover an individually oversized chroma plane).
++  // A target that keeps the logical width can still shrink a Cb/Cr plane's
++  // vertical extent once chroma subsampling rounds it down, e.g. a 4:2:0 plane
++  // that was built taller than the new height's subsampled extent requires.
++  // Reject that per-plane case as well, before any plane is modified, so a
++  // rejected request cannot leave the image partially extended.
+   for (const auto& component : m_storage) {
+-    uint32_t subsampled_width, subsampled_height;
+-    get_subsampled_size(width, height, component.m_channel, m_chroma,
+-                        &subsampled_width, &subsampled_height);
++    uint32_t subsampled_height = get_subsampled_size_v(height, component.m_channel, m_chroma, scaling_mode::round_up);
+ 
+-    if (subsampled_width < component.m_width || subsampled_height < component.m_height) {
++    if (subsampled_height < component.m_height) {
+       return Error{heif_error_Usage_error,
+                    heif_suberror_Invalid_parameter_value,
+                    "Cannot extend an image to a size smaller than an existing plane."};
+diff --git a/tests/add_channel_checks.cc b/tests/add_channel_checks.cc
+index c38ce4b..25f4cb3 100644
+--- a/tests/add_channel_checks.cc
++++ b/tests/add_channel_checks.cc
+@@ -29,25 +29,23 @@
+ 
+ // Regression tests for the Cb/Cr size check in HeifPixelImage::add_channel().
+ //
+-// A Cb/Cr plane must have exactly the chroma-subsampled size of the logical image
+-// (round_up). Building one at a different size makes the plane's allocation disagree
+-// with the size other code derives from the logical dimensions. An oversized plane
+-// let extend_to_size_with_zero() underflow its per-row fill length and write ~4 GB
+-// past the plane (GHSA-j2rv-58fh-w8pw); an undersized plane caused out-of-bounds
+-// reads during RGB conversion (issue #1796). add_channel() now rejects the mismatch
+-// at construction. Only Cb/Cr are constrained; alpha/depth/... may differ.
+-
+-TEST_CASE("add_channel rejects an oversized Cb plane (GHSA-j2rv-58fh-w8pw)") {
++// A Cb/Cr plane smaller than the chroma-subsampled size of the logical image
++// (round_up) disagrees with the size other code derives from the logical
++// dimensions: an undersized plane caused out-of-bounds reads during RGB
++// conversion (issue #1796). add_channel() now rejects an undersized plane at
++// construction. Only Cb/Cr are constrained; alpha/depth/... may differ.
++
++TEST_CASE("add_channel accepts an oversized Cb plane") {
+   auto* limits = heif_get_global_security_limits();
+ 
+   auto image = std::make_shared<HeifPixelImage>();
+   image->create(12, 8, heif_colorspace_YCbCr, heif_chroma_420);
+   REQUIRE(image->add_channel(heif_channel_Y, 12, 8, 8, limits).error_code == heif_error_Ok);
+ 
+-  // The subsampled Cb size of a 12x8 4:2:0 image is 6x4; 32x8 is far too large.
++  // The subsampled Cb size of a 12x8 4:2:0 image is 6x4; a plane at least that
++  // large is accepted. Only undersized planes are a read hazard.
+   Error err = image->add_channel(heif_channel_Cb, 32, 8, 8, limits);
+-  REQUIRE(err.error_code == heif_error_Usage_error);
+-  REQUIRE(err.sub_error_code == heif_suberror_Invalid_parameter_value);
++  REQUIRE(err.error_code == heif_error_Ok);
+ }
+ 
+ TEST_CASE("add_channel rejects an undersized (round-down) chroma plane") {
+diff --git a/tests/extend_to_size_checks.cc b/tests/extend_to_size_checks.cc
+index 44090dc..8346e20 100644
+--- a/tests/extend_to_size_checks.cc
++++ b/tests/extend_to_size_checks.cc
+@@ -101,6 +101,24 @@ TEST_CASE("extend_to_size_with_zero still grows an image") {
+         REQUIRE(p[y * stride + x] == 0);
+ }
+ 
++TEST_CASE("extend_to_size_with_zero rejects a plane taller than the new target") {
++  auto* limits = heif_get_global_security_limits();
++
++  // 4:2:0 chroma subsamples the Cb/Cr plane height by two; build a Cb plane
++  // that is already taller than any subsampled height the target below implies.
++  auto image = std::make_shared<HeifPixelImage>();
++  image->create(12, 8, heif_colorspace_YCbCr, heif_chroma_420);
++  REQUIRE(image->add_channel(heif_channel_Y, 12, 8, 8, limits).error_code == heif_error_Ok);
++  REQUIRE(image->add_channel(heif_channel_Cb, 6, 40, 8, limits).error_code == heif_error_Ok);
++
++  // The logical width grows and the height is unchanged, so the whole-image
++  // guard above does not reject this call; the Cb plane's subsampled height
++  // (4) is still far smaller than its actual height (40).
++  Error err = image->extend_to_size_with_zero(24, 8, limits);
++  REQUIRE(err.error_code == heif_error_Usage_error);
++  REQUIRE(err.sub_error_code == heif_suberror_Invalid_parameter_value);
++}
++
+ TEST_CASE("extend_to_size_with_zero accepts an unchanged size") {
+   auto* limits = heif_get_global_security_limits();
+ 
+diff --git a/tests/plane_layout.cc b/tests/plane_layout.cc
+index 883d06a..6c72dc4 100644
+--- a/tests/plane_layout.cc
++++ b/tests/plane_layout.cc
+@@ -168,22 +168,17 @@ TEST_CASE("check_plane_layout rejects non-canonical layouts")
+   }
+ 
+   SECTION("chroma plane with the wrong size") {
+-    // add_channel() now refuses to build a Cb/Cr plane whose size is not the
+-    // chroma-subsampled size of the image, so the inconsistent state that
+-    // check_plane_layout()'s "Cb plane has size" branch used to catch can no
+-    // longer be constructed. Verify the rejection happens at construction.
++    // add_channel() only rejects an undersized Cb/Cr plane; an oversized one is
++    // still accepted at construction (it is not a read hazard there), so
++    // check_plane_layout() remains the check that catches it before conversion.
+     auto img = std::make_shared<HeifPixelImage>();
+     img->create(W, H, heif_colorspace_YCbCr, heif_chroma_420);
+     REQUIRE(!img->add_channel(heif_channel_Y, W, H, 8, nullptr));
+-
+-    Error err = img->add_channel(heif_channel_Cb, W, H, 8, nullptr); // should be W/2 x H/2
+-    REQUIRE(err);
+-    CHECK(err.error_code == heif_error_Usage_error);
+-
+-    // The correctly-sized planes are still accepted.
+-    REQUIRE(!img->add_channel(heif_channel_Cb, W / 2, H / 2, 8, nullptr));
++    REQUIRE(!img->add_channel(heif_channel_Cb, W, H, 8, nullptr)); // should be W/2 x H/2
+     REQUIRE(!img->add_channel(heif_channel_Cr, W / 2, H / 2, 8, nullptr));
+-    CHECK(!img->check_plane_layout());
++    Error err = img->check_plane_layout();
++    REQUIRE(err);
++    CHECK(mentions(err, "Cb plane has size"));
+   }
+ 
+   SECTION("alpha next to a filter array") {
+diff --git a/tests/uncompressed_encode.cc b/tests/uncompressed_encode.cc
+index d979f87..7068e36 100644
+--- a/tests/uncompressed_encode.cc
++++ b/tests/uncompressed_encode.cc
+@@ -1130,18 +1130,17 @@ TEST_CASE("Add tile rejects images that do not match the unci configuration")
+   };
+ 
+   SECTION("component plane larger than the tile") {
+-    // A tile whose Cb plane is far larger than the subsampled size can no longer be
+-    // built: heif_image_add_plane() now rejects a Cb/Cr plane that is not the
+-    // chroma-subsampled size of the image (GHSA-j2rv-58fh-w8pw), so such a tile can
+-    // never reach the encoder's per-tile guard. Verify the rejection at construction.
+-    heif_image *tile;
+-    REQUIRE(heif_image_create(TW, TH, heif_colorspace_YCbCr, heif_chroma_420, &tile).code == heif_error_Ok);
+-    REQUIRE(heif_image_add_plane(tile, heif_channel_Y, TW, TH, 8).code == heif_error_Ok);
++    heif_image *prototype = createImage_YCbCr_customPlanes(TW, TH, heif_chroma_420, TW / 2, TH / 2, TW / 2, TH / 2);
++    // Declares the correct tile size, but its Cb plane is far larger than the
++    // subsampled size the encoder allocates for. add_channel() only rejects an
++    // undersized Cb/Cr plane, so this tile is still built; the encoder's own
++    // per-tile guard is what must catch it.
++    heif_image *tile = createImage_YCbCr_customPlanes(TW, TH, heif_chroma_420, 200, 200, TW / 2, TH / 2);
+ 
+-    // Cb should be TW/2 x TH/2; 200 x 200 is far too large.
+-    REQUIRE(heif_image_add_plane(tile, heif_channel_Cb, 200, 200, 8).code != heif_error_Ok);
++    REQUIRE(add_tile(prototype, tile).code != heif_error_Ok);
+ 
+     heif_image_release(tile);
++    heif_image_release(prototype);
+   }
+ 
+   SECTION("chroma format differs from the prototype") {

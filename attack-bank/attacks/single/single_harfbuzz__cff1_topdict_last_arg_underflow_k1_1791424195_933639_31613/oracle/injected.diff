@@ -1,0 +1,23 @@
+diff --git a/src/hb-ot-cff1-table.hh b/src/hb-ot-cff1-table.hh
+index 79f265050fc0cfac2f514576f9468f857f9da267..ff3096bf2919dfd78935462c10358179a455a999 100644
+--- a/src/hb-ot-cff1-table.hh
++++ b/src/hb-ot-cff1-table.hh
+@@ -774,7 +774,8 @@ struct cff1_top_dict_opset_t : top_dict_opset_t<cff1_top_dict_val_t>
+   static void process_op (op_code_t op, cff1_top_dict_interp_env_t& env, cff1_top_dict_values_t& dictval)
+   {
+     cff1_top_dict_val_t  val;
+-    val.last_arg_offset = (env.last_offset-1) - dictval.opStart;  /* offset to the last argument */
++    val.last_arg_offset = env.last_offset > dictval.opStart ?
++			  (env.last_offset-1) - dictval.opStart : 0;  /* offset to the last argument */
+ 
+     switch (op) {
+       case OpCode_version:
+@@ -814,6 +815,8 @@ struct cff1_top_dict_opset_t : top_dict_opset_t<cff1_top_dict_val_t>
+ 	break;
+ 
+       case OpCode_ROS:
++	if (env.last_offset - dictval.opStart == env.argStack.get_count ())
++	  val.last_arg_offset -= env.argStack.get_count ();
+ 	dictval.ros_supplement = env.argStack.pop_uint ();
+ 	dictval.nameSIDs[name_dict_values_t::ordering] = env.argStack.pop_uint ();
+ 	dictval.nameSIDs[name_dict_values_t::registry] = env.argStack.pop_uint ();

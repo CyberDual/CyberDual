@@ -1,0 +1,40 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0ae..d295f6fb 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -161,7 +161,7 @@ writeVariableLengthInteger (char*& outPtr, uint64_t value)
+ //
+ 
+ template <class T>
+-void
++size_t
+ readStringList (
+     const char*& readPtr,
+     const char*  endPtr,
+@@ -226,6 +226,8 @@ readStringList (
+         outputVector.insert (outputVector.end (), string (readPtr, length));
+         readPtr += length;
+     }
++
++    return totalTableSize;
+ }
+ 
+ //
+@@ -366,7 +368,7 @@ IDManifest::init (const char* data, const char* endOfData)
+     // first comes list of all strings used in manifest
+     //
+     vector<string> stringList;
+-    readStringList (data, endOfData, stringList);
++    const size_t stringTableSize = readStringList (data, endOfData, stringList);
+ 
+     //
+     // expand the strings in the stringlist
+@@ -411,7 +413,7 @@ IDManifest::init (const char* data, const char* endOfData)
+     // comments in serialize function describe the format
+     //
+ 
+-    vector<int> mapping (stringList.size ());
++    vector<int> mapping (stringTableSize);
+ 
+     //
+     // overlapping sequences: A list [(4,5),(3,6)] expands to 4,5,3,6 - because 4 and 5 are including already

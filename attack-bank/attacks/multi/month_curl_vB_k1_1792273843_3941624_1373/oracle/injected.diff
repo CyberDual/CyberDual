@@ -1,0 +1,46 @@
+diff --git a/lib/mprintf.c b/lib/mprintf.c
+index 571c417501..a5306e0ea0 100644
+--- a/lib/mprintf.c
++++ b/lib/mprintf.c
+@@ -85,7 +85,8 @@ enum {
+   FLAGS_CHAR       = 1 << 17, /* %c story */
+   FLAGS_FLOATE     = 1 << 18, /* %e or %E */
+   FLAGS_FLOATG     = 1 << 19, /* %g or %G */
+-  FLAGS_SUBSTR     = 1 << 20  /* no input, only substring */
++  FLAGS_SUBSTR     = 1 << 20, /* no input, only substring */
++  FLAGS_PREC_EXACT = 1 << 21  /* precision provides the length */
+ };
+ 
+ enum {
+@@ -210,7 +211,7 @@ static int parse_flags(const char **fmtp, unsigned int *flagsp, int use_dollar,
+     case '.':
+       if('*' == *fmt) {
+         /* The precision is picked from a specified parameter */
+-        flags |= FLAGS_PRECPARAM;
++        flags |= FLAGS_PRECPARAM | FLAGS_PREC_EXACT;
+         fmt++;
+ 
+         if(use_dollar == DOLLAR_USE) {
+@@ -226,7 +227,7 @@ static int parse_flags(const char **fmtp, unsigned int *flagsp, int use_dollar,
+       else {
+         bool is_neg;
+         curl_off_t num;
+-        flags |= FLAGS_PREC;
++        flags |= FLAGS_PREC | FLAGS_PREC_EXACT;
+         is_neg = ('-' == *fmt);
+         if(is_neg)
+           fmt++;
+@@ -1011,10 +1012,9 @@ static bool out_string(void *userp,
+     width = 0;
+   }
+ 
+-  /* With no precision, len is already the exact length; emit it without
+-     scanning again. With precision, scan up to len but stop at NUL, since
+-     the string may be shorter or the buffer may not be null-terminated. */
+-  if(prec == -1) {
++  /* With no precision or an exact precision, len is already the number of
++     bytes to emit. Other precision forms scan up to len and stop at NUL. */
++  if(prec == -1 || (flags & FLAGS_PREC_EXACT)) {
+     if(stream_run(userp, stream, streamn,
+                   (const unsigned char *)str, len, donep))
+       return TRUE;

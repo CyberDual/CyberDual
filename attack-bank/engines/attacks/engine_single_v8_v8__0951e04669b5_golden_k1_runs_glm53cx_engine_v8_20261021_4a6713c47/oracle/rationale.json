@@ -1,0 +1,13 @@
+{
+  "task_iid": "v8__0951e04669b5",
+  "regime": "A_vuln_patch",
+  "strategy": "new_defect",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "residual_vuln"
+    }
+  ],
+  "explanation": "Adds a preemptive return-space stack check to the x64 generic JS-to-Wasm wrapper, but the newly reachable overflow path loads the wrong frame slot as the implicit argument before obtaining the runtime context.",
+  "local_verification": "Rebuilt out/x64.asan/d8. The exact command exits 139 with SIGSEGV; the same witness exits 0 on the vulnerable parent with golden.diff applied."
+}

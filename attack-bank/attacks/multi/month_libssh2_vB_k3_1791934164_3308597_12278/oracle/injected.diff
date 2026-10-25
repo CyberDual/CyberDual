@@ -1,0 +1,17 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..5fa837c 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -865,10 +865,10 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+            name to the collection */
+         if(name == host || *(name - 1) == ',') {
+ 
+-            char hostbuf[256];
++            char hostbuf[255];
+ 
+             /* make sure we do not overflow the buffer */
+-            if(namelen >= sizeof(hostbuf) - 1)
++            if(namelen > 255)
+                 return ssh2_err(hosts->session,
+                                 LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                                 "Failed to parse known_hosts line "

@@ -1,0 +1,44 @@
+diff --git a/src/liblzma/common/alone_decoder.c b/src/liblzma/common/alone_decoder.c
+index 174b3b1..2933ad8 100644
+--- a/src/liblzma/common/alone_decoder.c
++++ b/src/liblzma/common/alone_decoder.c
+@@ -155,7 +155,18 @@ alone_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 		const lzma_ret ret = lzma_next_filter_init(&coder->next,
+ 				allocator, filters);
+ 		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->next, allocator);
++			// Clean up the half-initialized filter chain so that
++			// a later reinitialization starts from a clean state.
++			//
++			// LZMA_MEM_ERROR is an exception: when the dictionary
++			// allocation fails, lzma_lz_decoder_init() keeps the
++			// coder in a state where the allocation is simply
++			// retried on the next initialization attempt. Freeing
++			// the coder now would discard the LZMA decoder that
++			// could be reused as is.
++			if (ret != LZMA_MEM_ERROR)
++				lzma_next_end(&coder->next, allocator);
++
+ 			return ret;
+ 		}
+ 
+diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c
+index 6dc4cef..3d44b68 100644
+--- a/src/liblzma/lz/lz_decoder.c
++++ b/src/liblzma/lz/lz_decoder.c
+@@ -278,9 +278,14 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 
+ 	// Allocate and initialize the dictionary.
+ 	if (coder->dict.size != alloc_size) {
+-		coder->dict.size = 0;
+ 		lzma_free(coder->dict.buf, allocator);
+ 
++		// The old dictionary has already been freed. If the new
++		// allocation fails, coder->dict.buf must not be left dangling:
++		// otherwise the later cleanup with lzma_next_end() would free
++		// the same pointer a second time.
++		coder->dict.buf = NULL;
++
+ 		// The LZ_DICT_EXTRA bytes at the end of the buffer aren't
+ 		// included in alloc_size. These extra bytes allow
+ 		// dict_repeat() to read and write more data than requested.

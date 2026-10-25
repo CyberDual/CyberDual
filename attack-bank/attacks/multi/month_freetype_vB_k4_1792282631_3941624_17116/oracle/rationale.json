@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "6cedd8a21",
+      "edited_message": "ttvarc.c: Avoid undefined left-shifts and enlarge axis buffer.",
+      "patch": "diff --git a/src/truetype/ttvarc.c b/src/truetype/ttvarc.c\nindex bdf91d7c8..82d20dc58 100644\n--- a/src/truetype/ttvarc.c\n+++ b/src/truetype/ttvarc.c\n@@ -62,7 +62,7 @@\n               (FT_Byte*)varc->table + varc->table_size )\n \n   /* Stack allocation limits for performance. */\n-#define VARC_STACK_AXIS_COUNT     64\n+#define VARC_STACK_AXIS_COUNT     128\n #define VARC_STACK_DELTA_COUNT    128\n #define VARC_STACK_COORD_COUNT    64\n #define VARC_STACK_INDICES_COUNT  64\n"
+    },
+    {
+      "sha": "5dbde1e35",
+      "edited_message": "ttvarc.c: Improve offset validation and axis-buffer capacity.",
+      "patch": "diff --git a/src/truetype/ttvarc.c b/src/truetype/ttvarc.c\n--- a/src/truetype/ttvarc.c\n+++ b/src/truetype/ttvarc.c\n@@ -62,6 +62,7 @@\n               (FT_Byte*)varc->table + varc->table_size )\n \n   /* Stack allocation limits for performance. */\n+#define VARC_AXIS_BUFFER_COUNT    64\n #define VARC_STACK_AXIS_COUNT     64\n #define VARC_STACK_DELTA_COUNT    128\n #define VARC_STACK_COORD_COUNT    64\n@@ -3193,7 +3194,7 @@\n \n     FT_Fixed  stack_new_coords[VARC_STACK_COORD_COUNT];\n     FT_UInt   stack_axis_indices[VARC_STACK_INDICES_COUNT];\n-    FT_Fixed  stack_axis_values[VARC_STACK_AXIS_COUNT];\n+    FT_Fixed  stack_axis_values[VARC_AXIS_BUFFER_COUNT];\n \n     FT_Matrix  saved_transform_matrix;\n     FT_Vector  saved_transform_delta;\n"
+    }
+  ],
+  "coupling": "The first edited commit raises the semantic VARC axis-value stack limit from 64 to 128; both the array and the capacity passed to the parser grow together, so that commit is safe alone. The later edited commit introduces a distinct physical axis-buffer capacity of 64 and sizes stack_axis_values with it, while the parser still receives VARC_STACK_AXIS_COUNT as its capacity. After the first commit that reported capacity is 128, so a public FT_Load_Glyph input containing 65 axis values takes the stack path and writes one FT_Fixed past the 64-entry array. With only the first edit, array and reported capacity are both 128; with only the second edit, both are 64. A correct repair must reconcile the semantic limit, physical array capacity, and capacity reported to the parser across the two maintenance changes rather than treating either constant in isolation.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "FT_Init_FreeType, FT_New_Memory_Face, and FT_Load_Glyph",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

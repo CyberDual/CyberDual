@@ -1,0 +1,75 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0ae..3f9bc8f2 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -368,13 +368,15 @@ IDManifest::init (const char* data, const char* endOfData)
+     vector<string> stringList;
+     readStringList (data, endOfData, stringList);
+ 
++    const size_t numStrings = stringList.size ();
++
+     //
+     // expand the strings in the stringlist
+     // each string begins with number of characters to copy from the previous string
+     // the remainder is the 'new' bit that appears after that
+     //
+ 
+-    for (size_t i = 1; i < stringList.size (); ++i)
++    for (size_t i = 1; i < numStrings; ++i)
+     {
+ 
+         size_t common; // number of characters in common with previous string
+@@ -411,7 +413,12 @@ IDManifest::init (const char* data, const char* endOfData)
+     // comments in serialize function describe the format
+     //
+ 
+-    vector<int> mapping (stringList.size ());
++    //
++    // built up as the RLE ranges are read below: the ranges reference at
++    // most one entry per string, so only accumulate the entries actually
++    // provided rather than sizing the table from the string count
++    //
++    vector<int> mapping;
+ 
+     //
+     // overlapping sequences: A list [(4,5),(3,6)] expands to 4,5,3,6 - because 4 and 5 are including already
+@@ -429,7 +436,6 @@ IDManifest::init (const char* data, const char* endOfData)
+ 
+     Xdr::read<CharPtrIO> (data, rleLength);
+ 
+-    int currentIndex = 0;
+     for (int i = 0; i < rleLength; ++i)
+     {
+         int first;
+@@ -442,8 +448,8 @@ IDManifest::init (const char* data, const char* endOfData)
+         Xdr::read<CharPtrIO> (data, last);
+ 
+         if (first < 0 || last < 0 || first > last ||
+-            first >= int (stringList.size ()) ||
+-            last >= int (stringList.size ()))
++            first >= int (numStrings) ||
++            last >= int (numStrings))
+         {
+             throw IEX_NAMESPACE::InputExc (
+                 "Bad mapping table entry in IDManifest");
+@@ -453,9 +459,8 @@ IDManifest::init (const char* data, const char* endOfData)
+             // don't remap already mapped values
+             if (seen[entry] == 0)
+             {
+-                mapping[currentIndex] = entry;
+-                seen[entry]           = 1;
+-                currentIndex++;
++                seen[entry] = 1;
++                mapping.push_back (entry);
+             }
+         }
+     }
+@@ -571,7 +576,7 @@ IDManifest::init (const char* data, const char* endOfData)
+             for (size_t i = 0; i < m.getComponents ().size (); ++i)
+             {
+                 int stringIndex = readVariableLengthInteger (data, endOfData);
+-                if (size_t (stringIndex) >= stringList.size () ||
++                if (size_t (stringIndex) >= numStrings ||
+                     stringIndex < 0)
+                 {
+                     throw IEX_NAMESPACE::InputExc (

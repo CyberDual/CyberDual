@@ -1,0 +1,19 @@
+diff --git a/libarchive/archive_read_support_format_warc.c b/libarchive/archive_read_support_format_warc.c
+index 1e0053f..5b65f9b 100644
+--- a/libarchive/archive_read_support_format_warc.c
++++ b/libarchive/archive_read_support_format_warc.c
+@@ -724,11 +724,12 @@ warc_read_uri(const char *buf, size_t bsz, struct archive_string *str)
+ 		return;
+ 	}
+ 
+-	/* Require valid C string representation. */
+-	if (memchr(uri, '\0', eol - uri) != NULL)
++	if (uri < eol &&
++	    memchr(uri + 1, '\0', eol - uri - 1) != NULL)
+ 		return;
+ 
+ 	archive_strncpy(str, uri, eol - uri);
++	str->length = eol - uri;
+ }
+ 
+ static int64_t

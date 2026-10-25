@@ -1,0 +1,31 @@
+{
+  "task_iid": "v8__5afff59f46b5",
+  "project": "v8",
+  "engine": "v8",
+  "repo": "https://github.com/v8/v8",
+  "repo_url": "https://github.com/v8/v8",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "family": "collect_seeds",
+  "source": "mined",
+  "parent_commit": "ae52395dc2e509b3aaf71c1191f463b6d5a6afbe",
+  "parent_sha": "ae52395dc2e509b3aaf71c1191f463b6d5a6afbe",
+  "fix_sha": "5afff59f46b5500f74d03fbbce72b9bee4960067",
+  "date": "2026-09-03T02:33:42+00:00",
+  "cwe": "",
+  "vuln_type": "Out-of-bounds read (unmasked Wasm SIMD splat index)",
+  "vuln_desc": "Wasm revectorizer reads past a 128-bit lane after using an unmasked splat index.",
+  "task": "Wasm revectorizer reads past a 128-bit lane after using an unmasked splat index.",
+  "grading": "engine",
+  "selection_criteria": [
+    "upstream fix in [2026-07-01, 2026-10-01), before the shared maintenance cutoff",
+    "mined from the upstream engine repository via collect_seeds, not SEC-bench-Pro",
+    "not AI-authored; parent and fix SHA independently verified",
+    "distinct upstream repair commit with engine source changes"
+  ],
+  "selection_reason": "Prospectively added for the ten-task engine cohort: Out-of-bounds read (unmasked Wasm SIMD splat index); upstream fix 5afff59f46b5 dated 2026-09-03.",
+  "source_files": [
+    "src/compiler/turboshaft/wasm-revec-reducer.h",
+    "test/mjsunit/regress/wasm/regress-simd-555760230.js"
+  ]
+}

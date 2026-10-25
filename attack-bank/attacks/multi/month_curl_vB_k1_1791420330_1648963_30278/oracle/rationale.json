@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "34a2f5df169f6e89898953993f8078386c104ac0",
+      "edited_message": "mprintf: scan explicit-precision strings once\n\nMeasure the emitted length of strings with a literal precision before sending them to the block output sink. Keep the bounded NUL-aware path for precision supplied as an argument.",
+      "patch": "diff --git a/lib/mprintf.c b/lib/mprintf.c\nindex abe0df4..d1084d9 100644\n--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -714,9 +714,8 @@ static bool stream_pad(void *userp,\n /* emit the leading NUL-terminated part of a run of at most 'len' bytes.\n    Returns TRUE to abort formatting.\n \n-   A byte loop and not memchr(): 'len' is the requested precision, which\n-   out_string() does not clamp to the string length, so \"%.64s\" on a 10-byte\n-   string arrives with len == 64 and memchr() would read past the object. */\n+   A byte loop and not memchr(): dynamic precision can exceed the string\n+   length, so a block scan could read past the object. */\n static bool stream_zrun(void *userp,\n                         int (*stream)(unsigned char, void *),\n                         mp_streamn streamn,\n@@ -988,6 +987,12 @@ static bool out_string(void *userp,\n       len = 0;\n     }\n   }\n+  else if(prec >= 0 && !(flags & FLAGS_PRECPARAM)) {\n+    size_t limit = (size_t)prec;\n+    len = 0;\n+    while(len < limit && str[len])\n+      len++;\n+  }\n   else if(prec != -1)\n     len = (size_t)prec;\n   else if(*str == '\\0')\n@@ -1006,10 +1011,9 @@ static bool out_string(void *userp,\n     width = 0;\n   }\n \n-  /* With no precision, len is already the exact length; emit it without\n-     scanning again. With precision, scan up to len but stop at NUL, since\n-     the string may be shorter or the buffer may not be NUL-terminated. */\n-  if(prec == -1) {\n+  /* An exact length can be emitted directly; dynamic precision still needs\n+     the bounded NUL-aware output path. */\n+  if(prec == -1 || ((flags & FLAGS_PREC) && prec >= 0)) {\n     if(stream_run(userp, stream, streamn,\n                   (const unsigned char *)str, len, donep))\n       return TRUE;\n"
+    },
+    {
+      "sha": "d22e09dcd326dcb1726bf9580654fa73c56976fc",
+      "edited_message": "mprintf: report output errors and normalize precision flags\n\nReturn -1 when mprintf() or mfprintf() fails to write. Mark a precision supplied by an argument as resolved after reading the argument, so later output code sees the same precision state as for a literal precision.",
+      "patch": "diff --git a/lib/mprintf.c b/lib/mprintf.c\n--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -1150,6 +1150,7 @@\n         /* \"A negative precision is taken as if the precision were\n            omitted.\" */\n         p.prec = -1;\n+      p.flags |= FLAGS_PREC;\n     }\n     else if(p.flags & FLAGS_PREC)\n       p.prec = optr->precision;\n"
+    }
+  ],
+  "coupling": "The first edited commit measures strings with literal precision and sends them through a direct block copy when FLAGS_PREC is set; it retains the NUL-aware bounded scan for dynamic precision marked by FLAGS_PRECPARAM. The later commit marks a resolved dynamic precision with FLAGS_PREC while leaving FLAGS_PRECPARAM set. On the original code that flag change is harmless because bounded strings still use stream_zrun. Together, the dynamic string keeps its requested precision as len but takes the direct-copy branch, so a precision larger than the string allocation reads beyond it. A repair must reconcile the precision flags and the length/output-path invariant across the two commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "curl_maprintf",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

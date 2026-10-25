@@ -1,0 +1,21 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "f261527e7a33168c727f4d48ae2490d3e0a5e891",
+      "patch": "diff --git a/js/src/irregexp/RegExpShim.h b/js/src/irregexp/RegExpShim.h\nindex 6eb0561d2297c..63b1350d38200 100644\n--- a/js/src/irregexp/RegExpShim.h\n+++ b/js/src/irregexp/RegExpShim.h\n@@ -1372,7 +1372,11 @@ class RegExpData : public HeapObject {\n \n   inline uint8_t internal_flags() const { return inner()->internalFlags(); }\n   inline void set_internal_flags(uint32_t value) {\n-    inner()->setInternalFlags(value);\n+    uint8_t flags = value;\n+    if (inner()->quickCheckMask() && inner()->pairCount() > 10) {\n+      flags |= 1 << 1;\n+    }\n+    inner()->setInternalFlags(flags);\n   }\n \n   inline void clear_quick_check() { inner()->clearQuickCheck(); }\n"
+    },
+    {
+      "sha": "3da366964b02f34d1ab8453250e238eab4c1d0d8",
+      "patch": "diff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp\nindex 98e89d68844d3..81f9fe97b349f 100644\n--- a/js/src/vm/RegExpObject.cpp\n+++ b/js/src/vm/RegExpObject.cpp\n@@ -775,10 +775,17 @@ RegExpRunStatus RegExpShared::execute(JSContext* cx,\n    * Ensure sufficient memory for output vector.\n    * No need to initialize it. The RegExp engine fills them in on a match.\n    */\n-  if (!matches->allocOrExpandArray(re->pairCount())) {\n+  size_t pairCount = re->pairCount();\n+  size_t storageCount =\n+      re->internalFlags() &\n+              static_cast<uint8_t>(InternalFlag::CompactCaptureOutput)\n+          ? (pairCount + 1) / 2\n+          : pairCount;\n+  if (!matches->allocOrExpandArray(storageCount)) {\n     ReportOutOfMemory(cx);\n     return RegExpRunStatus::Error;\n   }\n+  matches->pairCount_ = pairCount;\n \n   if (re->kind() == RegExpShared::Kind::Atom) {\n     return RegExpShared::executeAtom(re, input, start, matches);\ndiff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h\nindex a574e7482d24f..45f6bd99c9be5 100644\n--- a/js/src/vm/RegExpShared.h\n+++ b/js/src/vm/RegExpShared.h\n@@ -75,6 +75,7 @@ class RegExpShared\n   enum class CodeKind { Bytecode, Jitcode, Any };\n   enum class InternalFlag {\n     HasQuickCheck = 1 << 0,\n+    CompactCaptureOutput = 1 << 1,\n   };\n \n   using ByteCode = js::irregexp::ByteArrayData;\n"
+    }
+  ],
+  "coupling": "The first edit marks quick-check RegExpShared objects with more than ten capture pairs using internal flag bit 1; alone, that bit has no consumer. The second edit treats that bit as a compact capture-output mode, allocates only half as many MatchPair elements, then restores the full pair count reported to irregexp. Alone, the second edit cannot enter this mode because the original quick-check setter never sets bit 1. Together, a successful match with many captures writes its full result into the undersized buffer.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "command": "ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 obj-debug-asan/dist/bin/js --no-baseline --no-ion pocs/probe.js",
+      "expected": "AddressSanitizer: heap-buffer-overflow"
+    }
+  ]
+}

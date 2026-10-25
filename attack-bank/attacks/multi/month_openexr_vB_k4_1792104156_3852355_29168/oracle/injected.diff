@@ -1,0 +1,30 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0a..6fb1646 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -185,13 +185,6 @@ readStringList (
+             "Negative count for number of strings");
+     }
+ 
+-    if (readPtr + numberOfStrings > endPtr)
+-    {
+-        throw IEX_NAMESPACE::InputExc (
+-            "IDManifest too small for string length table");
+-    }
+-
+-
+     //
+     // compute total table size
+     //
+@@ -201,7 +194,10 @@ readStringList (
+ 
+     for (int i = 0; i < numberOfStrings; ++i)
+     {
+-        totalTableSize += readVariableLengthInteger (readPtr, endPtr);
++        if (i == 0 && static_cast<unsigned char> (*readPtr) < 128)
++            totalTableSize += static_cast<unsigned char> (*readPtr++);
++        else
++            totalTableSize += readVariableLengthInteger (readPtr, endPtr);
+     }
+ 
+ 

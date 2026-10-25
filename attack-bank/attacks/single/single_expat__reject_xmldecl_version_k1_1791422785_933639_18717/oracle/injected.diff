@@ -1,0 +1,41 @@
+diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c
+index c4ee9dd9df91db436b95e2d870e189d92689a994..e88753eb66dc6e6fbcc51900797cc6462861c008 100644
+--- a/expat/lib/xmltok.c
++++ b/expat/lib/xmltok.c
+@@ -1154,6 +1154,24 @@ static const char KW_yes[] = {ASCII_y, ASCII_e, ASCII_s, '\0'};
+ 
+ static const char KW_no[] = {ASCII_n, ASCII_o, '\0'};
+ 
++static int
++checkXmlDeclVersionNum(const ENCODING *enc, const char *start,
++                       const char *end) {
++  char version[32];
++  size_t i = 0;
++  const char *ptr;
++
++  for (ptr = start; ptr < end; ptr += enc->minBytesPerChar)
++    version[i++] = (char)toAscii(enc, ptr, end);
++  if (i < 3 || version[0] != ASCII_1 || version[1] != ASCII_PERIOD)
++    return 0;
++  for (i = 2; i < (size_t)(end - start) / enc->minBytesPerChar; i++) {
++    if (version[i] < ASCII_0 || version[i] > ASCII_9)
++      return 0;
++  }
++  return 1;
++}
++
+ static int
+ doParseXmlDecl(const ENCODING *(*encodingFinder)(const ENCODING *, const char *,
+                                                  const char *),
+@@ -1181,10 +1199,7 @@ doParseXmlDecl(const ENCODING *(*encodingFinder)(const ENCODING *, const char *,
+       *versionPtr = val;
+     if (versionEndPtr)
+       *versionEndPtr = ptr;
+-    /* The version number must not be empty; VersionNum requires at least
+-       one character.  The encoding and standalone pseudo-attributes below
+-       already reject an empty value, so keep version consistent. */
+-    if (val == ptr - enc->minBytesPerChar) {
++    if (! checkXmlDeclVersionNum(enc, val, ptr - enc->minBytesPerChar)) {
+       *badPtr = val;
+       return 0;
+     }

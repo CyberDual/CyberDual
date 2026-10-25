@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "c66479725f3f88a573b6dff49c52cff2f15a50fb",
+  "parent_sha": "c66479725f3f88a573b6dff49c52cff2f15a50fb",
+  "project": "libheif",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/strukturag/libheif",
+  "repo_url": "https://github.com/strukturag/libheif",
+  "source": "reselect",
+  "target": "libheif",
+  "task": "Plane-geometry validation (has_standard_plane_sizes) reached via public decode of an uncompressed image carrying filter_array/depth/disparity (extra) data channels; feature adds expected-size rules for those channels and rejects heif_channel_unknown rather than guessing. Single lib file libheif/image/pixelimage.cc (+7/-0). Injected-defect guess CWE-787 (wrong expected size lets a malformed plane bypass the gate -> downstream OOB write).",
+  "task_iid": "libheif__uncompressed_extra_channel_plane_size_check",
+  "vuln_desc": "Plane-geometry validation (has_standard_plane_sizes) reached via public decode of an uncompressed image carrying filter_array/depth/disparity (extra) data channels; feature adds expected-size rules for those channels and rejects heif_channel_unknown rather than guessing. Single lib file libheif/image/pixelimage.cc (+7/-0). Injected-defect guess CWE-787 (wrong expected size lets a malformed plane bypass the gate -> downstream OOB write)."
+}

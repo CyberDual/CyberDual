@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "791eee563ce25a47b77277677699bf3a97771365",
+      "edited_message": null,
+      "patch": "diff --git a/lib/curlx/strparse.c b/lib/curlx/strparse.c\nindex a17aa3c..97267d0 100644\n--- a/lib/curlx/strparse.c\n+++ b/lib/curlx/strparse.c\n@@ -191,7 +191,7 @@ static int str_num_base(const char **linep, curl_off_t *nump, curl_off_t max,\n     } while(valid_digit(*p, m));\n   }\n   else {\n-    curl_off_t cutoff = (max - (base - 1)) / base;\n+    curl_off_t cutoff = max / base;\n     while(valid_digit(*p, m)) {\n       if(num <= cutoff)\n         num = (num * base) + curlx_hexval(*p++);\n"
+    },
+    {
+      "sha": "61c6d212b7d80d05ab293b48beba966e1dcfe8e5",
+      "edited_message": null,
+      "patch": "diff --git a/lib/mprintf.c b/lib/mprintf.c\nindex abe0df4..da2ecfd 100644\n--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -1009,7 +1009,7 @@ static bool out_string(void *userp,\n   /* With no precision, len is already the exact length; emit it without\n      scanning again. With precision, scan up to len but stop at NUL, since\n      the string may be shorter or the buffer may not be NUL-terminated. */\n-  if(prec == -1) {\n+  if(prec < 0) {\n     if(stream_run(userp, stream, streamn,\n                   (const unsigned char *)str, len, donep))\n       return TRUE;\n"
+    }
+  ],
+  "coupling": "The reachable heap out-of-bounds read exists only when both edited commits are combined; each diff is correct in isolation.\n\nCommit 791eee5 (strparse: speed up number parsing) owns the integer bound. The real optimization uses the conservative cutoff `(max - (base - 1)) / base`, which guarantees that a value taken through the fast path satisfies num*base + digit <= max, so curlx_str_number(..., INT_MAX) never returns a value above INT_MAX. The edit replaces it with the looser, very common strtol-style cutoff `max / base`. This alone is benign: it only lets a parsed value exceed `max` by up to base-1 for the single boundary input whose running value reaches exactly max/base before a final large digit (for base 10 / INT_MAX, only `2147483648`/`2147483649`), and every current consumer of this parser either uses the value in range or, in mprintf, only feeds it to a NUL-stopping scan. No memory error is reachable from this commit alone (strparse-only tree: probe prints \"abc\", rc 0).\n\nCommit 61c6d21 (mprintf: avoid scanning strings twice for unbounded %s) owns the emit routing. It introduces the fast path that emits exactly `len` bytes via stream_run() (no NUL scan) for an \"unbounded\" string, and keeps the NUL-stopping stream_zrun() for an explicit precision. The edit selects that fast path with `if(prec < 0)` instead of `if(prec == -1)`. This alone is benign and equivalent, because with the real parser the precision reaching out_string() is only ever -1 (the no-precision / clamped-negative sentinel) or a non-negative value <= INT_MAX, so `prec < 0` is exactly `prec == -1`. No memory error is reachable from this commit alone (mprintf-only tree: probe returns \"\", rc 0).\n\nThe defect emerges only from the composition: 791eee5 breaks the \"parsed precision <= INT_MAX\" invariant, so a literal precision of 2147483648 parses to 2147483648 and the (int) cast in parse_flags wraps it to INT_MIN. The literal-precision path in formatf() has no `< 0` clamp (only the `%.*s` argument path clamps), so INT_MIN reaches out_string(). There, `len = (size_t)prec` becomes enormous and 61c6d21's `prec < 0` test now routes this negative precision into stream_run(), which copies `len` bytes straight out of the short argument buffer -> heap out-of-bounds read (ASan abort in alloc_addrun via curl_maprintf).\n\nThe fix is non-local: correcting either commit's own diff in isolation does not reveal a flaw, because each diff is self-consistent under the invariant the OTHER commit silently broke. A correct repair must reason across both commits -- either restore the exact cutoff in strparse (so the precision can never exceed INT_MAX), or make mprintf stop trusting that a negative precision equals the -1 sentinel (clamp the literal precision, or test `prec == -1`). Neither commit, read on its own, contains an obviously wrong line.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "api",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

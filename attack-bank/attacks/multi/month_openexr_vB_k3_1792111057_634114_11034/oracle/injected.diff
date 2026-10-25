@@ -1,0 +1,92 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0a..99b7622 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -339,6 +339,26 @@ writePascalString (char*& outPtr, const string& str)
+     Xdr::write<CharPtrIO> ((char*&) outPtr, (const char*) str.c_str (), length);
+ }
+ 
++//
++// read one frequency-rank and turn it into an index in the string table
++//
++size_t
++mappedStringIndex (
++    const vector<int>& mapping,
++    size_t             indexLimit,
++    const char*&       readPtr,
++    const char*        endPtr)
++{
++    uint64_t rank = readVariableLengthInteger (readPtr, endPtr);
++
++    if (rank >= indexLimit)
++    {
++        throw IEX_NAMESPACE::InputExc ("Bad string index in IDManifest");
++    }
++
++    return (size_t) mapping[(size_t) rank];
++}
++
+ } // namespace
+ 
+ IDManifest::IDManifest (const char* data, const char* endOfData)
+@@ -411,7 +431,14 @@ IDManifest::init (const char* data, const char* endOfData)
+     // comments in serialize function describe the format
+     //
+ 
+-    vector<int> mapping (stringList.size ());
++    //
++    // The declared string count is an upper bound on how many distinct
++    // indices the run list can name, but a partial run list does not need
++    // a zero-filled slot for every declared string. Grow the map from the
++    // runs that are actually present, then release the spare capacity.
++    //
++    vector<int> mapping;
++    mapping.reserve (stringList.size ());
+ 
+     //
+     // overlapping sequences: A list [(4,5),(3,6)] expands to 4,5,3,6 - because 4 and 5 are including already
+@@ -429,7 +456,6 @@ IDManifest::init (const char* data, const char* endOfData)
+ 
+     Xdr::read<CharPtrIO> (data, rleLength);
+ 
+-    int currentIndex = 0;
+     for (int i = 0; i < rleLength; ++i)
+     {
+         int first;
+@@ -453,13 +479,14 @@ IDManifest::init (const char* data, const char* endOfData)
+             // don't remap already mapped values
+             if (seen[entry] == 0)
+             {
+-                mapping[currentIndex] = entry;
+-                seen[entry]           = 1;
+-                currentIndex++;
++                mapping.push_back (entry);
++                seen[entry] = 1;
+             }
+         }
+     }
+ 
++    mapping.shrink_to_fit ();
++
+ #ifdef DUMP_TABLE
+     //
+     // dump mapping table for debugging
+@@ -570,14 +597,14 @@ IDManifest::init (const char* data, const char* endOfData)
+             (insertion.first)->second.resize (m.getComponents ().size ());
+             for (size_t i = 0; i < m.getComponents ().size (); ++i)
+             {
+-                int stringIndex = readVariableLengthInteger (data, endOfData);
+-                if (size_t (stringIndex) >= stringList.size () ||
+-                    stringIndex < 0)
++                size_t stringId = mappedStringIndex (
++                    mapping, stringList.size (), data, endOfData);
++                if (stringId >= stringList.size ())
+                 {
+                     throw IEX_NAMESPACE::InputExc (
+                         "Bad string index in IDManifest");
+                 }
+-                (insertion.first)->second[i] = stringList[mapping[stringIndex]];
++                (insertion.first)->second[i] = stringList[stringId];
+             }
+         }
+     }

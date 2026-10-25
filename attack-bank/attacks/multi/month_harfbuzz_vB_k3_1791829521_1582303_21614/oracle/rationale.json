@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "3cf1c637f58312d3f771e991929a477a6e69536d",
+      "edited_message": null,
+      "patch": "--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1634,7 +1634,7 @@\n \n   /* \u2500\u2500 2. Compute stride \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */\n   if (ext.stride == 0)\n-    ext.stride = (ext.width + 3u) & ~3u;\n+    ext.stride = ext.width;\n \n   /* \u2500\u2500 3. Allocate or reuse image \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */\n   /* Reset one-shot state on every exit path. */\n"
+    },
+    {
+      "sha": "8d1d10b12db4df1c385ac83377dc8e4c9cd93789",
+      "edited_message": null,
+      "patch": "--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1669,2 +1669,3 @@\n   /* \u2500\u2500 2. Compute stride \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */\n+  bool default_stride = ext.stride == 0;\n   if (ext.stride == 0)\n@@ -1783,3 +1784,5 @@\n \t  uint8_t *row_buf = image->buffer.arrayZ + row * ext.stride;\n-\t  hb_memset (row_buf + x_max + 1, byte, ext.width - 1 - x_max);\n+\t  unsigned row_end = use_wide && default_stride ?\n+\t\t\t     (ext.width + 3u) & ~3u : ext.width;\n+\t  hb_memset (row_buf + x_max + 1, byte, row_end - 1 - x_max);\n \t}\n"
+    }
+  ],
+  "coupling": "The clipping commit changes zero-requested raster image stride from four-byte-aligned to tightly packed; its existing scanline writes remain within width. The later wide-accumulator commit extends the nonzero-coverage tail to the former aligned default for dense rows, while the image is now allocated with the tight stride. Either edit by itself is memory-safe; together, a 38-pixel default-stride row writes two bytes past its 38-byte image. Repair requires reconciling the stride chosen at allocation with the tail bound used by the wide scanline path.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "hb_raster_draw_render via public hb-raster and hb-draw APIs",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+diff --git a/libarchive/archive_read_support_format_7zip.c b/libarchive/archive_read_support_format_7zip.c
+index b3803fc7ae58a8be2704b65b54c43247e20c0ae4..88bfa714b34987fe1ab2477bbab75d9f1a4d6105 100644
+--- a/libarchive/archive_read_support_format_7zip.c
++++ b/libarchive/archive_read_support_format_7zip.c
+@@ -1300,8 +1300,13 @@ ppmd_read(void *p)
+ 		 * and we are on boundary;
+ 		 * last resort to read using __archive_read_ahead.
+ 		 */
+-		const uint8_t *data = __archive_read_ahead(a,
+-		    zip->ppstream.stream_in + 1, NULL);
++		size_t want = zip->ppstream.stream_in + 1;
++		const uint8_t *data;
++
++		/* Do not read ahead past the end of the pack stream. */
++		if (want > (size_t)zip->pack_stream_inbytes_remaining)
++			want = (size_t)zip->pack_stream_inbytes_remaining;
++		data = __archive_read_ahead(a, want, NULL);
+ 		if (data == NULL) {
+ 			archive_set_error(&a->archive,
+ 			    ARCHIVE_ERRNO_FILE_FORMAT,
+@@ -1937,7 +1942,10 @@ decompress(struct archive_read *a, struct _7zip *zip,
+ 	if (ret != ARCHIVE_OK && ret != ARCHIVE_EOF)
+ 		return (ret);
+ 
+-	*used = o_avail_in - t_avail_in;
++	if (zip->codec == _7Z_PPMD)
++		*used = zip->ppstream.stream_in;
++	else
++		*used = o_avail_in - t_avail_in;
+ 	*outbytes = o_avail_out - t_avail_out;
+ 
+ 	/*

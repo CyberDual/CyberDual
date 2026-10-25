@@ -1,0 +1,22 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "d0f4765bfe6671a7c91237d364d3f5720ca5632a",
+      "patch": "diff --git a/js/src/wasm/WasmBinary.h b/js/src/wasm/WasmBinary.h\nindex 158eb969a1bed..53d64c5160e95 100644\n--- a/js/src/wasm/WasmBinary.h\n+++ b/js/src/wasm/WasmBinary.h\n@@ -592,8 +592,13 @@ class Decoder {\n \n   bool readUTF8Bytes(uint32_t numBytes, UTF8Bytes* bytes) {\n     const uint8_t* rawBytes;\n-    if (!readBytes(numBytes, &rawBytes)) {\n-      return false;\n+    if (bytes->capacity() < numBytes) {\n+      if (!readBytes(numBytes, &rawBytes)) {\n+        return false;\n+      }\n+    } else {\n+      rawBytes = cur_;\n+      cur_ += numBytes;\n     }\n \n     if (!IsUtf8(AsChars(mozilla::Span(rawBytes, numBytes)))) {\n"
+    },
+    {
+      "sha": "47240d72475d6e4d2b7e5532f65f8d4e4b126022",
+      "patch": "diff --git a/js/src/wasm/WasmValidate.cpp b/js/src/wasm/WasmValidate.cpp\nindex 378b49e5b5a4a..bf8efcfa13c33 100644\n--- a/js/src/wasm/WasmValidate.cpp\n+++ b/js/src/wasm/WasmValidate.cpp\n@@ -4621,13 +4621,12 @@ static bool DecodeNameSectionName(Decoder& d,\n   MOZ_ASSERT(d.currentOffset() >= nameSection.payload.start);\n   uint32_t offsetInNamePayload = d.currentOffset() - nameSection.payload.start;\n \n-  const uint8_t* nameBytes;\n-  if (!d.readBytes(length, &nameBytes)) {\n-    return d.failf(\"failed to read %s name\", thing);\n+  UTF8Bytes nameBytes;\n+  if (!nameBytes.reserve(length)) {\n+    return false;\n   }\n-\n-  if (!IsUtf8(AsChars(mozilla::Span(nameBytes, length)))) {\n-    return d.failf(\"%s name was not valid UTF-8\", thing);\n+  if (!d.readUTF8Bytes(length, &nameBytes)) {\n+    return d.failf(\"failed to read %s name\", thing);\n   }\n \n   result->offsetInNamePayload = offsetInNamePayload;\n"
+    }
+  ],
+  "coupling": "The first edit lets a destination vector with sufficient capacity bypass the input bounds check in Decoder::readUTF8Bytes. Existing callers pass empty vectors, so their capacity is zero and readBytes still enforces the decoder bounds. The second edit pre-reserves the declared name length and routes extended Wasm name validation through readUTF8Bytes. With only the second edit, readUTF8Bytes still calls readBytes and rejects a length beyond the module buffer. Together, the reserved destination capacity satisfies the new fast path, so a malformed declared name length advances the decoder without validating the source bounds and IsUtf8 reads beyond the WebAssembly.Module byte buffer.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "shell": "js",
+      "command": "ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 obj-debug-asan/dist/bin/js pocs/probe.js",
+      "expected": "AddressSanitizer heap-buffer-overflow"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "51549b6e68a56795f6f42e270ec4df81d6117b15",
+      "edited_message": null,
+      "patch": "diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c\nindex cf22245..d0042fe 100644\n--- a/src/media_tools/crypt_tools.c\n+++ b/src/media_tools/crypt_tools.c\n@@ -177,6 +177,13 @@ static GF_Err crypt_cpix_decode_b64(const char *input, u8 **out_data, u32 *out_s\n \treturn GF_OK;\n }\n \n+static GF_Err crypt_cpix_decode_xml_text(char *text, u8 **out_data, u32 *out_size)\n+{\n+\tGF_Err e = crypt_cpix_decode_b64(text, out_data, out_size);\n+\tif (text) gf_free(text);\n+\treturn e;\n+}\n+\n static u32 crypt_cpix_read_u32(const u8 *data)\n {\n \treturn ((u32)data[0] << 24) | ((u32)data[1] << 16) | ((u32)data[2] << 8) | data[3];\n@@ -448,11 +455,17 @@ static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)\n \t\tgoto exit;\n \t}\n \n+\tGF_XMLNode *plain_text_node = plain_node->content ? (GF_XMLNode *) gf_list_get(plain_node->content, 0) : NULL;\n \ttext = crypt_xml_get_text(plain_node);\n-\te = crypt_cpix_decode_b64(text, &decoded, &decoded_size);\n-\tif (text) {\n-\t\tgf_free(text);\n+\tif (plain_text_node && (plain_text_node->type == GF_XML_CDATA_TYPE)) {\n+\t\te = crypt_cpix_decode_xml_text(text, &decoded, &decoded_size);\n \t\ttext = NULL;\n+\t} else {\n+\t\te = crypt_cpix_decode_b64(text, &decoded, &decoded_size);\n+\t\tif (text) {\n+\t\t\tgf_free(text);\n+\t\t\ttext = NULL;\n+\t\t}\n \t}\n \tif (e || (decoded_size != 16)) {\n \t\tGF_LOG(GF_LOG_ERROR, GF_LOG_PARSER, (\"[CPIX] ContentKey PlainValue must decode to 16 bytes\\n\"));\n"
+    },
+    {
+      "sha": "2c277ecf3f3f0df23d9e1b6e94fbdf202234ebfe",
+      "edited_message": null,
+      "patch": "diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c\n--- a/src/media_tools/crypt_tools.c\n+++ b/src/media_tools/crypt_tools.c\n@@ -104,8 +104,9 @@\n \tfor (i=0; i<gf_list_count(node->content); i++) {\n \t\tchild = (GF_XMLNode *) gf_list_get(node->content, i);\n \t\tif (child && ((child->type == GF_XML_TEXT_TYPE) || (child->type == GF_XML_CDATA_TYPE))) {\n-\t\t\tif (strlen(child->name))\n-\t\t\t\treturn child->name;\n+\t\t\tchar *start = child->name;\n+\t\t\twhile (isspace((unsigned char) *start)) start++;\n+\t\t\tif (*start) return start;\n \t\t}\n \t}\n \treturn NULL;\n"
+    }
+  ],
+  "coupling": "The earlier CPIX loader commit adds a consuming decode path for CDATA PlainValue text. At that point crypt_xml_get_text returns an allocated, trimmed copy, so decoding and freeing that text is correct; ordinary text takes the existing path. The later commit changes crypt_xml_get_text to return a borrowed pointer into the DOM text node, advancing past leading whitespace, and removes the old call-site frees. Its ordinary text callers remain read-only, but the CDATA consuming path added earlier still frees the borrowed interior pointer. The fix must reconcile the helper ownership contract with the CDATA consumer across both commits; changing only Base64 bounds or whitespace parsing does not address the invalid free.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "gf_crypt_info_load via public gpac/crypt_tools.h and gpac/tools.h",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

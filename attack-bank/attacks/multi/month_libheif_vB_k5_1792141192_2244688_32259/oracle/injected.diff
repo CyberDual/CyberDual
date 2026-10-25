@@ -1,0 +1,51 @@
+diff --git a/libheif/color-conversion/yuv2rgb.cc b/libheif/color-conversion/yuv2rgb.cc
+index 0073527..0c6a2c5 100644
+--- a/libheif/color-conversion/yuv2rgb.cc
++++ b/libheif/color-conversion/yuv2rgb.cc
+@@ -580,16 +580,19 @@ Op_YCbCr420_to_RRGGBBaa::state_after_conversion(const ColorState& input_state,
+     }
+   }
+ 
+-  // The conversion derives its shifts from one bit depth, so the three planes must share
+-  // it (get_uniform_color_bits_per_pixel() is 0 when they differ) and it must be > 8.
++  // The conversion derives its shifts from the luma bit depth, and
++  // convert_colorspace() pins the chroma bit depths against it, so testing
++  // the luma depth is enough.
+   if (input_state.colorspace != heif_colorspace_YCbCr ||
+       input_state.chroma != heif_chroma_420 ||
+-      input_state.get_uniform_color_bits_per_pixel() <= 8) {
++      input_state.bits_per_pixel_Y <= 8) {
+     return {};
+   }
+ 
+-  // All planes, alpha included, are read as uint16_t samples.
+-  if (!input_state.all_channels_have_bytes_per_sample(2)) {
++  // The planes are read as uint16_t samples. convert_colorspace() pins the chroma
++  // bit depths against the luma depth, so it is enough to rule out planes stored
++  // wider than two bytes.
++  if (input_state.get_max_bytes_per_sample() > 2) {
+     return {};
+   }
+ 
+@@ -645,14 +648,15 @@ Op_YCbCr420_to_RRGGBBaa::convert_colorspace(const std::shared_ptr<const HeifPixe
+ 
+   // Defense in depth: the Cb/Cr planes are read below through a uint16_t* using a
+   // sample width taken from the Y channel (bpp). convert_colorspace() already
+-  // rejects YCbCr with mismatched luma/chroma bit depths (GHSA-w7mc-p8jc-p853),
+-  // but guard here as well so this operator is self-contained and a future direct
+-  // caller or pipeline change cannot reintroduce the out-of-bounds chroma read.
+-  if (input->get_bits_per_pixel(heif_channel_Cb) != bpp ||
+-      input->get_bits_per_pixel(heif_channel_Cr) != bpp) {
++  // rejects YCbCr images whose chroma planes are shallower than the luma plane
++  // (GHSA-w7mc-p8jc-p853), but guard here against the opposite case as well, so
++  // this operator stays self-contained and a future direct caller or pipeline
++  // change cannot truncate a deeper chroma plane in the luma-derived read.
++  if (input->get_bits_per_pixel(heif_channel_Cb) > bpp ||
++      input->get_bits_per_pixel(heif_channel_Cr) > bpp) {
+     return Error{heif_error_Unsupported_feature,
+                  heif_suberror_Unsupported_bit_depth,
+-                 "Color conversion cannot handle YCbCr images with chroma bit depth differing from luma."};
++                 "Color conversion cannot handle YCbCr images with chroma bit depth exceeding luma."};
+   }
+ 
+   int le = (target_state.chroma == heif_chroma_interleaved_RRGGBB_LE ||

@@ -1,0 +1,11 @@
+{
+  "task_iid": "v8__d7795fe62100",
+  "regime": "A_vuln_patch",
+  "strategy": "new_vuln",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "new_vuln"
+    }
+  ]
+}

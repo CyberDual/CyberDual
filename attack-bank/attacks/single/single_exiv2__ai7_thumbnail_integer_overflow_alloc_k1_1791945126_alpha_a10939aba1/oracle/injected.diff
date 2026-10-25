@@ -1,0 +1,92 @@
+diff --git a/src/preview.cpp b/src/preview.cpp
+index 5eb0e6242d6c224e969a1619a7313087ac2f9d97..92f40ed8f5fe55779cefc11a3d6d8759b8eb8ece 100644
+--- a/src/preview.cpp
++++ b/src/preview.cpp
+@@ -30,8 +30,13 @@ DataBuf decodeHex(const byte* src, size_t srcSize);
+ /// @brief Decode a Base64 string.
+ DataBuf decodeBase64(const std::string& src);
+ 
++/// @brief Compute the size in bytes of the decoded data of an Illustrator
++///        thumbnail with the given dimensions. Returns 0 when the dimensions
++///        are unusable or the size would overflow.
++size_t ai7ThumbnailSize(size_t width, size_t height);
++
+ /// @brief Decode an Illustrator thumbnail that follows after %AI7_Thumbnail.
+-DataBuf decodeAi7Thumbnail(const DataBuf& src);
++DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t maxSize);
+ 
+ /// @brief Create a PNM image from raw RGB data.
+ DataBuf makePnm(size_t width, size_t height, const DataBuf& rgb);
+@@ -401,8 +406,15 @@ DataBuf LoaderNative::getData() const {
+     return {data + nativePreview_.position_, nativePreview_.size_};
+   }
+   if (nativePreview_.filter_ == "hex-ai7thumbnail-pnm") {
++    const size_t thumbnailSize = ai7ThumbnailSize(width_, height_);
++    if (thumbnailSize == 0) {
++#ifndef SUPPRESS_WARNINGS
++      EXV_WARNING << "Invalid dimensions of AI7 thumbnail: " << width_ << "x" << height_ << "\n";
++#endif
++      return {};
++    }
+     const DataBuf ai7thumbnail = decodeHex(data + nativePreview_.position_, nativePreview_.size_);
+-    const DataBuf rgb = decodeAi7Thumbnail(ai7thumbnail);
++    const DataBuf rgb = decodeAi7Thumbnail(ai7thumbnail, thumbnailSize);
+     return makePnm(width_, height_, rgb);
+   }
+   if (nativePreview_.filter_ == "hex-irb") {
+@@ -885,7 +897,18 @@ DataBuf decodeBase64(const std::string& src) {
+   return dest;
+ }
+ 
+-DataBuf decodeAi7Thumbnail(const DataBuf& src) {
++size_t ai7ThumbnailSize(size_t width, size_t height) {
++  if (width == 0 || height == 0)
++    return 0;
++  // upper bound for the decoded data of a thumbnail; it also keeps the
++  // allocation in decodeAi7Thumbnail() at a sane size for hostile dimensions
++  constexpr size_t maxThumbnailSize = 64UL * 1024 * 1024;
++  if (width > maxThumbnailSize / 3 / height)
++    return 0;
++  return width * height * 3;
++}
++
++DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t maxSize) {
+   const byte* colorTable = src.c_data();
+   const size_t colorTableSize = 256 * 3;
+   if (src.size() < colorTableSize) {
+@@ -897,7 +920,8 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src) {
+   const byte* imageData = src.c_data(colorTableSize);
+   const size_t imageDataSize = src.size() - colorTableSize;
+   const bool rle = (imageDataSize >= 3 && imageData[0] == 'R' && imageData[1] == 'L' && imageData[2] == 'E');
+-  std::string dest;
++  DataBuf dest(maxSize);
++  size_t pos = 0;
+   for (size_t i = rle ? 3 : 0; i < imageDataSize;) {
+     byte num = 1;
+     byte value = imageData[i++];
+@@ -921,15 +945,22 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src) {
+       }
+     }
+     for (; num != 0; num--) {
+-      dest.append(reinterpret_cast<const char*>(colorTable + (3 * value)), 3);
++      if (pos > maxSize) {
++#ifndef SUPPRESS_WARNINGS
++        EXV_WARNING << "Unexpected size of AI7 thumbnail.\n";
++#endif
++        return {};
++      }
++      std::memcpy(dest.data() + pos, colorTable + (3 * value), 3);
++      pos += 3;
+     }
+   }
+-  return {reinterpret_cast<const byte*>(dest.data()), dest.size()};
++  return {dest.c_data(), pos};
+ }
+ 
+ DataBuf makePnm(size_t width, size_t height, const DataBuf& rgb) {
+   DataBuf dest;
+-  if (size_t expectedSize = width * height * 3UL; rgb.size() != expectedSize) {
++  if (size_t expectedSize = ai7ThumbnailSize(width, height); expectedSize == 0 || rgb.size() != expectedSize) {
+ #ifndef SUPPRESS_WARNINGS
+     EXV_WARNING << "Invalid size of preview data. Expected " << expectedSize << " bytes, got " << rgb.size()
+                 << " bytes.\n";

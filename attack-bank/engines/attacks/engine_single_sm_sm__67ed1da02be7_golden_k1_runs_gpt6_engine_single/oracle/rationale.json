@@ -1,0 +1,10 @@
+{
+  "task_iid": "sm__67ed1da02be7",
+  "regime": "A_vuln_patch",
+  "strategy": "new_defect",
+  "pocs": [
+    {"input": "pocs/probe.js", "claim": "residual_vuln"}
+  ],
+  "explanation": "The OOM path clears inline fields but points the OOL field at storage inside the GC cell. GC buffer tracing treats that address as a separately allocated buffer and crashes.",
+  "local_verification": "ASan shell rebuilt successfully. The witness exits 1 with an AddressSanitizer SEGV in BufferAllocator::TraceEdge on this patch; the parent plus golden.diff rebuild exits 0."
+}

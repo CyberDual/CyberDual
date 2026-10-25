@@ -1,0 +1,117 @@
+diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c
+index 151aeac..1bae98f 100644
+--- a/src/type1/t1parse.c
++++ b/src/type1/t1parse.c
+@@ -291,6 +291,30 @@
+         priv_len += size;
+       }
+ 
++      /* Segments were bounds-checked above.  Keep one extra byte in   */
++      /* that allocation for a terminating `0', as the PFA loader does. */
++      /* The base dictionary has already been parsed, so record the     */
++      /* ciphertext length in `base_len'.                               */
++      if ( priv_len >= 4 )
++      {
++        if ( !parser->single_block )
++        {
++          parser->base_len     = priv_len;
++          parser->single_block = 1;
++        }
++
++        parser->private_dict = priv_dict;
++
++        if ( FT_QREALLOC( parser->private_dict,
++                          parser->base_len,
++                          parser->base_len + 1 ) )
++          goto Fail;
++
++        priv_dict = parser->private_dict;
++        priv_dict[parser->base_len] = '\0';
++        priv_len += 1;
++      }
++
+       /* Check that we have a private dictionary there */
+       if ( priv_len == 0 )
+       {
+@@ -302,6 +326,26 @@
+ 
+       parser->private_dict = priv_dict;
+       parser->private_len  = priv_len;
++
++      /* The merged binary dictionary is tokenized like an ASCII one,  */
++      /* which stores a trailing `0'.  Remember the ciphertext length   */
++      /* once and count that byte.                                      */
++      if ( priv_len >= 4 )
++      {
++        if ( !parser->single_block )
++        {
++          parser->base_len     = parser->private_len;
++          parser->single_block = 1;
++        }
++
++        if ( FT_QREALLOC( parser->private_dict,
++                          parser->base_len,
++                          parser->base_len + 1 ) )
++          goto Fail;
++
++        parser->private_dict[parser->base_len] = '\0';
++        parser->private_len += 1;
++      }
+     }
+     else
+     {
+@@ -434,9 +478,33 @@
+         FT_MEM_MOVE( parser->private_dict, cur, size );
+     }
+ 
++    /* The private dictionary is decrypted in place.  Keep a trailing */
++    /* `0' in the buffer, matching the ASCII (PFA) loader, and count  */
++    /* it so the tokenizer always stops inside the allocation.        */
++    if ( parser->in_pfb && parser->private_len >= 4 )
++    {
++      if ( !parser->single_block )
++      {
++        parser->base_len     = parser->private_len;
++        parser->single_block = 1;
++      }
++
++      if ( FT_QREALLOC( parser->private_dict,
++                        parser->base_len,
++                        parser->base_len + 1 ) )
++        goto Fail;
++
++      parser->private_dict[parser->base_len] = '\0';
++      parser->private_len += 1;
++    }
++
+     /* we now decrypt the encoded binary private dictionary */
+     psaux->t1_decrypt( parser->private_dict, parser->private_len, 55665U );
+ 
++    if ( parser->in_pfb && parser->single_block &&
++         parser->base_len < parser->private_len )
++      parser->private_dict[parser->base_len] = '\0';
++
+     if ( parser->private_len < 4 )
+     {
+       FT_ERROR(( "T1_Get_Private_Dict:"
+@@ -445,12 +513,20 @@
+       goto Fail;
+     }
+ 
++    if ( parser->in_pfb && parser->single_block &&
++         parser->base_len < parser->private_len )
++      parser->private_dict[parser->base_len] = '\0';
++
+     /* replace the four random bytes at the beginning with whitespace */
+     parser->private_dict[0] = ' ';
+     parser->private_dict[1] = ' ';
+     parser->private_dict[2] = ' ';
+     parser->private_dict[3] = ' ';
+ 
++    if ( parser->in_pfb && parser->single_block &&
++         parser->base_len < parser->private_len )
++      parser->private_dict[parser->base_len] = '\0';
++
+     parser->root.base   = parser->private_dict;
+     parser->root.cursor = parser->private_dict;
+     parser->root.limit  = parser->root.cursor + parser->private_len;

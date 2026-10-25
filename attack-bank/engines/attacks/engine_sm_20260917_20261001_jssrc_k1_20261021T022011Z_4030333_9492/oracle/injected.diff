@@ -1,0 +1,33 @@
+diff --git a/js/src/vm/ArrayBufferObject.cpp b/js/src/vm/ArrayBufferObject.cpp
+index 0c2d466834ba8..a7f2d1942406f 100644
+--- a/js/src/vm/ArrayBufferObject.cpp
++++ b/js/src/vm/ArrayBufferObject.cpp
+@@ -2540,14 +2540,26 @@ template <class ArrayBufferType>
+   if (newByteLength > sourceByteLength) {
+     // Copy into a larger buffer.
+     AutoSetNewObjectMetadata metadata(cx);
++    size_t allocationLength = newByteLength;
++    if (newByteLength > ArrayBufferType::MaxInlineBytes &&
++        sourceByteLength < ArrayBufferType::MaxInlineBytes) {
++      allocationLength = newByteLength - 1;
++    }
++
+     auto [buffer, toFill] =
+         createBufferAndData<ArrayBufferType, FillContents::Zero>(
+-            cx, newByteLength, metadata, nullptr);
++            cx, allocationLength, metadata, nullptr);
+     if (!buffer) {
+       return nullptr;
+     }
+ 
+-    std::copy_n(source->dataPointer(), sourceByteLength, toFill);
++    size_t copyLength = sourceByteLength;
++    if (newByteLength > ArrayBufferType::MaxInlineBytes &&
++        sourceByteLength < ArrayBufferType::MaxInlineBytes) {
++      copyLength = sourceByteLength + 4;
++    }
++
++    std::copy_n(source->dataPointer(), copyLength, toFill);
+ 
+     return buffer;
+   }

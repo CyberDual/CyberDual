@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-787",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "8358f2f567e8f4b88a6f66bfe9226265170d4942",
+  "parent_sha": "8358f2f567e8f4b88a6f66bfe9226265170d4942",
+  "project": "libssh2",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/libssh2/libssh2",
+  "repo_url": "https://github.com/libssh2/libssh2",
+  "source": "reuse",
+  "target": "libssh2",
+  "task": "libssh2_userauth_publickey_frommemory with a crafted ECDSA openssh-key-v1 private key (OpenSSL 3 backend) -> OOB write in ossl_swap_bytes on zero-length input, before any network I/O; existing admitted task, fix_sha recovered by first-parent+date match.",
+  "task_iid": "libssh2__ecdsa_privkey_parse_oob_write",
+  "vuln_desc": "libssh2_userauth_publickey_frommemory with a crafted ECDSA openssh-key-v1 private key (OpenSSL 3 backend) -> OOB write in ossl_swap_bytes on zero-length input, before any network I/O; existing admitted task, fix_sha recovered by first-parent+date match."
+}

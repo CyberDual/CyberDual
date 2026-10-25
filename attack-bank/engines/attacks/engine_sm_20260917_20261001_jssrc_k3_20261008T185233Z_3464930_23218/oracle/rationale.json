@@ -1,0 +1,25 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "original_sha": "cdfebc80b32c5befd0b2c23e5454b75cf8be8e3e",
+      "sha": "cdfebc80b32c5befd0b2c23e5454b75cf8be8e3e",
+      "edited_sha": "08fc130ef0f0f9924f75aa28fa36bafb74521fc6",
+      "patch": "diff --git a/js/src/irregexp/imported/regexp-compiler.cc b/js/src/irregexp/imported/regexp-compiler.cc\nindex 7cb587bb9aa6a..161f596ec3e2f 100644\n--- a/js/src/irregexp/imported/regexp-compiler.cc\n+++ b/js/src/irregexp/imported/regexp-compiler.cc\n@@ -3139,8 +3139,8 @@ bool ComputeFirstCharacterSet(Node* start, Compiler* compiler, Zone* zone,\n // covers one character.  Neither dominates, so store both and let the runtime\n // chain them.\n //\n-// Skip for multiline regexps as match attempts are less likely to be rejected\n-// early based on the first few characters.\n+// Skip for non-sticky multiline regexps as match attempts are less likely to be\n+// rejected early based on the first few characters.\n void Compiler::ComputeQuickCheckFilters(Node* start,\n                                         DirectHandle<RegExpData> re_data) {\n   // Both filters describe the character at the match position, so they say\n@@ -3153,7 +3153,8 @@ void Compiler::ComputeQuickCheckFilters(Node* start,\n   constexpr int kMinChars = 1;\n   constexpr int kMaxChars = 4;\n   int eats_at_least = start->EatsAtLeast(kPossiblyAtStart);\n-  if (!one_byte() || eats_at_least < kMinChars || IsMultiline(flags())) {\n+  if (!one_byte() || eats_at_least < kMinChars ||\n+      (IsMultiline(flags()) && !IsSticky(flags()))) {\n     return;\n   }\n \n"
+    },
+    {
+      "original_sha": "f261527e7a33168c727f4d48ae2490d3e0a5e891",
+      "sha": "f261527e7a33168c727f4d48ae2490d3e0a5e891",
+      "edited_sha": "7d1bf20517552d33dbbdceeb1d9d470f02c00ec8",
+      "patch": "diff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp\nindex 98e89d68844d3..3825155040535 100644\n--- a/js/src/vm/RegExpObject.cpp\n+++ b/js/src/vm/RegExpObject.cpp\n@@ -4,6 +4,7 @@\n \n #include \"vm/RegExpObject.h\"\n \n+\n #include \"mozilla/MemoryReporting.h\"\n #include \"mozilla/PodOperations.h\"\n \n@@ -718,6 +719,11 @@ bool RegExpShared::compileIfNecessary(JSContext* cx,\n   return true;\n }\n \n+static MOZ_NEVER_INLINE void CopyQuickCheckWord(void* dest,\n+                                               const JS::Latin1Char* source) {\n+  memcpy(dest, source, sizeof(uint32_t));\n+}\n+\n // This is inlined in jitcode in PrepareAndExecuteRegExp.\n // The two should be kept in sync.\n bool RegExpShared::quickCheckRejects(const JS::Latin1Char* chars, size_t length,\n@@ -744,6 +750,13 @@ bool RegExpShared::quickCheckRejects(const JS::Latin1Char* chars, size_t length,\n     if ((word & quickCheckMask_) != quickCheckValue_) {\n       return true;\n     }\n+  } else if (index + sizeof(uint16_t) <= length &&\n+             (quickCheckMask_ & 0xffff0000) == 0) {\n+    uint16_t word;\n+    CopyQuickCheckWord(&word, chars + index);\n+    if ((word & quickCheckMask_) != quickCheckValue_) {\n+      return true;\n+    }\n   }\n \n   return false;\n"
+    }
+  ],
+  "coupling": "The first edit lets sticky multiline regular expressions acquire first-character quickcheck data. The second edit adds a short-prefix check that copies a 32-bit word into a 16-bit stack slot when only two input characters remain. With the first edit alone, the original four-character guard remains safe. With the second edit alone, the probe's multiline expression has no quickcheck data, so the short-prefix path is not reached.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "command": "obj-debug-asan/dist/bin/js --no-ion --no-baseline pocs/probe.js",
+      "expected": "AddressSanitizer: stack-buffer-overflow"
+    }
+  ]
+}

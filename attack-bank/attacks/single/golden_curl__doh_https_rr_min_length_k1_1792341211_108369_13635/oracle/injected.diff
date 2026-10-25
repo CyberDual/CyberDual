@@ -1,0 +1,78 @@
+diff --git a/lib/vdns/doh.c b/lib/vdns/doh.c
+index 3b52ed92f3621dd7c33aae26f66c2ab4b168641c..a80a53aae1b7fab028e1d04769b28414d379dc7f 100644
+--- a/lib/vdns/doh.c
++++ b/lib/vdns/doh.c
+@@ -600,12 +600,10 @@ static DOHcode doh_rdata(const unsigned char *doh,
+     doh_store_aaaa(doh, index, d);
+     break;
+ #ifdef USE_HTTPSRR
+-  case CURL_DNS_TYPE_HTTPS: {
+-    DOHcode rc = doh_store_https(doh, index, d, rdlength);
+-    if(rc)
+-      return rc;
+-    break;
+-  }
++  case CURL_DNS_TYPE_HTTPS:
++    if(rdlength < 2)
++      return DOH_DNS_RDATA_LEN;
++    return doh_store_https(doh, index, d, rdlength);
+ #endif
+   default:
+     /* unsupported type, or type we do not store, skip it */
+@@ -905,7 +903,7 @@ static CURLcode doh_decode_rdata_name(const unsigned char **buf,
+   struct dynbuf thename;
+ 
+   DEBUGASSERT(buf && remaining && dnsname);
+-  if(!buf || !remaining || !dnsname || !*remaining)
++  if(!buf || !remaining || !dnsname)
+     return CURLE_OUT_OF_MEMORY;
+   curlx_dyn_init(&thename, CURL_MAXLEN_HOST_NAME);
+   rem = *remaining;
+@@ -965,7 +963,7 @@ UNITTEST CURLcode doh_resp_decode_httpsrr(struct Curl_easy *data,
+ 
+   (void)data;
+   *hrr = NULL;
+-  if(len <= 2)
++  if(len < 2)
+     return CURLE_BAD_FUNCTION_ARGUMENT;
+   lhrr = curlx_calloc(1, sizeof(struct Curl_https_rrinfo));
+   if(!lhrr)
+diff --git a/tests/unit/unit1650.c b/tests/unit/unit1650.c
+index 890027b19353dfe9420f961119a2566666baf87d..0e1b1d331562ec7a21682d6ebb58ce917322f0a7 100644
+--- a/tests/unit/unit1650.c
++++ b/tests/unit/unit1650.c
+@@ -229,6 +229,34 @@ static CURLcode test_unit1650(const char *arg)
+     }
+   }
+ 
++#ifdef USE_HTTPSRR
++  {
++    unsigned char httpsrr[] = {
++      0x00, 0x00, 0x81, 0x80, 0x00, 0x00, 0x00, 0x01,
++      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x41, 0x00,
++      0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++      0x00, 0x00
++    };
++
++    for(i = 0; i < 2; i++) {
++      struct dohentry d;
++      DOHcode rc;
++      httpsrr[22] = (unsigned char)i;
++      de_init(&d);
++      rc = doh_resp_decode(httpsrr, sizeof(httpsrr) - 3 + i,
++                           CURL_DNS_TYPE_HTTPS, &d);
++      if(rc != DOH_DNS_RDATA_LEN) {
++        curl_mfprintf(stderr,
++                      "HTTPS RR length %zu: Expected return code %d got %d\n",
++                      i, (int)DOH_DNS_RDATA_LEN, (int)rc);
++        abort_if(rc != DOH_DNS_RDATA_LEN, "return code");
++      }
++      fail_unless(d.numhttps_rrs == 0, "unexpected number of HTTPS RRs");
++      de_cleanup(&d);
++    }
++  }
++#endif
++
+   /* pass all sizes into the decoder until full */
+   for(i = 0; i < CURL_CSTRLEN(full49); i++) {
+     struct dohentry d;

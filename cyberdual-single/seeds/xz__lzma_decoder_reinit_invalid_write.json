@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-787",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "9fc6f5cd8774ebef8d4e030f7081fb6984c0dc3f",
+  "parent_sha": "9fc6f5cd8774ebef8d4e030f7081fb6984c0dc3f",
+  "project": "xz",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/tukaani-project/xz",
+  "repo_url": "https://github.com/tukaani-project/xz",
+  "source": "reuse",
+  "target": "xz",
+  "task": "Public reinit of lzma_alone_decoder/lzip/microlzma after a prior init failed with LZMA_MEM_ERROR (e.g. allocator refusing a large dict alloc) leaves lzma_lz_decoder stale -> out-of-bounds write on the next lzma_code; recovered fix_sha = direct commit whose first-parent == admitted parent.",
+  "task_iid": "xz__lzma_decoder_reinit_invalid_write",
+  "vuln_desc": "Public reinit of lzma_alone_decoder/lzip/microlzma after a prior init failed with LZMA_MEM_ERROR (e.g. allocator refusing a large dict alloc) leaves lzma_lz_decoder stale -> out-of-bounds write on the next lzma_code; recovered fix_sha = direct commit whose first-parent == admitted parent."
+}

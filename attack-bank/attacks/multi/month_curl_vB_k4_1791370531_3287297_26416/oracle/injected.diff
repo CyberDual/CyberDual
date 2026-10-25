@@ -1,0 +1,24 @@
+diff --git a/lib/parsedate.c b/lib/parsedate.c
+index 3c11d76..c9ae6a5 100644
+--- a/lib/parsedate.c
++++ b/lib/parsedate.c
+@@ -110,7 +110,8 @@ struct tzinfo {
+ 
+ #define DST (-60)     /* offset for daylight savings time */
+ 
+-/* alpha-sorted list of single-letter time zones, A - Z */
++/* alpha-sorted list of single-letter time zones, A - Y. 'Z' (Zulu, zero
++   offset) is handled separately below instead of taking up a table slot. */
+ static const int16_t tzone[] = {
+   -1 * 60,            /* Alpha */
+   -2 * 60,            /* Bravo */
+@@ -136,8 +137,7 @@ static const int16_t tzone[] = {
+    9 * 60,            /* Victor */
+   10 * 60,            /* Whiskey */
+   11 * 60,            /* X-ray */
+-  12 * 60,            /* Yankee */
+-  0                   /* Zulu, zero meridian, a.k.a. UTC */
++  12 * 60             /* Yankee */
+ };
+ 
+ /* two-letter time zones

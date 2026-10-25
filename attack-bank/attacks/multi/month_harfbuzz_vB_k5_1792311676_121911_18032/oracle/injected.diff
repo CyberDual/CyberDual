@@ -1,0 +1,53 @@
+diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc
+index 5134f7f83..104dd23de 100644
+--- a/src/hb-raster-draw.cc
++++ b/src/hb-raster-draw.cc
+@@ -1250,26 +1250,25 @@ hb_raster_draw_glyph (hb_raster_draw_t *draw,
+ static constexpr unsigned HB_RASTER_NARROW_MAX_ACTIVE_EDGES =
+   INT16_MAX / HB_RASTER_ONE_PIXEL;
+ 
+-/* Add one edge piece's area/cover into a single cell. */
++/* Add one edge piece's area/cover into a single cell.  The caller has
++   resolved the surface window: col is inside it, or negative to fold a
++   left-of-surface winding contribution into column 0. */
+ template <typename Area, typename Cover>
+ static HB_ALWAYS_INLINE void
+ cell_add (Area *area, Cover *cover, unsigned width, int col,
+ 	  int32_t fx0, int32_t fy0, int32_t fx1, int32_t fy1, int32_t wind,
+ 	  unsigned &x_min, unsigned &x_max)
+ {
+-  if (unlikely ((unsigned) col >= width))
++  if (unlikely (col < 0))
+   {
+-    if (unlikely (col < 0))
+-    {
+-      /* Edge is to the left of the surface.  The winding contribution
+-       * still carries into the visible region, so add the cover delta
+-       * to column 0.  Area is not added since the edge doesn't cross
+-       * column 0's cell. */
+-      int32_t dy = fy1 - fy0;
+-      cover[0] += (Cover) (dy * wind);
+-      x_min = hb_min (x_min, 0u);
+-      x_max = hb_max (x_max, 0u);
+-    }
++    /* Edge is to the left of the surface.  The winding contribution
++     * still carries into the visible region, so add the cover delta
++     * to column 0.  Area is not added since the edge doesn't cross
++     * column 0's cell. */
++    int32_t dy = fy1 - fy0;
++    cover[0] += (Cover) (dy * wind);
++    x_min = hb_min (x_min, 0u);
++    x_max = hb_max (x_max, 0u);
+     return;
+   }
+   int32_t dy = fy1 - fy0;
+@@ -1441,7 +1440,8 @@ edge_sweep_row (Area                   *area,
+     int32_t x_b = (int32_t) hb_clamp ((int64_t) cx0 * HB_RASTER_ONE_PIXEL,
+ 				      (int64_t) INT32_MIN, (int64_t) INT32_MAX);
+     int32_t fy_b = fy0 + (int32_t) ((((int64_t) x_b - (int64_t) x0) * total_dy) / total_dx);
+-    cell_add (area, cover, width, cx0 - x_org, fx0, fy0, 0, fy_b, wind, x_min, x_max);
++    if (likely (cx0 <= col_max))
++      cell_add (area, cover, width, cx0 - x_org, fx0, fy0, 0, fy_b, wind, x_min, x_max);
+ 
+     int32_t cx = cx0 - 1;
+     int32_t fy_prev = fy_b;

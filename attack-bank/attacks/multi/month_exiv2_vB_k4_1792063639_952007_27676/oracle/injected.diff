@@ -1,0 +1,25 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 513f94b..de0d4cb 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -917,7 +917,7 @@ void QuickTimeVideo::userDataDecoder(size_t outer_size, size_t recursion_depth)
+ 
+ void QuickTimeVideo::NikonTagsDecoder(size_t size) {
+   size_t cur_pos = io_->tell();
+-  DataBuf buf(201);
++  DataBuf buf(200);
+   DataBuf buf2(4 + 1);
+   uint32_t TagID = 0;
+   uint16_t dataLength = 0;
+@@ -1037,8 +1037,9 @@ void QuickTimeVideo::NikonTagsDecoder(size_t size) {
+       dataLength = buf.read_uint16(0, bigEndian);
+       std::memset(buf.data(), 0x0, buf.size());
+ 
+-      // Sanity check with an "unreasonably" large number
+-      if (dataLength >= buf.size()) {
++      // Sanity check with an "unreasonably" large number: these payloads
++      // are limited to 200 bytes.
++      if (dataLength > 200) {
+ #ifndef SUPPRESS_WARNINGS
+         EXV_ERROR << "Xmp.video Nikon Tags, dataLength was found to be larger than 200."
+                   << " Entries considered invalid. Not Processed.\n";

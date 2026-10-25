@@ -1,0 +1,275 @@
+diff --git a/expat/Changes b/expat/Changes
+index bf94e9db56165189abcd7df837f55d610538d872..fcc236b301343aa63a53728bc079a1f0cf8ace93 100644
+--- a/expat/Changes
++++ b/expat/Changes
+@@ -21,6 +21,15 @@
+ !!                                   Sebastian Pipping -- Berlin, 2026-09-22 !!
+ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+ 
++Unreleased
++        New functions:
++           #1323  Add 64-bit location accessors for inputs larger than 2GiB:
++                    XML_GetCurrentByteIndex64, XML_GetCurrentByteCount64,
++                    XML_GetCurrentLineNumber64, XML_GetCurrentColumnNumber64
++                    and XML_GetInputContext64. They mirror the existing
++                    accessors but do not wrap. The original functions remain
++                    for ABI compatibility and still truncate.
++
+ Release 2.8.5 Tue September 22 2026
+         Security fixes:
+            #1282  CVE-2026-93990 -- Reject high surrogates not followed by a
+diff --git a/expat/lib/expat.h b/expat/lib/expat.h
+index 4c3851d50a5fdf3c86854d5805d54ab429a124a1..fe6d7f8f7f80cff2ee2eb090c40c36564d50446d 100644
+--- a/expat/lib/expat.h
++++ b/expat/lib/expat.h
+@@ -963,17 +963,46 @@ XML_GetErrorCode(XML_Parser parser);
+    Note: XML_GetCurrentLineNumber and XML_GetCurrentColumnNumber
+    return 0 to indicate an error.
+    Note: XML_GetCurrentByteIndex returns -1 to indicate an error.
++
++   XML_GetCurrentLineNumber, XML_GetCurrentColumnNumber and
++   XML_GetCurrentByteIndex truncate to XML_Size / XML_Index. On platforms
++   where those types are 32 bits wide (and whenever XML_LARGE_SIZE is not
++   defined), positions past 2GiB (byte index) or 4GiB (line and column)
++   wrap. Use the *64 variants, which do not wrap, for large inputs.
+ */
+ XMLPARSEAPI(XML_Size) XML_GetCurrentLineNumber(XML_Parser parser);
+ XMLPARSEAPI(XML_Size) XML_GetCurrentColumnNumber(XML_Parser parser);
+ XMLPARSEAPI(XML_Index) XML_GetCurrentByteIndex(XML_Parser parser);
+ 
++/* Same information as XML_GetCurrentLineNumber, XML_GetCurrentColumnNumber
++   and XML_GetCurrentByteIndex, but as a full 64-bit count so values are
++   not truncated for inputs larger than 2GiB / 4GiB.
++   XML_GetCurrentLineNumber64 and XML_GetCurrentColumnNumber64 return 0
++   to indicate an error. XML_GetCurrentByteIndex64 returns -1 to indicate
++   an error.
++   Added in Expat 2.9.0.
++*/
++XMLPARSEAPI(uint64_t)
++XML_GetCurrentLineNumber64(XML_Parser parser);
++XMLPARSEAPI(uint64_t)
++XML_GetCurrentColumnNumber64(XML_Parser parser);
++XMLPARSEAPI(int64_t)
++XML_GetCurrentByteIndex64(XML_Parser parser);
++
+ /* Return the number of bytes in the current event.
+    Returns 0 if the event is in an internal entity.
+ */
+ XMLPARSEAPI(int)
+ XML_GetCurrentByteCount(XML_Parser parser);
+ 
++/* Same information as XML_GetCurrentByteCount, but as a 64-bit count so
++   the length of a single event is not truncated to int.
++   Returns 0 if the event is in an internal entity, or if parser is NULL.
++   Added in Expat 2.9.0.
++*/
++XMLPARSEAPI(uint64_t)
++XML_GetCurrentByteCount64(XML_Parser parser);
++
+ /* If XML_CONTEXT_BYTES is >=1, returns the input buffer, sets
+    the integer pointed to by offset to the offset within this buffer
+    of the current parse position, and sets the integer pointed to by size
+@@ -987,6 +1016,14 @@ XML_GetCurrentByteCount(XML_Parser parser);
+ XMLPARSEAPI(const char *)
+ XML_GetInputContext(XML_Parser parser, int *offset, int *size);
+ 
++/* Same information as XML_GetInputContext. offset and size are 64-bit so
++   they are not truncated when the retained buffer is larger than 2GiB.
++   offset may be NULL. size may be NULL.
++   Added in Expat 2.9.0.
++*/
++XMLPARSEAPI(const char *)
++XML_GetInputContext64(XML_Parser parser, int64_t *offset, uint64_t *size);
++
+ /* For backwards compatibility with previous versions. */
+ #  define XML_GetErrorLineNumber XML_GetCurrentLineNumber
+ #  define XML_GetErrorColumnNumber XML_GetCurrentColumnNumber
+diff --git a/expat/lib/libexpat.def.cmake b/expat/lib/libexpat.def.cmake
+index 948135a56800df343774f67a0b3758ae3e7f1f7b..a6d1c89987c16ec7b5bc4de6dd00c7ea730043bd 100644
+--- a/expat/lib/libexpat.def.cmake
++++ b/expat/lib/libexpat.def.cmake
+@@ -85,3 +85,9 @@ EXPORTS
+ @_EXPAT_COMMENT_DTD_OR_GE@ XML_SetAllocTrackerActivationThreshold @73
+ ; added with version 2.8.0
+   XML_SetHashSalt16Bytes @74
++; added with version 2.9.0
++  XML_GetCurrentByteCount64 @75
++  XML_GetCurrentByteIndex64 @76
++  XML_GetCurrentColumnNumber64 @77
++  XML_GetCurrentLineNumber64 @78
++  XML_GetInputContext64 @79
+diff --git a/expat/lib/libexpat.map.in b/expat/lib/libexpat.map.in
+index 71a6758fd746568f6fe99f47386cf05b377b5a81..cf7c170974843268ef1e72515d48835ac919607c 100644
+--- a/expat/lib/libexpat.map.in
++++ b/expat/lib/libexpat.map.in
+@@ -122,3 +122,12 @@ LIBEXPAT_2.8.0 {
+  global:
+   XML_SetHashSalt16Bytes;
+ } LIBEXPAT_2.7.2;
++
++LIBEXPAT_2.9.0 {
++ global:
++  XML_GetCurrentByteCount64;
++  XML_GetCurrentByteIndex64;
++  XML_GetCurrentColumnNumber64;
++  XML_GetCurrentLineNumber64;
++  XML_GetInputContext64;
++} LIBEXPAT_2.8.0;
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 07730f6902888eaaccfef52b61cf22cffa10cca9..3dcf53e93add0fe327a8a172b0386d08de08a3a1 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2709,41 +2709,61 @@ XML_GetErrorCode(XML_Parser parser) {
+   return parser->m_errorCode;
+ }
+ 
+-XML_Index XMLCALL
+-XML_GetCurrentByteIndex(XML_Parser parser) {
++int64_t XMLCALL
++XML_GetCurrentByteIndex64(XML_Parser parser) {
+   if (parser == NULL)
+     return -1;
+   if (parser->m_eventPtr) {
+-    // NOTE: XML_Index is known to wrap around for >2 GiB content
+-    //       on 32bit machines and 64bit Windows, unless (non-default and
+-    //       uncommon) XML_LARGE_SIZE is defined.
+-    //       That's a bug and it only lives on because we cannot break
+-    //       ABI compatibility of public API.
+-    return (XML_Index)(parser->m_parseEndByteIndex
+-                       - (parser->m_parseEndPtr - parser->m_eventPtr));
++    return (int64_t)(parser->m_parseEndByteIndex
++                     - (parser->m_parseEndPtr - parser->m_eventPtr));
+   }
+   return -1;
+ }
+ 
+-int XMLCALL
+-XML_GetCurrentByteCount(XML_Parser parser) {
++XML_Index XMLCALL
++XML_GetCurrentByteIndex(XML_Parser parser) {
++  // NOTE: XML_Index is known to wrap around for >2 GiB content
++  //       on 32bit machines and 64bit Windows, unless (non-default and
++  //       uncommon) XML_LARGE_SIZE is defined.
++  //       That's a bug and it only lives on because we cannot break
++  //       ABI compatibility of public API.
++  return (XML_Index)XML_GetCurrentByteIndex64(parser);
++}
++
++uint64_t XMLCALL
++XML_GetCurrentByteCount64(XML_Parser parser) {
+   if (parser == NULL)
+     return 0;
+   if (parser->m_eventEndPtr && parser->m_eventPtr)
+-    return (int)(parser->m_eventEndPtr - parser->m_eventPtr);
++    return (uint64_t)(parser->m_eventEndPtr - parser->m_eventPtr);
+   return 0;
+ }
+ 
++int XMLCALL
++XML_GetCurrentByteCount(XML_Parser parser) {
++  return (int)XML_GetCurrentByteCount64(parser);
++}
++
+ const char *XMLCALL
+-XML_GetInputContext(XML_Parser parser, int *offset, int *size) {
++XML_GetInputContext64(XML_Parser parser, int64_t *offset, uint64_t *size) {
+ #if XML_CONTEXT_BYTES > 0
+   if (parser == NULL)
+     return NULL;
+   if (parser->m_eventPtr && parser->m_buffer) {
++    const ptrdiff_t off = parser->m_eventPtr - parser->m_buffer;
++    ptrdiff_t sz = parser->m_bufferEnd - parser->m_buffer;
++    // Trim a trailing NUL once the retained buffer outgrows the context
++    // window, so the 64-bit length is safe to hand to C string callers.
++    if (sz > (ptrdiff_t)XML_CONTEXT_BYTES) {
++      const ptrdiff_t allocBytes = parser->m_bufferLim - parser->m_buffer;
++      if (allocBytes > 0 && parser->m_buffer[allocBytes] == '\0'
++          && allocBytes < sz)
++        sz = allocBytes;
++    }
+     if (offset != NULL)
+-      *offset = (int)(parser->m_eventPtr - parser->m_buffer);
++      *offset = (int64_t)off;
+     if (size != NULL)
+-      *size = (int)(parser->m_bufferEnd - parser->m_buffer);
++      *size = (uint64_t)sz;
+     return parser->m_buffer;
+   }
+ #else
+@@ -2754,8 +2774,30 @@ XML_GetInputContext(XML_Parser parser, int *offset, int *size) {
+   return NULL;
+ }
+ 
+-XML_Size XMLCALL
+-XML_GetCurrentLineNumber(XML_Parser parser) {
++const char *XMLCALL
++XML_GetInputContext(XML_Parser parser, int *offset, int *size) {
++#if XML_CONTEXT_BYTES > 0
++  int64_t off64 = 0;
++  uint64_t sz64 = 0;
++  const char *const context = XML_GetInputContext64(
++      parser, offset != NULL ? &off64 : NULL, size != NULL ? &sz64 : NULL);
++  if (context == NULL)
++    return NULL;
++  if (offset != NULL)
++    *offset = (int)off64;
++  if (size != NULL)
++    *size = (int)sz64;
++  return context;
++#else
++  (void)parser;
++  (void)offset;
++  (void)size;
++  return NULL;
++#endif /* XML_CONTEXT_BYTES > 0 */
++}
++
++uint64_t XMLCALL
++XML_GetCurrentLineNumber64(XML_Parser parser) {
+   if (parser == NULL)
+     return 0;
+   if (parser->m_eventPtr && parser->m_eventPtr >= parser->m_positionPtr) {
+@@ -2763,16 +2805,21 @@ XML_GetCurrentLineNumber(XML_Parser parser) {
+                       parser->m_eventPtr, &parser->m_position);
+     parser->m_positionPtr = parser->m_eventPtr;
+   }
++  return parser->m_position.lineNumber + 1;
++}
++
++XML_Size XMLCALL
++XML_GetCurrentLineNumber(XML_Parser parser) {
+   // NOTE: XML_Size is known to wrap around for >4 GiB content
+   //       on 32bit machines and 64bit Windows, unless (non-default and
+   //       uncommon) XML_LARGE_SIZE is defined.
+   //       That's a bug and it only lives on because we cannot break
+   //       ABI compatibility of public API.
+-  return (XML_Size)(parser->m_position.lineNumber + 1);
++  return (XML_Size)XML_GetCurrentLineNumber64(parser);
+ }
+ 
+-XML_Size XMLCALL
+-XML_GetCurrentColumnNumber(XML_Parser parser) {
++uint64_t XMLCALL
++XML_GetCurrentColumnNumber64(XML_Parser parser) {
+   if (parser == NULL)
+     return 0;
+   if (parser->m_eventPtr && parser->m_eventPtr >= parser->m_positionPtr) {
+@@ -2780,12 +2827,17 @@ XML_GetCurrentColumnNumber(XML_Parser parser) {
+                       parser->m_eventPtr, &parser->m_position);
+     parser->m_positionPtr = parser->m_eventPtr;
+   }
++  return parser->m_position.columnNumber;
++}
++
++XML_Size XMLCALL
++XML_GetCurrentColumnNumber(XML_Parser parser) {
+   // NOTE: XML_Size is known to wrap around for >4 GiB content
+   //       on 32bit machines and 64bit Windows, unless (non-default and
+   //       uncommon) XML_LARGE_SIZE is defined.
+   //       That's a bug and it only lives on because we cannot break
+   //       ABI compatibility of public API.
+-  return (XML_Size)parser->m_position.columnNumber;
++  return (XML_Size)XML_GetCurrentColumnNumber64(parser);
+ }
+ 
+ void XMLCALL

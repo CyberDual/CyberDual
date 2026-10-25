@@ -1,0 +1,154 @@
+diff --git a/docs/Makefile.inc b/docs/Makefile.inc
+index 20dafbafba50a3144bfd5e3d57089911eff4f0ac..dfe78ffead8e8f0137b23e84ffc6e480c64b189d 100644
+--- a/docs/Makefile.inc
++++ b/docs/Makefile.inc
+@@ -33,6 +33,7 @@ man_MANS = \
+   libssh2_channel_free.3 \
+   libssh2_channel_get_exit_signal.3 \
+   libssh2_channel_get_exit_status.3 \
++  libssh2_channel_has_exit_status.3 \
+   libssh2_channel_handle_extended_data.3 \
+   libssh2_channel_handle_extended_data2.3 \
+   libssh2_channel_ignore_extended_data.3 \
+diff --git a/docs/libssh2_channel_get_exit_status.md b/docs/libssh2_channel_get_exit_status.md
+index 512c93f4584eb8d5f0253ab01b749170aae81589..54c0df61f454711f43364ae8ab2bc5af88463005 100644
+--- a/docs/libssh2_channel_get_exit_status.md
++++ b/docs/libssh2_channel_get_exit_status.md
+@@ -5,6 +5,7 @@ Title: libssh2_channel_get_exit_status
+ Section: 3
+ Source: libssh2
+ See-also:
++  - libssh2_channel_has_exit_status(3)
+ ---
+ 
+ # NAME
+diff --git a/docs/libssh2_channel_has_exit_status.md b/docs/libssh2_channel_has_exit_status.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..12a53c883a8a71c9235852b353e531bb652d1849
+--- /dev/null
++++ b/docs/libssh2_channel_has_exit_status.md
+@@ -0,0 +1,43 @@
++---
++c: Copyright (C) The libssh2 project and its contributors.
++SPDX-License-Identifier: BSD-3-Clause
++Title: libssh2_channel_has_exit_status
++Section: 3
++Source: libssh2
++See-also:
++  - libssh2_channel_get_exit_status(3)
++---
++
++# NAME
++
++libssh2_channel_has_exit_status - tell whether an exit status was received
++
++# SYNOPSIS
++
++~~~c
++#include <libssh2.h>
++
++int libssh2_channel_has_exit_status(LIBSSH2_CHANNEL *channel)
++~~~
++
++# DESCRIPTION
++
++*channel* - Channel stream to check.
++
++Reports whether the remote host has delivered an exit status for the
++channel. libssh2_channel_get_exit_status(3) returns zero both when the
++remote process exited with a status of zero and when no exit status has
++been received yet, so this function is the way to tell the two cases
++apart.
++
++An exit status is normally delivered once the program running on the
++remote host has finished, before the channel is closed.
++
++# RETURN VALUE
++
++Returns 1 if an exit status has been received for the channel, 0 if none
++has been received, and 0 if channel is NULL.
++
++# AVAILABILITY
++
++Added in 1.11.2
+diff --git a/include/libssh2.h b/include/libssh2.h
+index c9b9e78c8735e034f47ae5574c9ea35f5af3f1b3..365e070222896bcfece140d351353ffd5721e894 100644
+--- a/include/libssh2.h
++++ b/include/libssh2.h
+@@ -994,6 +994,7 @@ LIBSSH2_API int libssh2_channel_flush_ex(LIBSSH2_CHANNEL *channel,
+     libssh2_channel_flush_ex(channel, SSH_EXTENDED_DATA_STDERR)
+ 
+ LIBSSH2_API int libssh2_channel_get_exit_status(LIBSSH2_CHANNEL *channel);
++LIBSSH2_API int libssh2_channel_has_exit_status(LIBSSH2_CHANNEL *channel);
+ LIBSSH2_API int libssh2_channel_get_exit_signal(LIBSSH2_CHANNEL *channel,
+                                                 char **exitsignal,
+                                                 size_t *exitsignal_len,
+diff --git a/src/channel.c b/src/channel.c
+index e3ab8bfebd1774d07f1207fd2e731f4a66eb2b66..5fb203975a36e37eeb8105a087e15d7adc6e3b03 100644
+--- a/src/channel.c
++++ b/src/channel.c
+@@ -1646,6 +1646,21 @@ int libssh2_channel_get_exit_status(LIBSSH2_CHANNEL *channel)
+     return channel->exit_status;
+ }
+ 
++/*
++ * Tell whether the remote side has delivered an exit status for the
++ * channel. Note that libssh2_channel_get_exit_status() returns zero both
++ * when the peer reported an exit status of zero and when no exit status
++ * was delivered at all, so this is the only way to tell the cases apart.
++ * We return zero also if channel is NULL.
++ */
++int libssh2_channel_has_exit_status(LIBSSH2_CHANNEL *channel)
++{
++    if(!channel)
++        return 0;
++
++    return channel->exit_status_set ? 1 : 0;
++}
++
+ /*
+  * Get exit signal (without leading "SIG"), error message, and language
+  * tag into newly allocated buffers of indicated length.  Caller can
+diff --git a/src/libssh2_priv.h b/src/libssh2_priv.h
+index e2f8a6e6a37deaeff3c07e37d8351c3114e0c047..198c2d9186d2be2e77426af7ce7fa52b1022f135 100644
+--- a/src/libssh2_priv.h
++++ b/src/libssh2_priv.h
+@@ -466,6 +466,9 @@ struct _LIBSSH2_CHANNEL {
+     /* channel's program exit status */
+     int exit_status;
+ 
++    /* non-zero once the remote side has delivered an exit status */
++    char exit_status_set;
++
+     /* channel's program exit signal (without the SIG prefix) */
+     char *exit_signal;
+ 
+diff --git a/src/packet.c b/src/packet.c
+index e040ba81d273b6662dea191fbf4d4f4baaecddc3..b0669b25f0493de7430f60f2c56b9518c17ed259 100644
+--- a/src/packet.c
++++ b/src/packet.c
+@@ -1099,17 +1099,19 @@ ssh2_packet_add_jump_point1:
+                 if(SSH2_IS_LITERAL(request, len, "exit-status")) {
+                     /* we have got "exit-status" packet. Set the session value.
+                      */
+-                    if(datalen >= 20)
++                    /* the request string is the literal "exit-status", so
++                       the status code follows the want reply byte: packet
++                       type (1), channel (4), request string length (4),
++                       "exit-status" (11), want reply (1) */
++                    if(datalen >= 21)
+                         channelp = ssh2_channel_locate(session, channel);
+ 
+                     if(channelp) {
+ 
+-                        uint32_t status = 0;
+-                        if(ssh2_get_u32(&buf, &status))
+-                            rc = ssh2_err(session, LIBSSH2_ERROR_PROTO,
+-                                          "exit-signal status error");
++                        uint32_t status = ssh2_ntohu32(data + 21);
+ 
+                         channelp->exit_status = (int)status;
++                        channelp->exit_status_set = 1;
+ 
+                         ssh2_deb((session, LIBSSH2_TRACE_CONN,
+                                   "Exit status %d received for channel %u/%u",

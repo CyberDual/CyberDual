@@ -1,0 +1,13 @@
+diff --git a/src/lib/OpenEXRCore/internal_ht_common.cpp b/src/lib/OpenEXRCore/internal_ht_common.cpp
+index b7b4a4a..ebbf3bc 100644
+--- a/src/lib/OpenEXRCore/internal_ht_common.cpp
++++ b/src/lib/OpenEXRCore/internal_ht_common.cpp
+@@ -325,7 +325,7 @@ read_header (
+     for (size_t i = 0; i < map.size (); i++)
+     {
+         uint16_t file_index = header.pull_uint16 ();
+-        if (file_index >= map.size() || map.at (file_index).scratch > 0)
++        if (file_index > map.size() || map[file_index].scratch > 0)
+             throw std::runtime_error (
+                 "HTJ2K chunk header contains invalid file_index values.");
+         map.at (i).file_index = file_index;

@@ -1,0 +1,25 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..1b933eb 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -122,6 +122,7 @@ static struct libssh2_knownhost *knownhost_to_external(struct known_host *node)
+ }
+ 
+ #define KNOWNHOST_MAX_LEN  (1024 * 1024)
++#define KNOWNHOST_LEGACY_HOSTNAME_MAX 255
+ 
+ static int knownhost_add(LIBSSH2_KNOWNHOSTS *hosts,
+                          const char *host, const char *salt,
+@@ -865,10 +866,10 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+            name to the collection */
+         if(name == host || *(name - 1) == ',') {
+ 
+-            char hostbuf[256];
++            char hostbuf[255];
+ 
+             /* make sure we do not overflow the buffer */
+-            if(namelen >= sizeof(hostbuf) - 1)
++            if(namelen > KNOWNHOST_LEGACY_HOSTNAME_MAX)
+                 return ssh2_err(hosts->session,
+                                 LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                                 "Failed to parse known_hosts line "

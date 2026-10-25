@@ -1,0 +1,96 @@
+diff --git a/src/value.cpp b/src/value.cpp
+index e7546cf3e8526adde8c770a39693c9fd24bcc587..0810efd9e442690eec165494cf97d9f35cadbfae 100644
+--- a/src/value.cpp
++++ b/src/value.cpp
+@@ -944,30 +944,38 @@ int TimeValue::read(const std::string& buf) {
+ 
+     if (fpos != std::string::npos) {
+       auto format = buf.substr(fpos, buf.size());
+-      auto posColon = format.find(':');
+-      if (posColon == std::string::npos) {
+-        // Extended format
+-        auto tzhi = std::stoi(format.substr(0, 3));
+-        if (tzhi < -23 || tzhi > 23)
+-          return printWarning();
+-        time_.tzHour = tzhi;
+-        if (format.size() > 3) {
+-          int minute = std::stoi(format.substr(3));
+-          if (minute < 0 || minute > 59)
+-            return printWarning();
+-          time_.tzMinute = time_.tzHour < 0 ? -minute : minute;
++
++      // Reduce the UTC offset to its basic form ±hhmm, dropping any ':'
++      // separators, so that the basic and the extended notation share the
++      // parsing below.
++      char offset[6];  // sign + hhmm + string terminator
++      char* end = offset;
++      for (char c : format) {
++        if (c == ':') {
++          continue;
++        }
++        if (end == offset + sizeof(offset)) {
++          break;
+         }
+-      } else {
+-        // Basic format
+-        auto tzhi = std::stoi(format.substr(0, posColon));
+-        if (tzhi < -23 || tzhi > 23)
+-          return printWarning();
+-        time_.tzHour = tzhi;
+-        int minute = std::stoi(format.substr(posColon + 1));
+-        if (minute < 0 || minute > 59)
+-          return printWarning();
+-        time_.tzMinute = time_.tzHour < 0 ? -minute : minute;
++        *end++ = c;
+       }
++      *end = '\0';
++      const size_t len = static_cast<size_t>(end - offset);
++
++      // The sign of the offset must be taken from the offset itself: an
++      // offset like -00:30 has a zero hour part, so the hour alone does not
++      // carry the sign.
++      const std::string digits(offset + 1);
++      const bool tzNegative = offset[0] == '-';
++      auto tzHour = std::stoi(digits.substr(0, 2));
++      int tzMinute = 0;
++      if (len > 3) {
++        tzMinute = std::stoi(digits.substr(2, 2));
++      }
++      if (tzHour < 0 || tzHour > 23 || tzMinute < 0 || tzMinute > 59)
++        return printWarning();
++      time_.tzHour = tzNegative ? -tzHour : tzHour;
++      time_.tzMinute = tzNegative ? -tzMinute : tzMinute;
+     }
+   } catch (std::exception&) {
+     // std::stoi might throw an exception if the syntax is invalid.
+diff --git a/unitTests/test_TimeValue.cpp b/unitTests/test_TimeValue.cpp
+index e5f7b6b709f0c8dc2bbaa5f2a9f300565bf14739..52b88e041c726ded5f173320628e18ff49385423 100644
+--- a/unitTests/test_TimeValue.cpp
++++ b/unitTests/test_TimeValue.cpp
+@@ -129,6 +129,26 @@ TEST(ATimeValue, canBeReadFromExtendedStringWithTimeZoneDesignatorNegative) {
+   ASSERT_EQ(0, value.getTime().tzMinute);
+ }
+ 
++TEST(ATimeValue, canBeReadFromStringWithNegativeZeroTimeZoneHour) {
++  TimeValue value;
++  std::string hms("23:55:02-00:30");
++  ASSERT_EQ(0, value.read(hms));
++  ASSERT_EQ(23, value.getTime().hour);
++  ASSERT_EQ(55, value.getTime().minute);
++  ASSERT_EQ(2, value.getTime().second);
++  ASSERT_EQ(0, value.getTime().tzHour);
++  ASSERT_EQ(-30, value.getTime().tzMinute);
++
++  value = TimeValue();
++  hms = "23:55:02-0030";
++  ASSERT_EQ(0, value.read(hms));
++  ASSERT_EQ(23, value.getTime().hour);
++  ASSERT_EQ(55, value.getTime().minute);
++  ASSERT_EQ(2, value.getTime().second);
++  ASSERT_EQ(0, value.getTime().tzHour);
++  ASSERT_EQ(-30, value.getTime().tzMinute);
++}
++
+ TEST(ATimeValue, cannotBeReadFromStringWithTimeZoneDesignatorWithoutSymbol) {
+   TimeValue value;
+   const std::string hms("23:55:02?04:04");

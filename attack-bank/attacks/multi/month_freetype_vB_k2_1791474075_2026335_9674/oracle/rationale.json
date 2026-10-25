@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "fb3a1ef32361479d42b3379a4c99ea5eac51fae2",
+      "edited_message": "* src/type1/t1parse.c (T1_Get_Private_Dict): Fix the segment merging.\n\nGrow the private dictionary buffer one PFB segment at a time instead of\npre-scanning the stream and re-reading it, reading each 0x8002 segment\ndirectly into place.\n\n(cherry picked from commit aa1a10afc530b5a820fe9a31ef11666e0453635a)",
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 6947b3d..c854c70 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -271,6 +271,7 @@\n       /* in the case of the PFB format, the private dictionary can be */\n       /* made of several adjacent segments.                           */\n       FT_UShort  tag;\n+      FT_UShort  seg;\n       FT_Byte*   priv_dict = NULL;\n       FT_ULong   priv_len  = 0;\n \n@@ -284,11 +285,13 @@\n         if ( tag != 0x8002U )\n           break;\n \n-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||\n-             FT_STREAM_READ( priv_dict + priv_len, size )        )\n+        seg = (FT_UShort)size;\n+\n+        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + seg ) ||\n+             FT_STREAM_READ( priv_dict + priv_len, seg )        )\n           goto Fail;\n \n-        priv_len += size;\n+        priv_len += seg;\n       }\n \n       /* Check that we have a private dictionary there */\n"
+    },
+    {
+      "sha": "43dd35a7858ff38498a4337e72a21bbb83629055",
+      "edited_message": "* src/type1/t1parse.c (T1_Get_Private_Dict): Check the size.\n\nReject a PFB private dictionary segment whose declared length exceeds the\ndata remaining in the stream.\n\nFixes https://issues.oss-fuzz.com/issues/568035737, also in #1470.\n\n(cherry picked from commit adf52842066d16931bb0c16da1ffa2ca277c8a00)",
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 151aeac..340de8e 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -271,6 +271,7 @@\n       /* in the case of the PFB format, the private dictionary can be */\n       /* made of several adjacent segments.                           */\n       FT_UShort  tag;\n+      FT_UShort  seg;\n       FT_Byte*   priv_dict = NULL;\n       FT_ULong   priv_len  = 0;\n \n@@ -284,8 +285,10 @@\n         if ( tag != 0x8002U || size > stream->size - stream->pos )\n           break;\n \n-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||\n-             FT_STREAM_READ( priv_dict + priv_len, size )        )\n+        seg = (FT_UShort)size;\n+\n+        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + seg ) ||\n+             FT_STREAM_READ( priv_dict + priv_len, size )       )\n           break;\n \n         priv_len += size;\n"
+    }
+  ],
+  "coupling": "The heap-buffer-overflow is split across two commits that each look correct in isolation. Commit fb3a1ef ('Fix the segment merging') rewrites the PFB private-dictionary loop to grow the buffer one segment at a time; it introduces a 16-bit local `seg = (FT_UShort)size` and uses `seg` consistently for the reallocation (`priv_len + seg`), for the stream read, and for advancing `priv_len`. Read on its own this commit is memory-safe: allocation, read length and offset all use the same value, so for any segment the write stays inside the allocation. On normal fonts (private segments <= 0xFFFF bytes, which is what real PFB writers emit) `seg == size`, so behaviour is unchanged. Commit 43dd35a ('Check the size') adds the genuine oss-fuzz fix -- it rejects a segment whose declared length exceeds the bytes remaining in the stream -- and, as part of that change, reads/advances by the full 32-bit `size` instead of `seg`, while leaving the allocation sized by `seg`. Read on its own against the real fb3a1ef (where a single `size` drives allocation and read) this is also safe, because there `size` is clamped/consumed consistently. Only the COMPOSITION is unsafe: the allocation is sized from the 16-bit-truncated `seg` while the read copies the full `size` bytes, so a 0x8002 segment with length > 0xFFFF (and that many bytes actually present, so the in-contract stream read succeeds and the new size check passes) overflows the private_dict heap buffer by `size - (FT_UShort)size` bytes. The fix is non-local: fixing only 43dd35a's diff (e.g. keeping the read at `seg`) re-truncates and removes the bug but reintroduces the correctness problem that commit meant to address, and fixing only fb3a1ef's diff cannot help because the oversized read is introduced later in 43dd35a; a correct fix must make the ALLOCATION use the full `size` (introduced in fb3a1ef) AND keep the full-length read (introduced in 43dd35a) -- i.e. reason across both commits. Reverting either edited commit alone yields a tree on which the PoC does not fire.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "driver",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

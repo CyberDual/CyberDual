@@ -1,0 +1,27 @@
+diff --git a/src/parsing/parser-base.h b/src/parsing/parser-base.h
+index 54dde689..9a82637b 100644
+--- a/src/parsing/parser-base.h
++++ b/src/parsing/parser-base.h
+@@ -4503,7 +4503,8 @@ void ParserBase<Impl>::ParseFormalParameterList(FormalParametersT* parameters) {
+     }
+   }
+ 
+-  if (parameters->arity + 1 /* receiver */ > Code::kMaxArguments) {
++  if (static_cast<uint16_t>(parameters->arity + kJSArgcReceiverSlots) >
++      Code::kMaxArguments) {
+     ReportMessage(MessageTemplate::kTooManyParameters);
+     return;
+   }
+diff --git a/src/parsing/parser.cc b/src/parsing/parser.cc
+index 80b7d5ae..00dab82d 100644
+--- a/src/parsing/parser.cc
++++ b/src/parsing/parser.cc
+@@ -943,6 +943,8 @@ ZonePtrList<const AstRawString>* Parser::PrepareWrappedArguments(
+   DirectHandle<FixedArray> arguments =
+       maybe_wrapped_arguments_.ToHandleChecked();
+   uint32_t arguments_length = arguments->ulength().value();
++  SBXCHECK_LE(arguments_length, static_cast<uint32_t>(Code::kMaxArguments -
++                                                      kJSArgcReceiverSlots));
+   ZonePtrList<const AstRawString>* arguments_for_wrapped_function =
+       zone->New<ZonePtrList<const AstRawString>>(arguments_length, zone);
+   for (uint32_t i = 0; i < arguments_length; i++) {

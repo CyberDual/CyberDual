@@ -1,0 +1,24 @@
+diff --git a/src/mcos.c b/src/mcos.c
+index 5b7582866920c4b9ada50d1488fe8312baaab62a..413428cfdb3e3133bf64f663c14c673fd43c8e78 100644
+--- a/src/mcos.c
++++ b/src/mcos.c
+@@ -1559,15 +1559,17 @@ static int
+ IsEnumStruct(const matvar_t *matvar)
+ {
+     const matvar_t *tag;
++    const mat_uint32_t reference = MCOS_REF_VALUE;
+ 
+     if ( matvar == NULL || matvar->class_type != MAT_C_STRUCT )
+         return 0;
+ 
+     tag = Mat_VarGetStructFieldByName(matvar, "EnumerationInstanceTag", 0);
+-    if ( tag == NULL || tag->class_type != MAT_C_UINT32 || tag->data == NULL )
++    if ( tag == NULL || tag->class_type != MAT_C_UINT32 || tag->data == NULL ||
++         tag->nbytes < sizeof(reference) )
+         return 0;
+ 
+-    return ((const mat_uint32_t *)tag->data)[0] == MCOS_REF_VALUE;
++    return memcmp(tag->data, &reference, tag->nbytes) == 0;
+ }
+ 
+ /** @brief Recursively check for a nested enumeration instance struct

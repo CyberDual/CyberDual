@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "abbf691",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2posix.c b/src/pcre2posix.c\nindex 2f2cdf5..38dc660 100644\n--- a/src/pcre2posix.c\n+++ b/src/pcre2posix.c\n@@ -411,7 +411,7 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t\n     if (pmatch[0].rm_so < 0 || pmatch[0].rm_eo < 0 || pmatch[0].rm_so > pmatch[0].rm_eo)\n       return REG_INVARG;\n     so = (PCRE2_SIZE)pmatch[0].rm_so;\n-    eo = (PCRE2_SIZE)pmatch[0].rm_eo;\n+    eo = (PCRE2_SIZE)(pmatch[0].rm_eo - pmatch[0].rm_so);\n   }\n   else\n   {\n@@ -419,7 +419,7 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t\n     eo = strlen(string);\n   }\n \n-  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, (eo - so), 0,\n+  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, eo, 0,\n                    options, md, NULL);\n \n   /* Successful match */\n"
+    },
+    {
+      "sha": "2d3a98a",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2posix.c b/src/pcre2posix.c\nindex 401ad0a..f84e20e 100644\n--- a/src/pcre2posix.c\n+++ b/src/pcre2posix.c\n@@ -396,7 +396,7 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t\n               int eflags)\n {\n   int rc;\n-  PCRE2_SIZE so, eo;\n+  PCRE2_SIZE so, eo, length;\n   int options = 0;\n   pcre2_match_data *md;\n \n@@ -440,7 +440,8 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t\n     eo = strlen(string);\n   }\n \n-  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, (eo - so), 0,\n+  length = eo - so;\n+  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, length, 0,\n                    options, md, NULL);\n \n   /* Successful match */\n"
+    }
+  ],
+  "coupling": "The earlier subject-length commit changes eo from an absolute end offset to the validated span length and passes it directly to pcre2_match. The later validation commit extracts the old eo - so calculation into a length variable, which is harmless with the original absolute-offset representation but subtracts the start offset a second time after the earlier edit. For a valid REG_STARTEND range whose start exceeds its span, the unsigned length wraps and pcre2_match reads beyond the subject. Repair requires reconciling the representation introduced in the first commit with its consumer in the second; either edited diff applied alone leaves the probe clean.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "pcre2_regcomp/pcre2_regexec (public POSIX API)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

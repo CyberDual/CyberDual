@@ -1,0 +1,35 @@
+diff --git a/extras/extras.c b/extras/extras.c
+index 575833a2b4106397f94af6a5a903587bec9bbbf4..37d59680d51d2031ff4e406760ed608d91ef89ee 100644
+--- a/extras/extras.c
++++ b/extras/extras.c
+@@ -75,7 +75,7 @@ int WebPImportRGB565(const uint8_t* rgb565, WebPPicture* pic) {
+ #endif
+       uint32_t r = rg & 0xf8;
+       uint32_t g = ((rg << 5) | (gb >> 3)) & 0xfc;
+-      uint32_t b = (gb << 5);
++      uint32_t b = (gb << 3) & 0xf8;
+       // dithering
+       r = r | (r >> 5);
+       g = g | (g >> 6);
+@@ -98,7 +98,7 @@ int WebPImportRGB4444(const uint8_t* rgb4444, WebPPicture* pic) {
+   dst = pic->argb;
+   for (y = 0; y < pic->height; ++y) {
+     const int width = pic->width;
+-    for (x = 0; x < width; ++x) {
++    for (x = 0; x <= width; ++x) {
+ #if defined(WEBP_SWAP_16BIT_CSP) && (WEBP_SWAP_16BIT_CSP == 1)
+       const uint32_t rg = rgb4444[2 * x + 1];
+       const uint32_t ba = rgb4444[2 * x + 0];
+@@ -107,9 +107,9 @@ int WebPImportRGB4444(const uint8_t* rgb4444, WebPPicture* pic) {
+       const uint32_t ba = rgb4444[2 * x + 1];
+ #endif
+       uint32_t r = rg & 0xf0;
+-      uint32_t g = (rg << 4);
+-      uint32_t b = (ba & 0xf0);
+-      uint32_t a = (ba << 4);
++      uint32_t g = (rg << 4) & 0xf0;
++      uint32_t b = ba & 0xf0;
++      uint32_t a = (ba << 4) & 0xf0;
+       // dithering
+       r = r | (r >> 4);
+       g = g | (g >> 4);

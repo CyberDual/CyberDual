@@ -1,0 +1,39 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index 3fbb5b1..917cbe5 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -252,17 +252,23 @@ index_tree_end(index_tree *tree, const lzma_allocator *allocator,
+ static void
+ index_tree_append(index_tree *tree, index_tree_node *node, bool prepend)
+ {
+-	node->parent = prepend ? tree->leftmost : tree->rightmost;
++	node->parent = prepend && tree->count == 2
++			&& node->uncompressed_base
++				== tree->leftmost->uncompressed_base
++			&& tree->leftmost->compressed_base
++				- node->compressed_base
++				> 2 * LZMA_STREAM_HEADER_SIZE
++					+ index_size(0, 0)
++			? tree->root : (prepend ? tree->leftmost : tree->rightmost);
+ 	node->left = NULL;
+ 	node->right = NULL;
+ 
+-	++tree->count;
+-
+ 	// Handle the special case of adding the first node.
+ 	if (tree->root == NULL) {
+ 		tree->root = node;
+ 		tree->leftmost = node;
+ 		tree->rightmost = node;
++		++tree->count;
+ 		return;
+ 	}
+ 
+@@ -282,6 +288,7 @@ index_tree_append(index_tree *tree, index_tree_node *node, bool prepend)
+ 		tree->rightmost->right = node;
+ 		tree->rightmost = node;
+ 	}
++	++tree->count;
+ 
+ 	// Balance the AVL-tree if needed. We don't need to keep the balance
+ 	// factors in nodes, because we always fill the tree sequentially,

@@ -1,0 +1,30 @@
+diff --git a/src/dec/alpha_dec.c b/src/dec/alpha_dec.c
+index 9fb1448..aaaee5a 100644
+--- a/src/dec/alpha_dec.c
++++ b/src/dec/alpha_dec.c
+@@ -140,7 +140,10 @@ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+   // pixel rows held back from the previous macroblock row plus all 16 pixel
+   // rows of the last macroblock row (24 pixel rows total), while retaining 1
+   // preceding row (row - 1) for spatial unfiltering and fancy upsampling.
+-  return (dec->alpha_dithering > 0)
++  // Streams carrying preprocessed levels are decoded in one pass for
++  // dithering and thus require the whole plane.
++  return (dec->alpha_data_size > ALPHA_HEADER_LEN &&
++          ((dec->alpha_data[0] >> 4) & 0x03) == ALPHA_PREPROCESSED_LEVELS)
+              ? height
+              : VP8LGetWindowRows(width, height, /*max_history_rows=*/25);
+ }
+diff --git a/src/dec/frame_dec.c b/src/dec/frame_dec.c
+index 2b3c99b..782b2f3 100644
+--- a/src/dec/frame_dec.c
++++ b/src/dec/frame_dec.c
+@@ -365,8 +365,7 @@ void VP8InitDithering(const WebPDecoderOptions* const options,
+       }
+     }
+     // potentially allow alpha dithering
+-    if (dec->alpha_data != NULL && dec->alpha_data_size > ALPHA_HEADER_LEN &&
+-        ((dec->alpha_data[0] >> 4) & 0x03) == ALPHA_PREPROCESSED_LEVELS) {
++    if (dec->alpha_data != NULL && dec->alpha_data_size > ALPHA_HEADER_LEN) {
+       dec->alpha_dithering = options->alpha_dithering_strength;
+       if (dec->alpha_dithering > 100) {
+         dec->alpha_dithering = 100;

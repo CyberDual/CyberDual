@@ -1,0 +1,17 @@
+diff --git a/src/tiffvisitor_int.cpp b/src/tiffvisitor_int.cpp
+index 9930b876d38765d2f96f4697ddd1174f92c40867..68f8d6840a0b413e4974b64bf1add99e02ff4075 100644
+--- a/src/tiffvisitor_int.cpp
++++ b/src/tiffvisitor_int.cpp
+@@ -1210,7 +1210,11 @@ void TiffReader::visitIfdMakernote(TiffIfdMakernote* object) {
+     return;
+   }
+ 
+-  object->ifd_.setStart(object->start() + object->ifdOffset());
++  const auto ifdOffset = object->ifdOffset();
++  enforce(ifdOffset < static_cast<size_t>(pLast_ - object->start()), ErrorCode::kerCorruptedMetadata);
++  const byte* ifdStart = object->start() + ifdOffset;
++  enforce(getUShort(ifdStart, object->byteOrder()) <= 256, ErrorCode::kerCorruptedMetadata);
++  object->ifd_.setStart(ifdStart);
+ 
+   // Modify reader for Makernote peculiarities, byte order and offset
+   object->mnOffset_ = object->start() - pData_;

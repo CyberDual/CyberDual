@@ -1,0 +1,110 @@
+diff --git a/src/hb-aat-layout-common.hh b/src/hb-aat-layout-common.hh
+index 1a35363c7a3fd4dc37265a8d78a42a328c283c2f..c870ae44906fe4b680b16153e223307c2d701232 100644
+--- a/src/hb-aat-layout-common.hh
++++ b/src/hb-aat-layout-common.hh
+@@ -180,6 +180,39 @@ struct hb_aat_apply_context_t :
+   {
+     if (likely (using_buffer_glyph_set))
+       buffer_glyph_set->add_array (glyphs, count);
++
++    /* End-of-text transitions have no current glyph. Inherit from the
++     * preceding output glyph and attach metadata to each emitted glyph. */
++    if (buffer->idx >= buffer->len)
++    {
++      hb_glyph_info_t anchor = {};
++      if (buffer->out_len)
++	anchor = buffer->prev ();
++      else if (buffer->len)
++	anchor = buffer->info[buffer->len - 1];
++
++      for (unsigned int i = 0; i < count; i++)
++      {
++	hb_glyph_info_t info = anchor;
++	info.codepoint = glyphs[i];
++	if (glyphs[i] == DELETED_GLYPH)
++	{
++	  buffer->scratch_flags |= HB_BUFFER_SCRATCH_FLAG_AAT_HAS_DELETED;
++	  _hb_glyph_info_set_aat_deleted (&info);
++	}
++	else
++	{
++#ifndef HB_NO_OT_LAYOUT
++	  if (has_glyph_classes)
++	    _hb_glyph_info_set_glyph_props (&info,
++					    gdef.get_glyph_props (glyphs[i]));
++#endif
++	}
++	if (unlikely (!buffer->output_info (info))) return false;
++      }
++      return true;
++    }
++
+     for (unsigned int i = 0; i < count; i++)
+     {
+       if (glyphs[i] == DELETED_GLYPH)
+diff --git a/src/hb-aat-layout-morx-table.hh b/src/hb-aat-layout-morx-table.hh
+index 4811f12be5a597f85d6fca88e416f58043fa3700..6492479a41eac4e63336443e744956320a90c14d 100644
+--- a/src/hb-aat-layout-morx-table.hh
++++ b/src/hb-aat-layout-morx-table.hh
+@@ -838,6 +838,53 @@ struct InsertionSubtable
+ 
+ 	unsigned int end = buffer->out_len;
+ 
++	/* Insert-before at end-of-text: there is no current glyph to split.
++	 * Stage the run from the preceding glyph, then append it. */
++	if (before && buffer->idx >= buffer->len && count)
++	{
++	  hb_glyph_info_t anchor = {};
++	  if (buffer->out_len)
++	    anchor = buffer->prev ();
++	  else if (buffer->len)
++	    anchor = buffer->info[buffer->len - 1];
++
++	  hb_glyph_info_t *staged = (hb_glyph_info_t *) hb_malloc (count * sizeof (glyphs[0]));
++	  if (unlikely (!staged)) return;
++
++	  for (unsigned int i = 0; i < count; i++)
++	  {
++	    staged[i] = anchor;
++	    staged[i].codepoint = glyphs[i];
++	    if (glyphs[i] == DELETED_GLYPH)
++	    {
++	      buffer->scratch_flags |= HB_BUFFER_SCRATCH_FLAG_AAT_HAS_DELETED;
++	      _hb_glyph_info_set_aat_deleted (&staged[i]);
++	    }
++	    else
++	    {
++#ifndef HB_NO_OT_LAYOUT
++	      if (c->has_glyph_classes)
++		_hb_glyph_info_set_glyph_props (&staged[i],
++						c->gdef.get_glyph_props (glyphs[i]));
++#endif
++	    }
++	  }
++
++	  bool ok = true;
++	  for (unsigned int i = 0; i < count; i++)
++	    if (unlikely (!buffer->output_info (staged[i])))
++	    {
++	      ok = false;
++	      break;
++	    }
++	  hb_free (staged);
++	  if (unlikely (!ok)) return;
++
++	  ret = true;
++	  if (unlikely (!buffer->move_to ((flags & DontAdvance) ? end : end + count))) return;
++	}
++	else
++	{
+ 	if (buffer->idx < buffer->len && !before)
+ 	  if (unlikely (!buffer->copy_glyph ())) return;
+ 	/* TODO We ignore KashidaLike setting. */
+@@ -864,6 +911,7 @@ struct InsertionSubtable
+ 	if (unlikely (!buffer->move_to ((flags & DontAdvance) ? end : end + count))) return;
+       }
+     }
++    }
+ 
+     public:
+     bool ret;

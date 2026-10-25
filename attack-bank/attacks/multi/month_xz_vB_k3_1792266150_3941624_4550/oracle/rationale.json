@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "90a28051a5229a181faaf55119e69fde0102e44d",
+      "edited_message": "liblzma: LZMA2 decoder: Be more strict about compressed chunk size\n\nIt wasn't really a bug, but it's good to be more strict.\n\nSide effects (\"downsides\" would be a too strong word):\n\n  - Now the LZMA decoder has to use the slow path at the end of every\n    LZMA2 chunk even when the read position isn't close to &in[in_size].\n    This doesn't matter in practice.\n\n  - If a chunk header was corrupt exactly so that the compressed size is\n    too small, now fewer bytes of uncompressed data can be recovered.\n\nAlso keep the dictionary overrun slack inside the allocation instead of\nallocating a separate region at the end. The exposed dictionary size is\nreduced by the same amount.\n\nReported-by: Maintainer I",
+      "patch": "diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c\nindex 1cb120ab..430a4972 100644\n--- a/src/liblzma/lz/lz_decoder.c\n+++ b/src/liblzma/lz/lz_decoder.c\n@@ -284,15 +284,15 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,\n \t\t// included in alloc_size. These extra bytes allow\n \t\t// dict_repeat() to read and write more data than requested.\n \t\t// Otherwise this extra space is ignored.\n-\t\tcoder->dict.buf = lzma_alloc(alloc_size + LZ_DICT_EXTRA,\n+\t\tcoder->dict.buf = lzma_alloc(alloc_size,\n \t\t\t\tallocator);\n \t\tif (coder->dict.buf == NULL)\n \t\t\treturn LZMA_MEM_ERROR;\n \n-\t\t// NOTE: Yes, alloc_size, not lz_options.dict_size. The way\n-\t\t// coder->dict.full is updated will take care that we will\n-\t\t// still reject distances larger than lz_options.dict_size.\n-\t\tcoder->dict.size = alloc_size;\n+\t\t// NOTE: Yes, alloc_size - LZ_DICT_EXTRA, not lz_options.dict_size.\n+\t\t// The way coder->dict.full is updated will take care that we\n+\t\t// will still reject distances larger than lz_options.dict_size.\n+\t\tcoder->dict.size = alloc_size - LZ_DICT_EXTRA;\n \t}\n \n \tlz_decoder_reset(next->coder);\n"
+    },
+    {
+      "sha": "ca41c6d16f2421e057a9f29fd7db6f4810456566",
+      "edited_message": "liblzma: Make lzma_lz_decoder_init() safe to reinit after alloc failure\n\nIf memory allocation fails and the resulting coder state is reused,\nensure that memory allocation is attempted again. However, coders that\nare initialized via lzma_next_filter_init() shouldn't be reinitialized\nafter failure; they should be cleaned up with lzma_next_end().\n\nUse a local variable for the final dictionary size so the size check and\nassignment cannot drift apart.\n\nReported-by: Maintainer I",
+      "patch": "diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c\nindex 6dc4cefb..94626dc3 100644\n--- a/src/liblzma/lz/lz_decoder.c\n+++ b/src/liblzma/lz/lz_decoder.c\n@@ -275,9 +275,10 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,\n \t// of #define LZ_DICT_REPEAT_MAX.\n \tconst size_t alloc_size\n \t\t\t= lz_options.dict_size + 2 * LZ_DICT_REPEAT_MAX;\n+\tconst size_t dictionary_size = alloc_size;\n \n \t// Allocate and initialize the dictionary.\n-\tif (coder->dict.size != alloc_size) {\n+\tif (coder->dict.size != dictionary_size) {\n \t\tcoder->dict.size = 0;\n \t\tlzma_free(coder->dict.buf, allocator);\n \n@@ -290,10 +291,10 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,\n \t\tif (coder->dict.buf == NULL)\n \t\t\treturn LZMA_MEM_ERROR;\n \n-\t\t// NOTE: Yes, alloc_size, not lz_options.dict_size. The way\n+\t\t// NOTE: Yes, dictionary_size, not lz_options.dict_size. The way\n \t\t// coder->dict.full is updated will take care that we will\n \t\t// still reject distances larger than lz_options.dict_size.\n-\t\tcoder->dict.size = alloc_size;\n+\t\tcoder->dict.size = dictionary_size;\n \t}\n \n \tlz_decoder_reset(next->coder);\n"
+    }
+  ],
+  "coupling": "The LZMA2 commit changes the allocation contract: it allocates only alloc_size bytes and correspondingly exposes alloc_size - LZ_DICT_EXTRA bytes as the decoder dictionary, leaving the SSE copy overrun slack inside that allocation. Alone this is safe. The later LZ reinitialization commit factors the final exposed size into dictionary_size and restores it to alloc_size, but does not restore the removed trailing allocation. Alone, with the original allocation still including LZ_DICT_EXTRA, it is also safe. Only their composition exposes alloc_size bytes in an alloc_size-byte allocation; dict_repeat() can then perform its allowed 32-byte overrun past the end and ASan reports a heap-buffer-overflow. A correct fix must restore the invariant across both commits: either preserve the trailing allocation or keep the exposed size reduced by the overrun slack. Fixing only one commit leaves the other side of the invariant unchanged and the unsafe combination can recur.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "public liblzma API: lzma_alone_encoder(), lzma_code(), and lzma_alone_decoder()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

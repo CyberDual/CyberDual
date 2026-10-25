@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "6e7df413c4ed73076721f0d1250ff71be6181338",
+      "edited_message": null,
+      "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\nindex f9a2327..e7a5321 100644\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -1565,7 +1565,7 @@ static int parse_file_extra_owner(struct archive_read* a,\n \tsize_t name_len = 0;\n \tsize_t name_size = 0;\n \tsize_t varint_len = 0;\n-\tchar namebuf[OWNER_MAXNAMELEN];\n+\tchar namebuf[OWNER_MAXNAMELEN + 1];\n \tconst uint8_t* p;\n \n \tif(!read_var(a, &flags, &value_size))\n@@ -1594,8 +1594,8 @@ static int parse_file_extra_owner(struct archive_read* a,\n \t\tif(!read_ahead(a, name_size, &p))\n \t\t\treturn ARCHIVE_EOF;\n \n-\t\tif (name_size >= OWNER_MAXNAMELEN) {\n-\t\t\tname_len = OWNER_MAXNAMELEN - 1;\n+\t\tif (name_size > OWNER_MAXNAMELEN) {\n+\t\t\tname_len = OWNER_MAXNAMELEN;\n \t\t} else {\n \t\t\tname_len = name_size;\n \t\t}\n@@ -1624,8 +1624,8 @@ static int parse_file_extra_owner(struct archive_read* a,\n \t\tif(!read_ahead(a, name_size, &p))\n \t\t\treturn ARCHIVE_EOF;\n \n-\t\tif (name_size >= OWNER_MAXNAMELEN) {\n-\t\t\tname_len = OWNER_MAXNAMELEN - 1;\n+\t\tif (name_size > OWNER_MAXNAMELEN) {\n+\t\t\tname_len = OWNER_MAXNAMELEN;\n \t\t} else {\n \t\t\tname_len = name_size;\n \t\t}\n"
+    },
+    {
+      "sha": "b3f0beb6b5717dc5d11be072113926b60eba2079",
+      "edited_message": null,
+      "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\nindex 6577364..a21ced2 100644\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -1588,7 +1588,7 @@ static int parse_file_extra_owner(struct archive_read* a,\n \tsize_t name_len = 0;\n \tsize_t name_size = 0;\n \tsize_t varint_len = 0;\n-\tchar namebuf[OWNER_MAXNAMELEN + 1];\n+\tchar namebuf[OWNER_MAXNAMELEN];\n \tconst uint8_t* p;\n \tint r;\n \n"
+    }
+  ],
+  "coupling": "The first RAR5 change permits all 256 owner-name bytes and allocates a 257-byte buffer for the terminating NUL. The later RAR5 cleanup shrinks that buffer to 256 bytes while retaining the earlier 256-byte copy limit. Neither changed commit is unsafe in isolation: the first has space for the terminator, and the later change paired with the original 255-byte limit has space for it. Together, an in-range 256-byte EX_UOWNER name writes its NUL one byte beyond the stack buffer. A fix must reconcile the owner-name length limit with its storage size across the two commits; reviewing only the later buffer declaration or only the earlier limit obscures that shared invariant.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "archive_read_open_memory + archive_read_next_header",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

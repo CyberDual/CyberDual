@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "085c5a2ca59a57a429fd82a9b8065ec9e9d57cda",
+      "edited_message": null,
+      "patch": "diff --git a/libheif/color-conversion/alpha.cc b/libheif/color-conversion/alpha.cc\nindex 9055b70..d40d779 100644\n--- a/libheif/color-conversion/alpha.cc\n+++ b/libheif/color-conversion/alpha.cc\n@@ -138,8 +138,12 @@ Op_flatten_alpha_plane<Pixel>::state_after_conversion(const ColorState& input_st\n   // below, so every plane must be stored with sizeof(Pixel) bytes per sample. A file may\n   // declare a different depth per plane ('unci'); reading a one-byte plane as two-byte\n   // samples would run past its end (GHSA-r7gr-2xm2-23wf), and a plane wider than two\n-  // bytes cannot be read through either instance. Decline anything else.\n-  if (!input_state.all_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel)))) {\n+  // bytes cannot be read through either instance. For monochrome images, the colour\n+  // width is sufficient here because the depth check below also covers alpha.\n+  bool matching_storage = input_state.chroma == heif_chroma_monochrome\n+                          ? input_state.color_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel)))\n+                          : input_state.all_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel)));\n+  if (!matching_storage) {\n     return {};\n   }\n \n"
+    },
+    {
+      "sha": "913df44145a89c265360c6666609d503b94fa1d6",
+      "edited_message": null,
+      "patch": "diff --git a/libheif/color-conversion/alpha.cc b/libheif/color-conversion/alpha.cc\nindex b585a7e..d8e4a48 100644\n--- a/libheif/color-conversion/alpha.cc\n+++ b/libheif/color-conversion/alpha.cc\n@@ -143,10 +143,12 @@ Op_flatten_alpha_plane<Pixel>::state_after_conversion(const ColorState& input_st\n     return {};\n   }\n \n-  // The colour planes are converted to RGB at one common depth and the alpha plane is\n-  // composited at that depth, so all of them have to agree (0 = the colour planes differ).\n+  // RGB compositing uses one common depth. The direct luma path weights alpha at its own\n+  // depth, while the sample-width check above keeps both planes compatible with Pixel.\n   int color_bpp = input_state.get_uniform_color_bits_per_pixel();\n-  if (color_bpp == 0 || (input_state.has_alpha() && input_state.bits_per_pixel_alpha != color_bpp)) {\n+  if (color_bpp == 0 ||\n+      (input_state.has_alpha() && input_state.bits_per_pixel_alpha != color_bpp &&\n+       input_state.chroma != heif_chroma_monochrome)) {\n     return {};\n   }\n \n@@ -260,17 +262,16 @@ Op_flatten_alpha_plane<Pixel>::convert_colorspace(const std::shared_ptr<const He\n                  \"Op_flatten_alpha_plane: image has no alpha plane\"};\n   }\n \n-  // The colour planes are converted at, and the alpha plane is composited at, one common depth\n-  // through the 'Pixel' type of this instance.\n+  // The colour planes must match Pixel; RGB compositing also uses that colour depth for alpha.\n   int color_bpp = input_state.get_uniform_color_bits_per_pixel();\n   int bpp_alpha = input_raw->get_bits_per_pixel(heif_channel_Alpha);\n \n   if (color_bpp == 0 ||\n-      bpp_alpha != color_bpp ||\n+      (bpp_alpha != color_bpp && input_raw->get_chroma_format() != heif_chroma_monochrome) ||\n       bytes_per_sample_for_bit_depth(color_bpp) != static_cast<int>(sizeof(Pixel))) {\n     return Error{heif_error_Unsupported_feature,\n                  heif_suberror_Unsupported_color_conversion,\n-                 \"Op_flatten_alpha_plane: colour and alpha planes must share one bit depth\"};\n+                 \"Op_flatten_alpha_plane: incompatible colour or alpha depth\"};\n   }\n \n   // See composite_plane(): the composite accumulates in 32 bits, which is exact for samples\n"
+    }
+  ],
+  "coupling": "The sample-width maintenance commit checks only colour storage for monochrome compositing, while its existing exact-depth check still protects the alpha plane. The later luma-only compositing commit accepts an independent alpha bit depth and relies on that earlier width check to select a Pixel type. Together, a 16-bit Y plane and 8-bit alpha plane reach the luma loop, which reads alpha through uint16_t and crosses its allocation. Either change in isolation retains the other guard; a correct repair must account for both the planning width invariant and the luma path\u2019s independent alpha depth.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "heif_decode_image",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

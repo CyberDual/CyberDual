@@ -1,0 +1,43 @@
+diff --git a/src/objects/js-weak-refs-inl.h b/src/objects/js-weak-refs-inl.h
+index e15fdc66..25f87003 100644
+--- a/src/objects/js-weak-refs-inl.h
++++ b/src/objects/js-weak-refs-inl.h
+@@ -145,14 +145,31 @@ bool JSFinalizationRegistry::RemoveUnregisterToken(
+ 
+   Tagged<SimpleNumberDictionary> key_map =
+       Cast<SimpleNumberDictionary>(this->key_map());
+-  // If the token doesn't have a hash, it was not used as a key inside any hash
+-  // tables.
+-  Tagged<Object> hash = Object::GetHash(unregister_token);
+-  if (IsUndefined(hash)) {
+-    return false;
++  InternalIndex entry = InternalIndex::NotFound();
++  if (removal_mode == kKeepMatchedCellsInRegistry) {
++    // During scavenging the token may still contain pointers into from-space.
++    // Locate its list without reading the token's identity hash.
++    ReadOnlyRoots roots(isolate);
++    for (InternalIndex candidate : key_map->IterateEntries()) {
++      if (!key_map->IsKey(roots, key_map->KeyAt(candidate))) continue;
++      Tagged<Object> cell = key_map->ValueAt(candidate);
++      while (!IsUndefined(cell)) {
++        Tagged<WeakCell> weak_cell = Cast<WeakCell>(cell);
++        if (weak_cell->unregister_token() == unregister_token) {
++          entry = candidate.adjust_up(1);
++          break;
++        }
++        cell = weak_cell->key_list_next();
++      }
++      if (entry.is_found()) break;
++    }
++  } else {
++    // If the token doesn't have a hash, it was not used as a key inside any
++    // hash tables.
++    Tagged<Object> hash = Object::GetHash(unregister_token);
++    if (IsUndefined(hash)) return false;
++    entry = key_map->FindEntry(isolate, Smi::ToInt(hash));
+   }
+-  uint32_t key = Smi::ToInt(hash);
+-  InternalIndex entry = key_map->FindEntry(isolate, key);
+   if (entry.is_not_found()) {
+     return false;
+   }

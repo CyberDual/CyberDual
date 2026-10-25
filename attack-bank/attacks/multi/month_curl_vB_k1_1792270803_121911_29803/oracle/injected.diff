@@ -1,0 +1,27 @@
+diff --git a/lib/mprintf.c b/lib/mprintf.c
+index 571c417501..2aecc999ed 100644
+--- a/lib/mprintf.c
++++ b/lib/mprintf.c
+@@ -993,7 +993,8 @@ static bool out_string(void *userp,
+       len = 0;
+     }
+   }
+-  else if(prec != -1)
++  else if((flags & FLAGS_PREC) || (prec != -1))
++    /* a precision written out in the format counts as given */
+     len = (size_t)prec;
+   else if(*str == '\0')
+     len = 0;
+@@ -1151,8 +1152,11 @@ static int formatf(void *userp, /* untouched by format(), sent to the
+            omitted." */
+         p.prec = -1;
+     }
+-    else if(p.flags & FLAGS_PREC)
++    else if(p.flags & FLAGS_PREC) {
+       p.prec = optr->precision;
++      if(p.prec < 0)
++        p.prec = -1;
++    }
+     else
+       p.prec = -1;
+ 

@@ -1,0 +1,21 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "81ec4c2ba085b7a40e1dfe6c9927202899958bf6",
+      "patch": "diff --git a/src/regexp/regexp-compiler-tonode.cc b/src/regexp/regexp-compiler-tonode.cc\nindex 2ae70c3fe7e..09a7478d71c 100644\n--- a/src/regexp/regexp-compiler-tonode.cc\n+++ b/src/regexp/regexp-compiler-tonode.cc\n@@ -3,6 +3,7 @@\n // found in the LICENSE file.\n \n #include \"src/common/globals.h\"\n+#include <memory>\n #include \"src/execution/isolate.h\"\n #include \"src/objects/string.h\"\n #include \"src/regexp/regexp-ast-printer.h\"\n@@ -823,6 +824,10 @@ CaseFolding::Mode CaseFoldingMode(Flags flags) {\n                                 : CaseFolding::Mode::kNonUnicode;\n }\n \n+V8_NOINLINE bool FirstKeyIsTrailSurrogate(const base::uc16* keys) {\n+  return unibrow::Utf16::IsTrailSurrogate(keys[0]);\n+}\n+\n // Use the matcher's case equivalence (see\n // TextNode::GetCaseIndependentLetters). Full case folding would, for example,\n // conflate U+017F and 's' under /i.\n@@ -1092,16 +1097,36 @@ void Disjunction::FixSingleCharacterDisjunctions(Compiler* compiler) {\n       continue;\n     }\n     Atom* const atom = alternative->AsAtom();\n+    const Flags flags = compiler->flags();\n+#ifdef V8_INTL_SUPPORT\n+    // Keep the keys for an atom together while preparing single-character\n+    // alternatives for range merging.\n+    bool first_is_trail_surrogate = false;\n+    if (IsIgnoreCase(flags)) {\n+      auto keys = std::make_unique<base::uc16[]>(atom->length());\n+      for (int j = 0; j < atom->length(); ++j) {\n+        keys[j] = static_cast<base::uc16>(CaseFolding::EquivalenceKey(\n+            atom->data().at(j), CaseFoldingMode(flags)));\n+      }\n+      first_is_trail_surrogate = FirstKeyIsTrailSurrogate(keys.get());\n+    } else if (atom->length() == 1) {\n+      first_is_trail_surrogate =\n+          unibrow::Utf16::IsTrailSurrogate(atom->data().at(0));\n+    }\n+#endif\n     if (atom->length() != 1) {\n       alternatives->at(write_posn++) = alternatives->at(i);\n       i++;\n       continue;\n     }\n-    const Flags flags = compiler->flags();\n     DCHECK_IMPLIES(IsEitherUnicode(flags),\n                    !unibrow::Utf16::IsLeadSurrogate(atom->data().at(0)));\n     bool contains_trail_surrogate =\n+#ifdef V8_INTL_SUPPORT\n+        first_is_trail_surrogate;\n+#else\n         unibrow::Utf16::IsTrailSurrogate(atom->data().at(0));\n+#endif\n     int first_in_run = i;\n     i++;\n     // Find a run of single-character atom alternatives that have identical\n"
+    },
+    {
+      "sha": "f76a45ea41320997e5f354477c20c0249f33d834",
+      "patch": "diff --git a/src/regexp/regexp-compiler-tonode.cc b/src/regexp/regexp-compiler-tonode.cc\nindex 2ae70c3fe7e..8e639e2f8ca 100644\n--- a/src/regexp/regexp-compiler-tonode.cc\n+++ b/src/regexp/regexp-compiler-tonode.cc\n@@ -1147,6 +1147,16 @@ Node* Disjunction::ToNodeImpl(Compiler* compiler, Node* on_success) {\n   ZoneList<Tree*>* alternatives = this->alternatives();\n \n   if (alternatives->length() > 2) {\n+    if (compiler->read_backward()) {\n+      // Keep empty branches in the same sequence representation as literal\n+      // branches while retaining their original positions.\n+      for (int i = 0; i < alternatives->length(); ++i) {\n+        if (alternatives->at(i)->IsEmpty()) {\n+          alternatives->at(i) = compiler->zone()->New<Atom>(\n+              base::Vector<const base::uc16>());\n+        }\n+      }\n+    }\n     if (!compiler->read_backward() && v8_flags.regexp_optimization) {\n       // We deliberately disable SortConsecutiveAtoms and\n       // RationalizeConsecutiveAtoms in lookbehinds rather than keep\n"
+    }
+  ],
+  "coupling": "The case-equivalence change stages keys for each atom and reads the first key while merging single-character alternatives. The lookbehind change preserves empty alternatives as zero-length atoms. Only their combination passes an empty atom to the key reader; a zero-length allocation is then read at index zero.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "command": "out/x64.asan/d8 pocs/probe.js",
+      "expected": "AddressSanitizer: heap-buffer-overflow"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+ "project": "libssh2",
+ "window_id": "209cbd9c2dd94a7cce1fcc2126f757c8321b3ce70710ebd1b37521b46446da00",
+ "base": "99f17f4fe808301045300300c1a7fd40abbc50ff",
+ "maint_batch_tip": "53273436f5d51ec8a64aa250d1101d138bf3a309",
+ "tree": "a72e537c8f69dc03e70cd60cb0c677dcbea73433",
+ "n_commits": 65,
+ "n_editable": 65,
+ "list_sha1": "7315fdb010daf2ae791b5f2b6f35354a3f0a791b",
+ "tar_sha256": "f52e7a9f6e90134b677fc16702d0131287ad76ac36e6c6fcef4426b9908cf308",
+ "tar_bytes": 14223360,
+ "built_utc": "2026-10-17T20:13:20Z",
+ "cyberdual": "f685a97c"
+}

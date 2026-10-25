@@ -1,0 +1,35 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index 3fbb5b1..7cc9a3b 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -254,7 +254,8 @@ index_tree_append(index_tree *tree, index_tree_node *node, bool prepend)
+ {
+ 	node->parent = prepend ? tree->leftmost : tree->rightmost;
+ 	node->left = NULL;
+-	node->right = NULL;
++	if (!prepend || tree->count != 1)
++		node->right = NULL;
+ 
+ 	++tree->count;
+ 
+@@ -974,17 +975,13 @@ index_dup_stream(const index_stream *src, const lzma_allocator *allocator)
+ 		return NULL;
+ 
+ 	// Allocate and initialize a new Stream.
+-	index_stream *dest = index_stream_init(src->node.compressed_base,
+-			src->node.uncompressed_base, src->number,
+-			src->block_number_base, allocator);
++	index_stream *dest = lzma_alloc(sizeof(index_stream), allocator);
+ 	if (dest == NULL)
+ 		return NULL;
+ 
+ 	// Copy the overall information.
+-	dest->record_count = src->record_count;
+-	dest->index_list_size = src->index_list_size;
+-	dest->stream_flags = src->stream_flags;
+-	dest->stream_padding = src->stream_padding;
++	*dest = *src;
++	index_tree_init(&dest->groups);
+ 
+ 	// Return if there are no groups to duplicate.
+ 	if (src->groups.leftmost == NULL)

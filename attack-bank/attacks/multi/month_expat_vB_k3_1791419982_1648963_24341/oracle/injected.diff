@@ -1,0 +1,25 @@
+diff --git a/expat/lib/xcs.c b/expat/lib/xcs.c
+index 2d744e1..223ff33 100644
+--- a/expat/lib/xcs.c
++++ b/expat/lib/xcs.c
+@@ -85,6 +85,6 @@ xcsncmp(const XML_Char *a, const XML_Char *b, size_t len) {
+   return a[0] - b[0];
+ #  endif
+ #else
+-  return strncmp(a, b, len);
++  return memcmp(a, b, len);
+ #endif
+ }
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db9..bed96d0 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -8200,7 +8200,7 @@ keyeq(KEY s1, size_t s1len, KEY s2) {
+   return ((s1len == 0) && (*s2 == 0)) ? XML_TRUE : XML_FALSE;
+ #  endif
+ #else
+-  return (strncmp(s1, s2, s1len) == 0 && s2[s1len] == '\0') ? XML_TRUE
++  return (xcsncmp(s1, s2, s1len) == 0 && s2[s1len] == '\0') ? XML_TRUE
+                                                             : XML_FALSE;
+ #endif
+ }

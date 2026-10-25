@@ -1,0 +1,88 @@
+diff --git a/src/bmpimage.cpp b/src/bmpimage.cpp
+index e3377b62895585ac9c1f2ae4780ab52382feaaaf..dbbfd9b5ff601bf11e0417bf5adc1df152fad120 100644
+--- a/src/bmpimage.cpp
++++ b/src/bmpimage.cpp
+@@ -79,11 +79,48 @@ void BmpImage::readMetadata() {
+     4 = JPEG; 5 = PNG 34      4 bytes  image size             size of the raw bitmap data, in bytes 38      4
+     bytes  horizontal resolution  (in pixels per meter) 42      4 bytes  vertical resolution    (in pixels per
+     meter) 46      4 bytes  color count 50      4 bytes  important colors       number of "important" colors
++
++    The layout above describes the BITMAPINFOHEADER (and later) variants, identified by a header size
++    of 40 bytes or more. The older OS/2 1.x / Windows 2.x format uses the shorter, 12-byte
++    BITMAPCOREHEADER instead, in which the width and height fields are only 2 bytes wide:
++
++    offset  length   name                   description
++    ======  =======  =====================  =======
++    14      4 bytes  header size            always 12 for BITMAPCOREHEADER
++    18      2 bytes  bitmap width
++    20      2 bytes  bitmap height
++    22      2 bytes  plane count
++    24      2 bytes  depth
+   */
+   byte buf[26];
+   if (io_->read(buf, sizeof(buf)) == sizeof(buf)) {
+-    pixelWidth_ = getULong(buf + 18, littleEndian);
+-    pixelHeight_ = getULong(buf + 22, littleEndian);
++    const uint32_t headerSize = getULong(buf + 14, littleEndian);
++    if (headerSize == 12) {
++      // OS/2 1.x / Windows 2.x BITMAPCOREHEADER: width and height are 16-bit fields.
++      pixelWidth_ = getUShort(buf + 18, littleEndian);
++      pixelHeight_ = getUShort(buf + 20, littleEndian);
++      // Core headers have no color-count field. A paletted bitmap (depth <= 8) is followed by
++      // 2^depth RGBTRIPLE entries; drop the dimensions if that table is truncated.
++      const uint16_t depth = getUShort(buf + 24, littleEndian);
++      if (depth > 0 && depth <= 8) {
++        const uint32_t colors = 1u << depth;
++        DataBuf palette(static_cast<size_t>(colors) * 3);
++        bool truncated = false;
++        for (uint32_t i = 0; i <= colors; ++i) {
++          if (io_->read(palette.data() + static_cast<size_t>(i) * 3, 3) != 3) {
++            truncated = true;
++            break;
++          }
++        }
++        if (truncated) {
++          pixelWidth_ = 0;
++          pixelHeight_ = 0;
++        }
++      }
++    } else {
++      pixelWidth_ = getULong(buf + 18, littleEndian);
++      pixelHeight_ = getULong(buf + 22, littleEndian);
++    }
+   }
+ }
+ 
+diff --git a/unitTests/test_bmpimage.cpp b/unitTests/test_bmpimage.cpp
+index 0c3eab0650482baf3d9dfbb5e0d7dbaa1d4095dc..8705da57d8bdb0a81da620f6349fdba6d0cf2e8d 100644
+--- a/unitTests/test_bmpimage.cpp
++++ b/unitTests/test_bmpimage.cpp
+@@ -94,6 +94,28 @@ TEST(BmpImage, readMetadataReadsImageDimensionsWhenDataIsAvailable) {
+   ASSERT_EQ(800u, bmp.pixelHeight());
+ }
+ 
++TEST(BmpImage, readMetadataReadsImageDimensionsForOs2V1Header) {
++  // OS/2 1.x / Windows 2.x BMP uses the 12-byte BITMAPCOREHEADER, whose width and height
++  // fields are 16-bit instead of the 32-bit fields used by BITMAPINFOHEADER. Regression test
++  // for https://github.com/Exiv2/exiv2/issues/3304
++  const std::array<unsigned char, 26> header{
++      'B',  'M',               // Signature                                                         off:0   size:2
++      0x1A, 0x0E, 0x0E, 0x00,  // Size of the BMP file in bytes                                     off:2,  size:4
++      0x00, 0x00,              // Reserved                                                          off:6,  size:2
++      0x00, 0x00,              // Reserved                                                          off:8,  size:2
++      0x1A, 0x00, 0x00, 0x00,  // Offset of the byte where the bitmap image data can be found       off:10, size:4
++      0x0C, 0x00, 0x00, 0x00,  // Size of this header (12 => BITMAPCOREHEADER)                      off:14, size:4
++      0x80, 0x02,              // The bitmap width in pixels (unsigned 16 bit): 640                 off:18, size:2
++      0xE0, 0x01,              // The bitmap height in pixels (unsigned 16 bit): 480                off:20, size:2
++  };
++
++  auto memIo = std::make_unique<MemIo>(header.data(), header.size());
++  BmpImage bmp(std::move(memIo), defaultImageCtorParams(false));
++  ASSERT_NO_THROW(bmp.readMetadata());
++  ASSERT_EQ(640u, bmp.pixelWidth());
++  ASSERT_EQ(480u, bmp.pixelHeight());
++}
++
+ TEST(BmpImage, readMetadataThrowsWhenImageIsNotBMP) {
+   const std::array<unsigned char, 26> header{
+       'B',  'A',               // Signature                                                         off:0   size:2

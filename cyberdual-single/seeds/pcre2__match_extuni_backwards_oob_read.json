@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-125",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "a2b146a3245a930aa4c8ea8b33c0d83092daa7c9",
+  "parent_sha": "a2b146a3245a930aa4c8ea8b33c0d83092daa7c9",
+  "project": "pcre2",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/PCRE2Project/pcre2",
+  "repo_url": "https://github.com/PCRE2Project/pcre2",
+  "source": "reselect",
+  "target": "pcre2",
+  "task": "pcre2_match() on an invalid-UTF subject (PCRE2_MATCH_INVALID_UTF) with a grapheme-cluster/\\X (extuni) backwards scan reads before the subject start (used start_subject instead of check_subject) -> OOB read (GHSA-9qww-pwc4-77qq); src/pcre2_match.c + src/pcre2_extuni.c.",
+  "task_iid": "pcre2__match_extuni_backwards_oob_read",
+  "vuln_desc": "pcre2_match() on an invalid-UTF subject (PCRE2_MATCH_INVALID_UTF) with a grapheme-cluster/\\X (extuni) backwards scan reads before the subject start (used start_subject instead of check_subject) -> OOB read (GHSA-9qww-pwc4-77qq); src/pcre2_match.c + src/pcre2_extuni.c."
+}

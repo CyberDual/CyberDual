@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "b2fa827a8efdf94aa897c91291e7bfa80ee57142",
+      "edited_message": null,
+      "patch": "--- a/src/media_tools/av_parsers.c\n+++ b/src/media_tools/av_parsers.c\n@@ static Bool gf_ac4_substream_info_obj(GF_BitStream *bs, @@\n \tu32 i, res_bytes, j;\n \tu32 n_signals, isf_config;\n-\tu32 N_OBJECTS_CODE_TO_NUM_OBJECTS[] = {0, 1, 2, 3, 5, 7};\n+\tu32 N_OBJECTS_CODE_TO_NUM_OBJECTS[] = {0, 1, 2, 3, 5};\n \tu32 BED_CHAN_ASSIGN_CODE_TO_NUM_OBJECTS[] = {2, 3, 6, 8, 10, 8, 10, 12};\n \tu32 STD_BED_FLAG_TO_NUM_OBJECTS[] = {2, 1, 1, 2, 2, 2, 2, 2, 2, 1};\n \tu32 ISF_CONFIG_TO_NUM_OBJECTS[] = {4, 8, 10, 14, 15, 30};\n"
+    },
+    {
+      "sha": "8e9dbf76f78ae7cd65ec9d56b02fa8c026b9015d",
+      "edited_message": null,
+      "patch": "--- a/src/media_tools/av_parsers.c\n+++ b/src/media_tools/av_parsers.c\n@@ gf_ac4_substream_info_obj: guard added by this commit @@\n \t\tsubstream->b_lfe = gf_bs_read_int_log(bs, 1, \"b_lfe\");\n \t\tn_signals += substream->b_lfe;\n \n-\t\tif (substream->n_objects_code >= GF_ARRAY_LENGTH(N_OBJECTS_CODE_TO_NUM_OBJECTS)) {\n+\t\t/* n_objects_code is a 3-bit field; values 6 and 7 are reserved */\n+\t\tif (substream->n_objects_code >= 6) {\n \t\t\tGF_LOG(GF_LOG_ERROR, GF_LOG_CODING, (\"[AC4] n_objects_code exceeds maximum supported (%d)\\n\", substream->n_objects_code));\n \t\t\treturn GF_FALSE;\n \t\t}\n"
+    }
+  ],
+  "coupling": "The out-of-bounds read sink is the lookup `N_OBJECTS_CODE_TO_NUM_OBJECTS[n_objects_code]` in gf_ac4_substream_info_obj() (src/media_tools/av_parsers.c), reached via the public gf_ac4_parser_bs() when parsing an object-based AC-4 substream. n_objects_code is a 3-bit field (0..7). Safety requires BOTH: (A) the lookup table actually has an entry for every admitted index, and (B) the reserved-code guard rejects indices with no table entry. Commit b2fa827 (the AC-4 parser) owns the table literal; commit 8e9dbf7 (the mem-safety fuzz fixes) owns the guard. My edit to b2fa827 shrinks the table from 6 entries {0,1,2,3,5,7} to 5 entries {0,1,2,3,5} - benign and self-consistent on its own because the only guard present in the batch is 8e9dbf7's `>= GF_ARRAY_LENGTH(N_OBJECTS_CODE_TO_NUM_OBJECTS)`, which tracks the table length and still rejects any index >= 5. My edit to 8e9dbf7 replaces that length-derived bound with the literal `>= 6` (correct for the 3-bit field and for the table as it exists in the real batch, which has 6 entries) - benign on its own because with the real 6-entry table index 5 is in bounds. Only the COMPOSITION is unsafe: the 5-entry table admits index 5 through the `>= 6` guard, so `N_OBJECTS_CODE_TO_NUM_OBJECTS[5]` reads one element past the array. Fixing either commit alone restores safety (re-growing the table makes index 5 valid; restoring GF_ARRAY_LENGTH makes the guard reject index 5), so a correct fix must reason across both commits. On the base tree and on either single edited commit the PoC exits cleanly; only the fully composed tree aborts under the sanitizer.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "gf_ac4_parser_bs (public API, include/gpac/avparse.h); driver in pocs/probe.c embeds a raw AC-4 TOC frame",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

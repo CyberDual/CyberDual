@@ -1,0 +1,42 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index b0b30e7350846b379726a8e794ae40c2187cac8b..3b736dbdba39a9e190c3b6ebe958becb419c204e 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -7832,10 +7832,34 @@ dtdCopy(XML_Parser oldParser, DTD *newDtd, const DTD *oldDtd,
+       } else
+         newE->defaultAtts[i].value = NULL;
+ 
+-      NAMED *const nameAddedOrFound = lookup(parser, &(newE->defaultAttForName),
+-                                             attributeName, sizeof(NAMED));
+-      if (! nameAddedOrFound) {
++      /* Prefixed names are copied out of the parent pool so the hash key
++         stays valid for the lifetime of this parser. */
++      const XML_Char *keyName = attributeName;
++      if (newE->defaultAtts[i].id && newE->defaultAtts[i].id->prefix
++          && ! newE->defaultAtts[i].id->xmlns) {
++        const XML_Char *const prefixName
++            = newE->defaultAtts[i].id->prefix->name;
++        const size_t prefixLen = xcslen(prefixName);
++        const size_t fullLen = xcslen(attributeName);
++        const size_t localLen = fullLen - prefixLen;
++        XML_Char *const qualified
++            = MALLOC(parser, (prefixLen + localLen) * sizeof(XML_Char));
++        if (! qualified)
++          return 0;
++        memcpy(qualified, attributeName, (fullLen + 1) * sizeof(XML_Char));
++        keyName = qualified;
++      }
++
++      NAME_AND_DEFAULT_ATTRIBUTE *const nameAddedOrFound
++          = (NAME_AND_DEFAULT_ATTRIBUTE *)lookup(
++              parser, &(newE->defaultAttForName), keyName,
++              sizeof(NAME_AND_DEFAULT_ATTRIBUTE));
++      if (! nameAddedOrFound)
+         return 0;
++      /* First declaration is binding; later duplicates are ignored. */
++      if (! nameAddedOrFound->initialized) {
++        nameAddedOrFound->attIndex = i;
++        nameAddedOrFound->initialized = true;
+       }
+     }
+   }

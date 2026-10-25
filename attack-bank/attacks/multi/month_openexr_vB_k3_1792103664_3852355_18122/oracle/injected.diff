@@ -1,0 +1,36 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0a..016b0f7 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -197,19 +197,12 @@ readStringList (
+     //
+     const char* tablePtr = readPtr;
+ 
+-    size_t totalTableSize = 0;
+-
+     for (int i = 0; i < numberOfStrings; ++i)
+     {
+-        totalTableSize += readVariableLengthInteger (readPtr, endPtr);
++        readVariableLengthInteger (readPtr, endPtr);
+     }
+ 
+ 
+-    if(readPtr + totalTableSize > endPtr)
+-    {
+-        throw IEX_NAMESPACE::InputExc ("IDManifest too small for string table");
+-    }
+-
+     //
+     // now tablePtr points to size of string in string table, and readPtr
+     // points to the string itself
+@@ -219,10 +212,6 @@ readStringList (
+     {
+ 
+         size_t length = readVariableLengthInteger (tablePtr, endPtr);
+-        if (readPtr + length > endPtr)
+-        {
+-            throw IEX_NAMESPACE::InputExc ("IDManifest too small for string");
+-        }
+         outputVector.insert (outputVector.end (), string (readPtr, length));
+         readPtr += length;
+     }

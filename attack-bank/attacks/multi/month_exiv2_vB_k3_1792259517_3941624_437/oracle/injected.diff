@@ -1,0 +1,31 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 513f94bf..dec5c126 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -576,9 +576,8 @@ void QuickTimeVideo::decodeBlock(size_t recursion_depth, std::string const& ente
+   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);
+ 
+   const long bufMinSize = 4;
+-  DataBuf buf(bufMinSize + 1);
++  DataBuf buf(bufMinSize);
+   uint64_t size = 0;
+-  buf.data()[4] = '\0';
+ 
+   io_->read(buf.data(), 4);
+   if (io_->eof()) {
+@@ -627,13 +626,13 @@ static std::string readString(BasicIo& io, size_t size) {
+ 
+ void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size, size_t recursion_depth) {
+   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);
+-  assert(buf.size() > 4);
++  assert(buf.size() >= 4);
+ 
+   if (ignoreList(buf))
+     discard(size);
+ 
+   else if (dataIgnoreList(buf)) {
+-    decodeBlock(recursion_depth + 1, Exiv2::toString(buf.data()));
++    decodeBlock(recursion_depth + 1, std::string(reinterpret_cast<const char*>(buf.c_data())));
+   } else if (equalsQTimeTag(buf, "ftyp"))
+     fileTypeDecoder(size);
+ 

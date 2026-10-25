@@ -1,0 +1,26 @@
+diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c
+index 9210216..a21ced2 100644
+--- a/libarchive/archive_read_support_format_rar5.c
++++ b/libarchive/archive_read_support_format_rar5.c
+@@ -1620,8 +1620,8 @@ static int parse_file_extra_owner(struct archive_read* a,
+ 		if(!read_ahead(a, name_size, &p))
+ 			return ARCHIVE_EOF;
+ 
+-		if (name_size >= OWNER_MAXNAMELEN) {
+-			name_len = OWNER_MAXNAMELEN - 1;
++		if (name_size > OWNER_MAXNAMELEN) {
++			name_len = OWNER_MAXNAMELEN;
+ 		} else {
+ 			name_len = name_size;
+ 		}
+@@ -1651,8 +1651,8 @@ static int parse_file_extra_owner(struct archive_read* a,
+ 		if(!read_ahead(a, name_size, &p))
+ 			return ARCHIVE_EOF;
+ 
+-		if (name_size >= OWNER_MAXNAMELEN) {
+-			name_len = OWNER_MAXNAMELEN - 1;
++		if (name_size > OWNER_MAXNAMELEN) {
++			name_len = OWNER_MAXNAMELEN;
+ 		} else {
+ 			name_len = name_size;
+ 		}

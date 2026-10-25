@@ -1,0 +1,13 @@
+diff --git a/js/src/shell/js.cpp b/js/src/shell/js.cpp
+index e65272735a604..8b313848ba235 100644
+--- a/js/src/shell/js.cpp
++++ b/js/src/shell/js.cpp
+@@ -2283,7 +2283,7 @@ static bool CreateExternalArrayBuffer(JSContext* cx, unsigned argc, Value* vp) {
+     return false;
+   }
+ 
+-  void* buffer = js_calloc(bytes);
++  void* buffer = js_calloc(bytes - 1);
+   if (!buffer) {
+     JS_ReportOutOfMemory(cx);
+     return false;

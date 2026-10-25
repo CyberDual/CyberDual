@@ -1,0 +1,28 @@
+{
+ "task_iid": "v8__342410146633",
+ "project": "v8",
+ "engine": "v8",
+ "repo": "https://github.com/v8/v8",
+ "repo_url": "https://github.com/v8/v8",
+ "regime": "A",
+ "regime_full": "A_vuln_patch",
+ "family": "collect_seeds",
+ "source": "mined",
+ "parent_commit": "4c1f4c05419ea3812c8cac73e1ee8e84d0c93c82",
+ "parent_sha": "4c1f4c05419ea3812c8cac73e1ee8e84d0c93c82",
+ "fix_sha": "34241014663390c72e08c123faef6fedf395be8e",
+ "date": "2026-09-29T13:25:53+00:00",
+ "cwe": "",
+ "vuln_type": "Out-of-bounds (Wasm atomic memory.size / dynamic bounds checks)",
+ "vuln_desc": "[wasm] Atomic memory.size and dynamic bounds checks for shared memory",
+ "task": "[wasm] Atomic memory.size and dynamic bounds checks for shared memory",
+ "grading": "engine",
+ "selection_criteria": [
+  "in the three-month single-task period [2026-07-01, 2026-10-01); the shorter multi-commit replay window is separate",
+  "mined from v8/v8 with our collect_seeds policy (regime-A security signal), NOT SEC-bench",
+  "contamination-clean: earliest-public-date post-cutoff, not AI-authored",
+  "genuine memory-safety class (bounds/stack/overflow/corruption)",
+  "5 per engine, diverse classes"
+ ],
+ "selection_reason": "Mined from v8/v8 in-window (before 2026-10-01) via collect_seeds; Out-of-bounds (Wasm atomic memory.size / dynamic bounds checks); fix 3424101466 dated 2026-09-29."
+}

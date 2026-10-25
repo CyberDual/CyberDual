@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "fce52513dbd9b120eff427ebf431131207708175",
+  "parent_sha": "fce52513dbd9b120eff427ebf431131207708175",
+  "project": "matio",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/tbeu/matio",
+  "repo_url": "https://github.com/tbeu/matio",
+  "source": "reselect",
+  "target": "matio",
+  "task": "Feature: Mat_Open + Mat_VarRead of an HDF5 struct that lacks the MATLAB_fields attribute must enumerate fields via H5Literate (continue-iteration return value) instead of yielding an empty struct; core change single-FILE src/mat73.c (other 5 files are test fixtures).",
+  "task_iid": "matio__hdf5_struct_without_matlab_fields",
+  "vuln_desc": "Feature: Mat_Open + Mat_VarRead of an HDF5 struct that lacks the MATLAB_fields attribute must enumerate fields via H5Literate (continue-iteration return value) instead of yielding an empty struct; core change single-FILE src/mat73.c (other 5 files are test fixtures)."
+}

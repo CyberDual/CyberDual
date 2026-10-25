@@ -1,0 +1,15 @@
+diff --git a/src/hb-ot-layout-gsubgpos.hh b/src/hb-ot-layout-gsubgpos.hh
+index 73af70f..7cde4c5 100644
+--- a/src/hb-ot-layout-gsubgpos.hh
++++ b/src/hb-ot-layout-gsubgpos.hh
+@@ -5522,8 +5522,8 @@ struct ChainContextFormat2_5
+   void *external_cache_create () const
+   {
+     unsigned count = ruleSet.len;
+-    unsigned size = sizeof (external_cache_t) -
+-		    HB_VAR_ARRAY * sizeof (hb_ot_layout_ruleset_digest_t) +
++    unsigned size = sizeof (hb_ot_layout_binary_cache_t) +
++		    sizeof (hb_ot_layout_mapping_cache_t) +
+ 		    count * sizeof (hb_ot_layout_ruleset_digest_t);
+     external_cache_t *cache = (external_cache_t *) hb_malloc (size);
+     if (likely (cache))

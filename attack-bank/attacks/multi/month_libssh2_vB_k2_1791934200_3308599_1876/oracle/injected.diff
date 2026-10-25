@@ -1,0 +1,45 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..a81decc 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -375,6 +375,10 @@ int libssh2_knownhost_addc(LIBSSH2_KNOWNHOSTS *hosts,
+  * LIBSSH2_KNOWNHOST_CHECK_MATCH
+  * LIBSSH2_KNOWNHOST_CHECK_MISMATCH
+  */
++
++/* length in bytes of a parsed IPv6 address */
++#define LIBSSH2_KNOWNHOST_IPV6_LEN 16
++
+ static int knownhost_hex_value(char c)
+ {
+     if(c >= '0' && c <= '9')
+@@ -420,7 +424,7 @@ static int knownhost_parse_ipv4(const char *src, const char *end,
+ }
+ 
+ static int knownhost_parse_ipv6(const char *src, size_t len,
+-                                unsigned char result[16])
++                                unsigned char result[LIBSSH2_KNOWNHOST_IPV6_LEN])
+ {
+     unsigned short words[8];
+     const char *p = src;
+@@ -458,7 +462,8 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+         if(p < end && *p == '.') {
+             unsigned char ipv4[4];
+ 
+-            if(count > 6 || !knownhost_parse_ipv4(part, end, ipv4))
++            if(count > LIBSSH2_KNOWNHOST_IPV6_LEN / 2 - 1 ||
++               !knownhost_parse_ipv4(part, end, ipv4))
+                 return 0;
+ 
+             words[count++] =
+@@ -552,8 +557,8 @@ static int knownhost_plain_match(const char *host, const char *known)
+     const char *known_suffix;
+     size_t host_len;
+     size_t known_len;
+-    unsigned char host_binary[16];
+-    unsigned char known_binary[16];
++    unsigned char host_binary[LIBSSH2_KNOWNHOST_IPV6_LEN];
++    unsigned char known_binary[LIBSSH2_KNOWNHOST_IPV6_LEN];
+ 
+     if(!strcmp(host, known))
+         return 1;

@@ -1,0 +1,53 @@
+diff --git a/src/base/ftcalc.c b/src/base/ftcalc.c
+index c78d3b6..d416005 100644
+--- a/src/base/ftcalc.c
++++ b/src/base/ftcalc.c
+@@ -732,7 +732,7 @@
+       return 0;
+ 
+     /* Scale matrix to avoid overflows */
+-    shift = FT_MSB( val ) - 4 * sizeof ( FT_ULong ) + 2;
++    shift = FT_MSB( val ) - 4 * sizeof ( FT_ULong ) - 2;
+ 
+     if ( shift > 0 )
+     {
+diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c
+index 151aeac..65df259 100644
+--- a/src/type1/t1parse.c
++++ b/src/type1/t1parse.c
+@@ -264,6 +264,7 @@
+     FT_Memory  memory = parser->root.memory;
+     FT_Error   error  = FT_Err_Ok;
+     FT_ULong   size;
++    FT_UInt    segment_count = 0;
+ 
+ 
+     if ( parser->in_pfb )
+@@ -284,11 +285,12 @@
+         if ( tag != 0x8002U || size > stream->size - stream->pos )
+           break;
+ 
+-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||
++        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size + 1U ) ||
+              FT_STREAM_READ( priv_dict + priv_len, size )        )
+           break;
+ 
+         priv_len += size;
++        segment_count++;
+       }
+ 
+       /* Check that we have a private dictionary there */
+@@ -437,6 +439,13 @@
+     /* we now decrypt the encoded binary private dictionary */
+     psaux->t1_decrypt( parser->private_dict, parser->private_len, 55665U );
+ 
++    if ( parser->in_pfb && segment_count > 1 &&
++         parser->private_dict[parser->private_len - 1] != '\n' )
++      parser->private_dict[parser->private_len++] = '\n';
++
++    if ( parser->in_pfb )
++      parser->private_dict[parser->private_len] = '\0';
++
+     if ( parser->private_len < 4 )
+     {
+       FT_ERROR(( "T1_Get_Private_Dict:"

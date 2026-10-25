@@ -1,0 +1,45 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index e3afe51..9259741 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -1865,10 +1865,6 @@ XML_ParserFree(XML_Parser parser) {
+   TAG *tagList;
+   if ((parser == NULL) || isCalledFromInsideHandler(parser))
+     return;
+-  // The application-defined release callback may access the parser, so it
+-  // must run before any parser state is freed.
+-  if (parser->m_unknownEncodingRelease)
+-    callUnknownEncodingRelease(parser);
+   /* free m_tagStack and m_freeTagList */
+   tagList = parser->m_tagStack;
+   for (;;) {
+@@ -1914,10 +1910,18 @@ XML_ParserFree(XML_Parser parser) {
+     FREE(parser, openEntity);
+   }
+   parser->m_freeEntities = NULL;
++  // NOTE: We are avoiding FREE(..) here because parser->m_buffer
++  //       is not being allocated with MALLOC(..) but with plain
++  //       .malloc_fcn(..).
++  parser->m_mem.free_fcn(parser->m_buffer);
+   destroyBindings(parser->m_freeBindingList, parser);
+   destroyBindings(parser->m_inheritedBindings, parser);
+   poolDestroy(&parser->m_tempPool);
+   poolDestroy(&parser->m_temp2Pool);
++  // The application-defined release callback may access the parser, so it
++  // must run before the buffer and encoding state is freed.
++  if (parser->m_unknownEncodingRelease)
++    callUnknownEncodingRelease(parser);
+   FREE(parser, (void *)parser->m_protocolEncodingName);
+ #ifdef XML_DTD
+   /* external parameter entity parsers share the DTD structure
+@@ -1930,10 +1934,6 @@ XML_ParserFree(XML_Parser parser) {
+     dtdDestroy(parser->m_dtd, (XML_Bool)! parser->m_parentParser, parser);
+   FREE(parser, parser->m_atts);
+   FREE(parser, parser->m_groupConnector);
+-  // NOTE: We are avoiding FREE(..) here because parser->m_buffer
+-  //       is not being allocated with MALLOC(..) but with plain
+-  //       .malloc_fcn(..).
+-  parser->m_mem.free_fcn(parser->m_buffer);
+   FREE(parser, parser->m_dataBuf);
+   FREE(parser, parser->m_nsAtts);
+   FREE(parser, parser->m_unknownEncodingMem);

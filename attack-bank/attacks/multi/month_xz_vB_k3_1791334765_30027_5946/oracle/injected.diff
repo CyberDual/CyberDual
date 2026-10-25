@@ -1,0 +1,22 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index 3fbb5b1..8d31baf 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -766,10 +766,15 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,
+ 		// There is space in the last group at least for one Record.
+ 		++g->last;
+ 	} else {
+-		// We need to allocate a new group.
++		// We need to allocate a new group. Allocate at most
++		// INDEX_GROUP_SIZE Records at a time so that a crafted Index
++		// with a huge Number of Records cannot make us attempt a
++		// single enormous allocation; any remaining Records are
++		// placed into further groups.
+ 		assert(i->prealloc > 0);
++		const size_t prealloc = my_min(i->prealloc, INDEX_GROUP_SIZE);
+ 		g = lzma_alloc(sizeof(index_group)
+-				+ i->prealloc * sizeof(index_record),
++				+ prealloc * sizeof(index_record),
+ 				allocator);
+ 		if (g == NULL)
+ 			return LZMA_MEM_ERROR;

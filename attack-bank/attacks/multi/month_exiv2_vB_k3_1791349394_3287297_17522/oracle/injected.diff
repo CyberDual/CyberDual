@@ -1,0 +1,22 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 513f94b..0fed522 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -801,7 +801,7 @@ void QuickTimeVideo::trackApertureTagDecoder(size_t size) {
+ 
+ void QuickTimeVideo::CameraTagsDecoder(size_t size) {
+   size_t cur_pos = io_->tell();
+-  DataBuf buf(49);
++  DataBuf buf(48);
+   DataBuf buf2(4);
+ 
+   io_->readOrThrow(buf.data(), 4);
+@@ -833,7 +833,7 @@ void QuickTimeVideo::CameraTagsDecoder(size_t size) {
+     xmpData_["Xmp.video.FocalLength"] =
+         buf.read_uint32(0, littleEndian) / static_cast<double>(buf2.read_uint32(0, littleEndian));
+     io_->seek(95L, BasicIo::cur);
+-    io_->readOrThrow(buf.data(), 48);
++    io_->readOrThrow(buf.data(), 49);
+     buf.write_uint8(48, 0);
+     xmpData_["Xmp.video.Software"] = buf.data();
+     io_->readOrThrow(buf.data(), 4);

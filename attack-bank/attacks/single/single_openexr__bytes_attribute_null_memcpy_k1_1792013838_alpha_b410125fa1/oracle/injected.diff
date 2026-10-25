@@ -1,0 +1,128 @@
+diff --git a/src/lib/OpenEXR/ImfBytesAttribute.cpp b/src/lib/OpenEXR/ImfBytesAttribute.cpp
+index ee6a6f5755528de870b2b75de0e20a2030273493..6d9b10db1c4ffa0f69ff923ba6818c8b9b5163e8 100644
+--- a/src/lib/OpenEXR/ImfBytesAttribute.cpp
++++ b/src/lib/OpenEXR/ImfBytesAttribute.cpp
+@@ -34,19 +34,25 @@ BytesAttribute::BytesAttribute (
+     {
+         THROW (IEX_NAMESPACE::ArgExc, "Invalid data pointer.");
+     }
+-    memcpy (
+-        (unsigned char*) _data,
+-        (const unsigned char*) data,
+-        size);
++    if (size > 0)
++    {
++        memcpy (
++            (unsigned char*) _data,
++            (const unsigned char*) data,
++            size);
++    }
+ }
+ 
+ BytesAttribute::BytesAttribute (const BytesAttribute& other)
+     : typeHint (other.typeHint), _data (other._data.size ())
+ {
+-    memcpy (
+-        (unsigned char*) _data,
+-        (const unsigned char*) other._data,
+-        other._data.size ());
++    if (other._data.size () > 0)
++    {
++        memcpy (
++            (unsigned char*) _data,
++            (const unsigned char*) other._data,
++            other._data.size ());
++    }
+ }
+ 
+ // Note the destructor is defined here and not in the header file to
+@@ -133,7 +139,8 @@ BytesAttribute::readValueFrom (
+     // implementations in the OpenEXR library. An error in the underlying
+     // stream read is very rare, it's much more likely that an exception
+     // will be thrown.
+-    Xdr::readUnsignedChars<StreamIO> (is, _data, dataSize);
++    if (dataSize > 0)
++        Xdr::readUnsignedChars<StreamIO> (is, _data, dataSize);
+ }
+ 
+ void
+@@ -154,10 +161,13 @@ BytesAttribute::copyValueFrom (const Attribute& other)
+ 
+     typeHint = oa->typeHint;
+     _data.resizeErase (oa->_data.size ());
+-    memcpy (
+-        (unsigned char*) _data,
+-        (const unsigned char*) oa->_data,
+-        oa->_data.size ());
++    if (oa->_data.size () > 0)
++    {
++        memcpy (
++            (unsigned char*) _data,
++            (const unsigned char*) oa->_data,
++            oa->_data.size ());
++    }
+ }
+ 
+ Attribute*
+diff --git a/src/lib/OpenEXRCore/parse_header.c b/src/lib/OpenEXRCore/parse_header.c
+index 2226fbae92c777367e357a180c6af09651cbe32b..fcda1f5b17cc342b638e8c4aa7d2d8f7d14d51ab 100644
+--- a/src/lib/OpenEXRCore/parse_header.c
++++ b/src/lib/OpenEXRCore/parse_header.c
+@@ -761,6 +761,7 @@ extract_attr_bytes(
+     int32_t n;
+     int32_t hint_length;
+     size_t bytes_length;
++    size_t value_size;
+     exr_result_t rv;
+ 
+     rv = check_bad_attrsz(scratch, attrsz, 1, aname, tname, &n);
+@@ -789,23 +790,38 @@ extract_attr_bytes(
+             ctxt, EXR_ERR_INVALID_ATTR,
+             "Attribute '%s': Invalid size (%d) for type_hint.", aname, hint_length);
+ 
+-    bytes_length = attrsz - sizeof(uint32_t) - hint_length;
++    value_size = (size_t) attrsz - sizeof (uint32_t);
++    if ((size_t) hint_length > value_size)
++        return ctxt->print_error (
++            ctxt,
++            EXR_ERR_INVALID_ATTR,
++            "Attribute '%s': Invalid size (%d) for type_hint.",
++            aname,
++            hint_length);
++
++    bytes_length = value_size - (size_t) hint_length;
+ 
+     rv = exr_attr_bytes_init(ctxt, attrdata, (size_t)hint_length, bytes_length);
+     if (rv != EXR_ERR_SUCCESS) return rv;
+ 
+-    rv = scratch->sequential_read(scratch, (void*)attrdata->type_hint, (uint64_t)hint_length);
+-    if (rv != EXR_ERR_SUCCESS) {
+-        exr_attr_bytes_destroy(ctxt, attrdata);
+-        return ctxt->print_error(
+-            ctxt, rv, "Failed to read bytes attribute '%s'", aname);
++    if (hint_length > 0)
++    {
++        rv = scratch->sequential_read(scratch, (void*)attrdata->type_hint, (uint64_t)hint_length);
++        if (rv != EXR_ERR_SUCCESS) {
++            exr_attr_bytes_destroy(ctxt, attrdata);
++            return ctxt->print_error(
++                ctxt, rv, "Failed to read bytes attribute '%s'", aname);
++        }
+     }
+ 
+-    rv = scratch->sequential_read(scratch, (void*)attrdata->data, (uint64_t)bytes_length);
+-    if (rv != EXR_ERR_SUCCESS) {
+-        exr_attr_bytes_destroy(ctxt, attrdata);
+-        return ctxt->print_error(
+-            ctxt, rv, "Failed to read bytes attribute '%s'", aname);
++    if (bytes_length > 0)
++    {
++        rv = scratch->sequential_read(scratch, (void*)attrdata->data, value_size);
++        if (rv != EXR_ERR_SUCCESS) {
++            exr_attr_bytes_destroy(ctxt, attrdata);
++            return ctxt->print_error(
++                ctxt, rv, "Failed to read bytes attribute '%s'", aname);
++        }
+     }
+     return rv;
+ }

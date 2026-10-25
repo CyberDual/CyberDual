@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-787",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "ec9c286d5c10cf1c388b58a442ccefded42254fd",
+  "parent_sha": "ec9c286d5c10cf1c388b58a442ccefded42254fd",
+  "project": "pcre2",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/PCRE2Project/pcre2",
+  "repo_url": "https://github.com/PCRE2Project/pcre2",
+  "source": "reselect",
+  "target": "pcre2",
+  "task": "pcre2_dfa_match() on a deeply-recursive pattern/subject with a heap limit set: more_workspace() under-sizes (integer-overflow in block-doubling / reuses a too-small next block) and overflows the DFA workspace (GHSA-3r4p-g7gg-ppmf); single file src/pcre2_dfa_match.c.",
+  "task_iid": "pcre2__dfa_match_workspace_overflow",
+  "vuln_desc": "pcre2_dfa_match() on a deeply-recursive pattern/subject with a heap limit set: more_workspace() under-sizes (integer-overflow in block-doubling / reuses a too-small next block) and overflows the DFA workspace (GHSA-3r4p-g7gg-ppmf); single file src/pcre2_dfa_match.c."
+}

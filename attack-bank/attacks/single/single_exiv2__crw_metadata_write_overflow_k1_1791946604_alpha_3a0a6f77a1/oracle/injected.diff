@@ -1,0 +1,60 @@
+diff --git a/src/crwimage_int.cpp b/src/crwimage_int.cpp
+index 9c20d7d2d4d8ecbea92ed5f1d4f8667fe83eaee5..a93557eb3772ba4d177168048cb330a7e813c10b 100644
+--- a/src/crwimage_int.cpp
++++ b/src/crwimage_int.cpp
+@@ -983,23 +983,50 @@ void CrwMap::encode0x2008(const Image& image, const CrwMapping& pCrwMapping, Cif
+ // free functions
+ DataBuf packIfdId(const ExifData& exifData, IfdId ifdId, ByteOrder byteOrder) {
+   const uint16_t size = 1024;
+-  DataBuf buf(size);
+-
+   uint16_t len = 0;
+ 
++  // Check for integer overflow before narrowing the component end. The previous
++  // sum was computed in uint16_t, so a large value wrapped into the directory buffer.
++  auto componentEnd = [](const Exifdatum& exif) {
++    const uint32_t offset = static_cast<uint32_t>(exif.tag()) * 2;
++    if (exif.size() > 0xffffffffu - offset) {
++      throw Error(ErrorCode::kerCorruptedMetadata);
++    }
++    return offset + static_cast<uint32_t>(exif.size());
++  };
++
+   for (auto&& exif : exifData) {
+     if (exif.ifdId() != ifdId)
+       continue;
+-    const uint16_t s = (exif.tag() * 2) + static_cast<uint16_t>(exif.size());
++    const uint32_t end = componentEnd(exif);
++    if (end > 0xffffu) {
++      if (static_cast<uint16_t>(end) <= size) {
++        throw Error(ErrorCode::kerCorruptedMetadata);
++      }
++      EXV_ERROR << "packIfdId out-of-bounds error: s = " << std::dec << end << "\n";
++      continue;
++    }
++    const auto s = static_cast<uint16_t>(end);
+     if (s <= size) {
+       len = std::max(len, s);
+-      exif.copy(buf.data(exif.tag() * 2), byteOrder);
+     } else {
+       EXV_ERROR << "packIfdId out-of-bounds error: s = " << std::dec << s << "\n";
+     }
+   }
++
+   // Round the size to make it even.
+-  buf.resize(len + (len % 2));
++  DataBuf buf(static_cast<size_t>(len - (len % 2)));
++
++  for (auto&& exif : exifData) {
++    if (exif.ifdId() != ifdId)
++      continue;
++    const uint32_t offset = static_cast<uint32_t>(exif.tag()) * 2;
++    const uint32_t end = componentEnd(exif);
++    if (end > 0xffffu || static_cast<uint16_t>(end) > size) {
++      continue;
++    }
++    exif.copy(buf.data(offset), byteOrder);
++  }
+   return buf;
+ }
+ 

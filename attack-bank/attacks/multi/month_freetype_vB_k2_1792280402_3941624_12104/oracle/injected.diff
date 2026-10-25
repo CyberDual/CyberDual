@@ -1,0 +1,22 @@
+diff --git a/src/truetype/ttvarc.c b/src/truetype/ttvarc.c
+index 50d08bcb9..7111a1160 100644
+--- a/src/truetype/ttvarc.c
++++ b/src/truetype/ttvarc.c
+@@ -79,7 +79,7 @@
+   /* Stack allocation limits for performance. */
+ #define VARC_STACK_AXIS_COUNT     64
+ #define VARC_STACK_DELTA_COUNT    128
+-#define VARC_STACK_COORD_COUNT    64
++#define VARC_STACK_COORD_COUNT    63
+ #define VARC_STACK_INDICES_COUNT  64
+ 
+ 
+@@ -3269,7 +3269,7 @@
+       {
+         /* allocate new_coords only                  */
+         /* (`parent_coords` replaces `saved_coords`) */
+-        if ( num_coords <= VARC_STACK_COORD_COUNT )
++        if ( num_coords <= 64 )
+           new_coords = stack_new_coords;
+         else
+         {

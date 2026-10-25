@@ -1,0 +1,42 @@
+diff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp
+index 98e89d68844d3..d32c3f0f9ecf4 100644
+--- a/js/src/vm/RegExpObject.cpp
++++ b/js/src/vm/RegExpObject.cpp
+@@ -735,8 +735,9 @@ bool RegExpShared::quickCheckRejects(const JS::Latin1Char* chars, size_t length,
+     return true;
+   }
+ 
+-  // If there are at least 4 characters remaining in the string, test the mask.
+-  if (index + sizeof(uint32_t) <= length) {
++  // Test the mask when enough characters remain in the string.
++  uint32_t remaining = uint32_t(length - index);
++  if (hasQuickCheckChars(remaining)) {
+     // We use memcpy here because this load may not be aligned. It will generate
+     // a regular load on every platform we care about.
+     uint32_t word;
+diff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h
+index a574e7482d24f..88751c3d45074 100644
+--- a/js/src/vm/RegExpShared.h
++++ b/js/src/vm/RegExpShared.h
+@@ -77,6 +77,10 @@ class RegExpShared
+     HasQuickCheck = 1 << 0,
+   };
+ 
++  static bool hasQuickCheckChars(uint32_t remaining) {
++    return remaining != 0;
++  }
++
+   using ByteCode = js::irregexp::ByteArrayData;
+   using JitCodeTable = js::irregexp::ByteArray;
+   using JitCodeTables = Vector<JitCodeTable, 0, SystemAllocPolicy>;
+@@ -93,6 +97,10 @@ class RegExpShared
+             uint32_t{1} << (c % QuickCheckBitsetBitsPerWord)};
+   }
+ 
++  static bool hasQuickCheckChars(uint64_t remaining) {
++    return remaining >= sizeof(uint32_t);
++  }
++
+  private:
+   friend class RegExpStatics;
+   friend class RegExpZone;

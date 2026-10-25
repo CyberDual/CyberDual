@@ -1,0 +1,296 @@
+diff --git a/build-emscripten.sh b/build-emscripten.sh
+deleted file mode 100755
+index a1da417b7330ca63c87b8c0f02b8a2dfe760d78f..0000000000000000000000000000000000000000
+--- a/build-emscripten.sh
++++ /dev/null
+@@ -1,203 +0,0 @@
+-#!/bin/bash
+-set -e
+-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+-
+-if [[ $# -ne 1 ]] ; then
+-    echo "Usage: $0 SRCDIR"
+-    echo
+-    echo "It is recommended to build in a separate directory."
+-    echo "Then specify this directory as an argument to this script."
+-    echo "Example:"
+-    echo "  mkdir buildjs"
+-    echo "  cd buildjs"
+-    echo "  USE_WASM=0 ../build-emscripten.sh .."
+-    echo
+-    echo "This should generate a libheif.js and (optionally, without the USE_WASM=0) a libheif.wasm"
+-    exit 5
+-fi
+-
+-SRCDIR=$1
+-
+-CORES="${CORES:-`nproc --all`}"
+-
+-ENABLE_LIBDE265="${ENABLE_LIBDE265:-1}"
+-LIBDE265_VERSION="${LIBDE265_VERSION:-1.0.15}"
+-
+-ENABLE_AOM="${ENABLE_AOM:-0}"
+-AOM_VERSION="${AOM_VERSION:-3.6.1}"
+-
+-# Webcodecs is not on by default b/c asyncify increases the binary size considerably
+-ENABLE_WEBCODECS="${ENABLE_WEBCODECS:-0}"
+-
+-ENABLE_UNCOMPRESSED="${ENABLE_UNCOMPRESSED:-0}"
+-
+-# J2K still defunct. OpenJPEG compiles, but library is not picked up by libheif cmake.
+-ENABLE_OPENJPEG="${ENABLE_OPENJPEG:-0}"
+-OPENJPEG_VERSION="${OPENJPEG_VERSION:-2.5.4}"
+-
+-STANDALONE="${STANDALONE:-0}"
+-DEBUG="${DEBUG:-0}"
+-USE_ES6="${USE_ES6:-0}"
+-USE_WASM="${USE_WASM:-1}"
+-USE_TYPESCRIPT="${USE_TYPESCRIPT:-1}"
+-USE_UNSAFE_EVAL="${USE_UNSAFE_EVAL:-1}"
+-
+-echo "Build using ${CORES} CPU cores"
+-
+-LIBRARY_LINKER_FLAGS=""
+-LIBRARY_INCLUDE_FLAGS=""
+-
+-CONFIGURE_ARGS_LIBDE265=""
+-if [ "$ENABLE_LIBDE265" = "1" ]; then
+-    [ -s "libde265-${LIBDE265_VERSION}.tar.gz" ] || curl \
+-        -L \
+-        -o libde265-${LIBDE265_VERSION}.tar.gz \
+-        https://github.com/strukturag/libde265/releases/download/v${LIBDE265_VERSION}/libde265-${LIBDE265_VERSION}.tar.gz
+-    if [ ! -s "libde265-${LIBDE265_VERSION}/libde265/.libs/libde265.a" ]; then
+-        tar xf libde265-${LIBDE265_VERSION}.tar.gz
+-        cd libde265-${LIBDE265_VERSION}
+-        [ -x configure ] || ./autogen.sh
+-        CXXFLAGS=-O3 emconfigure ./configure --enable-static --disable-shared --disable-sse --disable-dec265 --disable-sherlock265
+-        emmake make -j${CORES}
+-        cd ..
+-    fi
+-    LIBDE265_DIR="$(pwd)/libde265-${LIBDE265_VERSION}"
+-    CONFIGURE_ARGS_LIBDE265="-DLIBDE265_INCLUDE_DIR=${LIBDE265_DIR} -DLIBDE265_LIBRARY=-L${LIBDE265_DIR}/libde265/.libs"
+-    LIBRARY_LINKER_FLAGS="$LIBRARY_LINKER_FLAGS -L${LIBDE265_DIR}/libde265/.libs -lde265"
+-fi
+-
+-CONFIGURE_ARGS_AOM=""
+-if [ "$ENABLE_AOM" = "1" ]; then
+-    [ -s "aom-${AOM_VERSION}.tar.gz" ] || curl \
+-        -L \
+-        -o aom-${AOM_VERSION}.tar.gz \
+-        "https://aomedia.googlesource.com/aom/+archive/v${AOM_VERSION}.tar.gz"
+-    if [ ! -s "aom-${AOM_VERSION}/libaom.a" ]; then
+-        mkdir -p aom-${AOM_VERSION}/aom-source
+-        tar xf aom-${AOM_VERSION}.tar.gz -C aom-${AOM_VERSION}/aom-source
+-        cd aom-${AOM_VERSION}
+-
+-        emcmake cmake aom-source \
+-            -DENABLE_CCACHE=1 \
+-            -DAOM_TARGET_CPU=generic \
+-            -DENABLE_APPS=0 \
+-            -DENABLE_DOCS=0 \
+-            -DENABLE_TESTS=0 \
+-            -DENABLE_EXAMPLES=0 \
+-            -DENABLE_TESTDATA=0 \
+-            -DENABLE_TOOLS=0 \
+-            -DCONFIG_MULTITHREAD=0 \
+-            -DCONFIG_RUNTIME_CPU_DETECT=0 \
+-            -DBUILD_SHARED_LIBS=0 \
+-            -DCMAKE_BUILD_TYPE=Release
+-
+-        emmake make -j${CORES}
+-
+-        cd ..
+-    fi
+-
+-    AOM_DIR="$(pwd)/aom-${AOM_VERSION}"
+-    CONFIGURE_ARGS_AOM="-DAOM_INCLUDE_DIR=${AOM_DIR}/aom-source -DAOM_LIBRARY=-L${AOM_DIR}"
+-    LIBRARY_LINKER_FLAGS="$LIBRARY_LINKER_FLAGS -L${AOM_DIR} -laom"
+-fi
+-
+-CONFIGURE_ARGS_OPENJPEG=""
+-if [ "$ENABLE_OPENJPEG" = "1" ]; then
+-    [ -s "openjpeg-${OPENJPEG__VERSION}.tar.gz" ] || curl \
+-        -L \
+-        -o openjpeg-${OPENJPEG_VERSION}.tar.gz \
+-	"https://github.com/uclouvain/openjpeg/archive/refs/tags/v${OPENJPEG_VERSION}.tar.gz"
+-    if [ ! -s "openjpeg-${OPENJPEG_VERSION}/bin/libopenjp2.a" ]; then
+-        mkdir -p openjpeg-${OPENJPEG_VERSION}/openjpeg-source
+-        tar xf openjpeg-${OPENJPEG_VERSION}.tar.gz -C openjpeg-${OPENJPEG_VERSION}/openjpeg-source
+-        cd openjpeg-${OPENJPEG_VERSION}
+-        emcmake cmake openjpeg-source/openjpeg-${OPENJPEG_VERSION} \
+-            -DBUILD_SHARED_LIBS=0 \
+-            -DCMAKE_BUILD_TYPE=Release \
+-	    -DCMAKE_INSTALL_PREFIX=openjpeg-install
+-
+-        emmake make -j${CORES}
+-        emmake make install -j${CORES}
+-
+-        cd ..
+-    fi
+-
+-    J2K_DIR="$(pwd)/openjpeg-${OPENJPEG_VERSION}"
+-    CONFIGURE_ARGS_OPENJPEG="-DWITH_OpenJPEG_DECODER=ON -DCMAKE_PREFIX_PATH=${J2K_DIR}/openjpeg-install -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH"
+-    LIBRARY_LINKER_FLAGS="$LIBRARY_LINKER_FLAGS -L${J2K_DIR}/bin -lopenjp2"
+-fi
+-
+-CONFIGURE_ARGS_WEBCODECS=""
+-if [ "$ENABLE_WEBCODECS" = "1" ]; then
+-    CONFIGURE_ARGS_WEBCODECS="-DWITH_WEBCODECS=ON"
+-fi
+-
+-CONFIGURE_ARGS_UNCOMPRESSED=""
+-if [ "$ENABLE_UNCOMPRESSED" = "1" ]; then
+-    CONFIGURE_ARGS_UNCOMPRESSED="-DWITH_UNCOMPRESSED_CODEC=ON"
+-fi
+-
+-EXTRA_EXE_LINKER_FLAGS="-lembind"
+-EXTRA_COMPILER_FLAGS=""
+-if [ "$STANDALONE" = "1" ]; then
+-    EXTRA_EXE_LINKER_FLAGS=""
+-    EXTRA_COMPILER_FLAGS="-D__EMSCRIPTEN_STANDALONE_WASM__=1"
+-fi
+-
+-CONFIGURE_ARGS="-DENABLE_MULTITHREADING_SUPPORT=OFF -DWITH_GDK_PIXBUF=OFF -DWITH_EXAMPLES=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_PLUGIN_LOADING=OFF"
+-emcmake cmake ${SRCDIR} $CONFIGURE_ARGS \
+-    -DCMAKE_BUILD_TYPE=Release \
+-    -DCMAKE_C_FLAGS="${EXTRA_COMPILER_FLAGS}" \
+-    -DCMAKE_CXX_FLAGS="${EXTRA_COMPILER_FLAGS}" \
+-    -DCMAKE_EXE_LINKER_FLAGS="${LIBRARY_LINKER_FLAGS} ${EXTRA_EXE_LINKER_FLAGS}" \
+-    $CONFIGURE_ARGS_LIBDE265 \
+-    $CONFIGURE_ARGS_AOM \
+-    $CONFIGURE_ARGS_WEBCODECS \
+-    $CONFIGURE_ARGS_UNCOMPRESSED \
+-    $CONFIGURE_ARGS_OPENJPEG
+-
+-VERBOSE=1 emmake make -j${CORES}
+-
+-LIBHEIFA="libheif/libheif.a"
+-EXPORTED_FUNCTIONS=$($EMSDK/upstream/bin/llvm-nm $LIBHEIFA --format=just-symbols | grep "^heif_\|^de265_\|^aom_" | grep "[^:]$" | sed 's/^/_/' | paste -sd "," -)
+-
+-echo "Running Emscripten..."
+-
+-BUILD_FLAGS="-lembind -o libheif.js --post-js ${SRCDIR}/post.js -sWASM=$USE_WASM -sDYNAMIC_EXECUTION=$USE_UNSAFE_EVAL"
+-
+-if [ "$ENABLE_WEBCODECS" = "1" ]; then
+-    BUILD_FLAGS="$BUILD_FLAGS -sASYNCIFY -sASYNCIFY_IMPORTS=['decode_with_browser_hevc']"
+-fi
+-
+-if [ "$USE_TYPESCRIPT" = "1" ]; then
+-    BUILD_FLAGS="$BUILD_FLAGS --emit-tsd libheif.d.ts"
+-fi
+-
+-RELEASE_BUILD_FLAGS="-O3"
+-
+-if [ "$STANDALONE" = "1" ]; then
+-    # Note: this intentionally overwrites the BUILD_FLAGS set above
+-    echo "Building in standalone (non-web) build mode"
+-    BUILD_FLAGS="-sSTANDALONE_WASM -sWASM -o libheif.wasm --no-entry"
+-fi
+-
+-if [ "$DEBUG" = "1" ]; then
+-    echo "Building in debug mode"
+-    RELEASE_BUILD_FLAGS="--profile -g"
+-fi
+-
+-if [ "$USE_ES6" = "1" ]; then
+-    BUILD_FLAGS="$BUILD_FLAGS -sEXPORT_ES6"
+-fi
+-
+-emcc -Wl,--whole-archive "$LIBHEIFA" -Wl,--no-whole-archive \
+-    -sEXPORTED_FUNCTIONS="$EXPORTED_FUNCTIONS,_free,_malloc,_memcpy" \
+-    -sMODULARIZE \
+-    -sEXPORT_NAME="libheif" \
+-    -sWASM_ASYNC_COMPILATION=0 \
+-    -sALLOW_MEMORY_GROWTH \
+-    -std=c++11 \
+-    $LIBRARY_INCLUDE_FLAGS \
+-    $LIBRARY_LINKER_FLAGS \
+-    $BUILD_FLAGS \
+-    $RELEASE_BUILD_FLAGS
+diff --git a/libheif/box.cc b/libheif/box.cc
+index 504e26e6988de13f77ac24b5d6be2fdbaa5f76eb..9313c082b6158c226dcf63924a896317c0786d6c 100644
+--- a/libheif/box.cc
++++ b/libheif/box.cc
+@@ -4028,6 +4028,9 @@ Error Box_iref::parse(BitstreamRange& range, const heif_security_limits* limits)
+               sstr.str()};
+     }
+ 
++    uint16_t reference_bytes = static_cast<uint16_t>(nRefs * (read_len / 8));
++    ref.to_item_ID.resize(reference_bytes / (read_len / 8));
++
+     for (int i = 0; i < nRefs; i++) {
+       if (range.eof()) {
+         std::stringstream sstr;
+@@ -4038,20 +4041,13 @@ Error Box_iref::parse(BitstreamRange& range, const heif_security_limits* limits)
+                 sstr.str()};
+       }
+ 
+-      ref.to_item_ID.push_back(static_cast<uint32_t>(range.read_uint(read_len)));
++      ref.to_item_ID[i] = static_cast<uint32_t>(range.read_uint(read_len));
+     }
+ 
+     m_references.push_back(ref);
+   }
+ 
+ 
+-  // --- check for duplicate references
+-
+-  if (auto error = check_for_double_references()) {
+-    return error;
+-  }
+-
+-
+ #if 0
+   // Note: This input sanity check first did not work as expected.
+   // Its idea was to prevent infinite recursions while decoding when the input file
+@@ -4148,26 +4144,6 @@ Error Box_iref::parse(BitstreamRange& range, const heif_security_limits* limits)
+ }
+ 
+ 
+-Error Box_iref::check_for_double_references() const
+-{
+-  for (const auto& ref : m_references) {
+-    std::set<heif_item_id> to_ids;
+-    for (const auto to_id : ref.to_item_ID) {
+-      if (to_ids.find(to_id) == to_ids.end()) {
+-        to_ids.insert(to_id);
+-      }
+-      else {
+-        return {heif_error_Invalid_input,
+-                heif_suberror_Unspecified,
+-                "'iref' has double references"};
+-      }
+-    }
+-  }
+-
+-  return Error::Ok;
+-}
+-
+-
+ void Box_iref::derive_box_version()
+ {
+   uint8_t version = 0;
+@@ -4192,10 +4168,6 @@ void Box_iref::derive_box_version()
+ 
+ Error Box_iref::write(StreamWriter& writer) const
+ {
+-  if (auto error = check_for_double_references()) {
+-    return error;
+-  }
+-
+   size_t box_start = reserve_box_header_space(writer);
+ 
+   int id_size = ((get_version() == 0) ? 2 : 4);
+diff --git a/libheif/box.h b/libheif/box.h
+index 424aebd124392205fa4d2063ed77ced44a98fe45..a686fd7cd0e93b679ebc15fbfe45f064389c95da 100644
+--- a/libheif/box.h
++++ b/libheif/box.h
+@@ -1105,8 +1105,6 @@ protected:
+ 
+   void derive_box_version() override;
+ 
+-  Error check_for_double_references() const;
+-
+ private:
+   std::vector<Reference> m_references;
+ 

@@ -1,0 +1,58 @@
+diff --git a/src/pcre2posix.c b/src/pcre2posix.c
+index 401ad0a..5556ffa 100644
+--- a/src/pcre2posix.c
++++ b/src/pcre2posix.c
+@@ -382,6 +382,30 @@ pcre2_regcomp(regex_t *preg, const char *pattern, int cflags)
+ 
+ 
+ 
++
++/*************************************************
++*        Copy one REG_STARTEND subject span      *
++*************************************************/
++
++/* REG_STARTEND subjects need not be NUL-terminated. Copy the selected bytes
++into a temporary and terminate it so the matcher sees a C string of the
++widened size_t span. */
++
++static unsigned char *
++regexec_copy_region(const char *string, PCRE2_SIZE start, PCRE2_SIZE end)
++{
++  PCRE2_SIZE n = end - start + 1;
++  unsigned char *buf = (unsigned char *)malloc(n + 1);
++
++  if (buf == NULL)
++    return NULL;
++  memcpy(buf, string + start, n);
++  buf[n] = 0;
++  return buf;
++}
++
++
++
+ /*************************************************
+ *              Match a regular expression        *
+ *************************************************/
+@@ -440,8 +464,21 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t
+     eo = strlen(string);
+   }
+ 
+-  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, (eo - so), 0,
++  PCRE2_SPTR match_subject = (PCRE2_SPTR)string + so;
++  unsigned char *copied = NULL;
++
++  /* The span is a size_t now, and the subject may not be terminated. */
++  if ((eflags & REG_STARTEND) != 0 && eo > so)
++  {
++    copied = regexec_copy_region(string, so, eo);
++    if (copied == NULL)
++      return REG_ESPACE;
++    match_subject = copied;
++  }
++
++  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, match_subject, (eo - so), 0,
+                    options, md, NULL);
++  free(copied);
+ 
+   /* Successful match */
+ 

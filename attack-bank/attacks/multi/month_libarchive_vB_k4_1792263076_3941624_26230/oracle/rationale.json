@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "e081f10b3f23613547f748faf8e96835ee99e846",
+      "edited_message": "rar5: decode read_var() from whatever lookahead is actually available\n\nread_var() now asks for the full 10-byte lookahead first, since that is the common case, and falls back to however many bytes are actually available via __archive_read_ahead() when that fails. It decodes within that smaller window instead of failing outright, only returning an error once the archive genuinely has no more bytes or the available bytes are exhausted without a terminator. No call site needed changes, since read_var() now only fails for genuine errors.\n\nAlso size the filename scratch buffer from the largest accepted name and its terminator.\n\nFixes #3484\n\nSigned-off-by: Gaurav Jadhav <gaurav.vjadhav01@gmail.com>\n",
+      "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\nindex af3891b0..a0c1c95a 100644\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -98,7 +98,7 @@ static const size_t g_unpack_window_size = 0x20000;\n /* These could have been static const's, but they aren't, because of\n  * Visual Studio. */\n #define MAX_NAME_IN_CHARS 2048\n-#define MAX_NAME_IN_BYTES (4 * MAX_NAME_IN_CHARS)\n+#define MAX_NAME_IN_BYTES (4 * (MAX_NAME_IN_CHARS - 1) + 1)\n \n struct file_header {\n \tssize_t bytes_remaining;\n"
+    },
+    {
+      "sha": "1597054eb0ec6208beff5aae6f2eee0ae60cef40",
+      "edited_message": "rar5: Adjust read_var/read_var_sized return values\n\nUSE ARCHIVE_OK, ARCHIVE_EOF, and ARCHIVE_FATAL for improved error handling. Integer overflows must not be considered \"end of file\".\n\nExpress the filename byte limit directly so long, multi-byte names can use the full scratch buffer.\n\nHandle different error message on 32 bit systems in tests.\n\nSigned-off-by: Tobias Stoeckmann <tobias@stoeckmann.org>\n",
+      "patch": "--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -2071,7 +2071,7 @@\n \tif(r != ARCHIVE_OK)\n \t\treturn r;\n \n-\tif(name_size > (MAX_NAME_IN_CHARS - 1)) {\n+\tif(name_size > (4 * MAX_NAME_IN_CHARS - 1)) {\n \t\tarchive_set_error(&a->archive, ARCHIVE_ERRNO_FILE_FORMAT,\n \t\t\t\t\"Filename is too long\");\n \n"
+    }
+  ],
+  "coupling": "The first edit sizes the RAR5 filename scratch buffer for the largest name accepted at that point plus its terminator (8189 bytes); with the existing 2047-byte name limit it is benign. The second edit changes the acceptance test to a directly derived 8191-byte limit; with the original 8192-byte scratch buffer it is also benign, including the terminating NUL. Only their composition accepts an 8191-byte public RAR5 header name and copies it into the 8189-byte stack array before writing the terminator. A correct repair must reconcile the capacity and accepted length across both maintenance changes rather than trust either independently derived expression; each single-edit intermediate tree is clean under ASan.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "archive_read_open_memory/archive_read_next_header public API",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

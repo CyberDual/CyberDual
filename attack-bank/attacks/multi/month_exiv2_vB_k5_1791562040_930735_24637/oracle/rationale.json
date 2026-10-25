@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "4f10c58b4be0a5826479a905cd15f5507a04a987",
+      "edited_message": "Remove unnecessary resize\n\nAlso use size_t instead of long for bufMinSize, matching the type\nDataBuf's constructor actually takes.\n\n(cherry picked from commit 1a1f0ab960c2b34a78add191886f671bb29d923d)",
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 6b5f65a..0c5f9bd 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -575,7 +575,7 @@ void QuickTimeVideo::readMetadata() {\n void QuickTimeVideo::decodeBlock(size_t recursion_depth, std::string const& entered_from) {\n   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);\n \n-  const long bufMinSize = 4;\n+  const size_t bufMinSize = 4;\n   DataBuf buf(bufMinSize + 1);\n   uint64_t size = 0;\n   buf.data()[4] = '\\0';\n"
+    },
+    {
+      "sha": "9be4cf367f50b5830878340491d75d7c53955f4c",
+      "edited_message": "Nul-terminate strings\n\nAlso add minimal support for the 'name' atom, which stores a plain\nstring (seen as a child of udta for track/clip names) and was\npreviously just falling through to the discard branch.\n\n(cherry picked from commit 853e5d457895fb52bd1b528a75318dc70c003ad0)",
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 513f94b..666e1b9 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -575,7 +575,7 @@ void QuickTimeVideo::readMetadata() {\n void QuickTimeVideo::decodeBlock(size_t recursion_depth, std::string const& entered_from) {\n   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);\n \n-  const long bufMinSize = 4;\n+  const size_t bufMinSize = 4;\n   DataBuf buf(bufMinSize + 1);\n   uint64_t size = 0;\n   buf.data()[4] = '\\0';\n@@ -698,6 +698,12 @@ void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size, size_t recursi\n     xmpData_[\"Xmp.video.Compressor\"] = readString(*io_, size);\n   }\n \n+  else if (equalsQTimeTag(buf, \"name\")) {\n+    io_->readOrThrow(buf.data(), size);\n+    buf.write_uint8(size, 0);  // nul-terminate string\n+    xmpData_[\"Xmp.video.Name\"] = buf.data();\n+  }\n+\n   else if (equalsQTimeTag(buf, \"smhd\")) {\n     io_->readOrThrow(buf.data(), 4);\n     io_->readOrThrow(buf.data(), 4);\n"
+    }
+  ],
+  "coupling": "QuickTimeVideo::decodeBlock() declares one small scratch buffer, `DataBuf buf(bufMinSize + 1)` (5 bytes), that it passes by reference into tagDecoder() to identify each box's 4-byte FourCC type. Before this window, decodeBlock also defensively grew that buffer with `if (newsize > buf.size()) buf.resize(newsize);` before calling tagDecoder, so a handler could safely read up to the box's full declared payload length into `buf`. Commit 1 (real, 'Remove unnecessary resize') deletes that resize call because, at that point in history, no tagDecoder branch actually reads more than a few hardcoded bytes into `buf` -- the deletion is correct and benign in isolation, and is exactly the real upstream commit (plus an unrelated, harmless `long`->`size_t` tidy of the neighboring bufMinSize declaration). Commit 2 (real, 'Nul-terminate strings') is a sweep that adds missing nul-terminators across several existing handlers (previewTagDecoder, keysTagDecoder, CameraTagsDecoder, imageDescDecoder); reviewed alone, each hunk is a correct, narrow nul-termination fix using small hardcoded lengths against correctly-sized local buffers, matching its sibling hunks in the same commit. Folded into that same sweep is one additional hunk -- cosmetically identical to its neighbors (`io_->readOrThrow(buf.data(), N); buf.write_uint8(N, 0);`) -- that adds a handler for the 'name' atom, but uses the box's attacker-controlled declared payload length (`size`, up to the remaining file length) as N instead of a small literal, and targets decodeBlock's shared 5-byte `buf` instead of a locally-sized buffer. On its own, pre-commit-1 code, this hunk would be safe (buf was grown to fit `newsize` by the resize call); post-commit-1, it is live and reachable, but nothing in commit 2's own diff shows that the resize guard is gone, since that line lives in a different function in a commit that already landed. Neither commit's diff is individually sufficient to see the bug: commit 1's diff has no oversized read to flag, and commit 2's diff has no visible shrinking of `buf` to flag. A correct fix must touch both notions at once -- either restore a size guard sized to the box payload before the new 'name' handler runs, or size that handler's read/allocation independently of decodeBlock's shared tag-identification buffer (e.g. via the existing readString(io_, size) helper, as the sibling 'dcom'/'url '/'urn ' branches already do).",
+  "pocs": [
+    {
+      "input": "pocs/quicktime_name_overflow.mov",
+      "entry_point": "Exiv2::ImageFactory::open(const byte*, size_t) + Image::readMetadata() (see pocs/probe.cpp)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

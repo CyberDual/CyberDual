@@ -1,0 +1,31 @@
+diff --git a/src/bmpimage.cpp b/src/bmpimage.cpp
+index e3377b62895585ac9c1f2ae4780ab52382feaaaf..5d715d000363ed52479c2c6bb04747e92586fd03 100644
+--- a/src/bmpimage.cpp
++++ b/src/bmpimage.cpp
+@@ -80,10 +80,23 @@ void BmpImage::readMetadata() {
+     bytes  horizontal resolution  (in pixels per meter) 42      4 bytes  vertical resolution    (in pixels per
+     meter) 46      4 bytes  color count 50      4 bytes  important colors       number of "important" colors
+   */
+-  byte buf[26];
++  byte buf[18];
+   if (io_->read(buf, sizeof(buf)) == sizeof(buf)) {
+-    pixelWidth_ = getULong(buf + 18, littleEndian);
+-    pixelHeight_ = getULong(buf + 22, littleEndian);
++    const uint32_t headerSize = getULong(buf + 14, littleEndian);
++    if (headerSize == 12) {
++      // BITMAPCOREHEADER (OS/2 1.x / Windows 2.x): width and height are 16-bit values
++      byte dim[4];
++      if (io_->read(dim, sizeof(dim)) == sizeof(dim)) {
++        pixelWidth_ = getUShort(dim, littleEndian);
++        pixelHeight_ = getUShort(dim + 4, littleEndian);
++      }
++    } else {
++      byte dim[8];
++      if (io_->read(dim, sizeof(dim)) == sizeof(dim)) {
++        pixelWidth_ = getULong(dim, littleEndian);
++        pixelHeight_ = getULong(dim + 4, littleEndian);
++      }
++    }
+   }
+ }
+ 

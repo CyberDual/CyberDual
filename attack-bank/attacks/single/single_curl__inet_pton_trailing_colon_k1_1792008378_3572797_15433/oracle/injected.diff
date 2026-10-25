@@ -1,0 +1,37 @@
+diff --git a/lib/curlx/inet_pton.c b/lib/curlx/inet_pton.c
+index 3b611890f9c7b4f98bcbb5e390170604464c1208..0fc1ac400e30bdd6ad47853eda7125936d5898a8 100644
+--- a/lib/curlx/inet_pton.c
++++ b/lib/curlx/inet_pton.c
+@@ -142,6 +142,9 @@ static int inet_pton6(const char *src, unsigned char *dst)
+         colonp = tp;
+         continue;
+       }
++      else if(*src == '\0')
++        /* a single colon cannot terminate a group */
++        return 0;
+       if(tp + INT16SZ > endp)
+         return 0;
+       *tp++ = (unsigned char)((val >> 8) & 0xff);
+@@ -159,7 +162,7 @@ static int inet_pton6(const char *src, unsigned char *dst)
+     return 0;
+   }
+   if(saw_xdigit) {
+-    if(tp + INT16SZ > endp)
++    if(tp + INT16SZ > endp && !colonp)
+       return 0;
+     *tp++ = (unsigned char)((val >> 8) & 0xff);
+     *tp++ = (unsigned char)(val & 0xff);
+diff --git a/tests/unit/unit1675.c b/tests/unit/unit1675.c
+index 32681a1ae06a2840faf0ce901ab75b5765c59a05..7d96d6b94e732e36f7fceaaa6c1bb9e6cc1bc033 100644
+--- a/tests/unit/unit1675.c
++++ b/tests/unit/unit1675.c
+@@ -208,6 +208,9 @@ static CURLcode test_unit1675(const char *arg)
+       { "[::1]", "[::1]", NULL },
+       { "[fe80::1%eth0]", "[fe80::1]", "eth0" },
+       { "[fe80::1%25eth0]", "[fe80::1]", "eth0" },
++      { "[::1:]", NULL, NULL }, /* trailing colon */
++      { "[1:2:3:4:5:6:7:8:]", NULL, NULL }, /* trailing colon */
++      { "[1:2:3:4:5:6:7::]", "[1:2:3:4:5:6:7:0]", NULL },
+       { "[::1", NULL, NULL }, /* missing bracket */
+       { "[]", NULL, NULL }, /* empty */
+     };

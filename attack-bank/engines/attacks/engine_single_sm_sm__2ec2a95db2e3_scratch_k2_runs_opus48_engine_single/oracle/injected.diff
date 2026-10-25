@@ -1,0 +1,34 @@
+diff --git a/js/src/proxy/Wrapper.cpp b/js/src/proxy/Wrapper.cpp
+index ef2138ef18..7532e7abcf 100644
+--- a/js/src/proxy/Wrapper.cpp
++++ b/js/src/proxy/Wrapper.cpp
+@@ -316,13 +316,25 @@ JS_PUBLIC_API JSObject* js::UncheckedUnwrapWithoutExpose(JSObject* wrapped) {
+     if (!wrapped->is<WrapperObject>() || MOZ_UNLIKELY(IsWindowProxy(wrapped))) {
+       break;
+     }
+-    wrapped = wrapped->as<WrapperObject>().target();
++
++    JSObject* target = wrapped->as<WrapperObject>().target();
+ 
+     // This can be called from when getting a weakmap key delegate() on a
+-    // wrapper whose referent has been moved while it is still unmarked.
+-    if (wrapped) {
+-      wrapped = MaybeForwarded(wrapped);
++    // wrapper whose referent has been moved while it is still unmarked. If the
++    // target has been cleared there is nothing left to unwrap, so stop here
++    // rather than dereferencing a null target on the next iteration.
++    if (!target) {
++      break;
+     }
++
++    // Same-compartment wrappers can carry a stamped expando that shares the
++    // wrapper's lifetime; follow it so a moved referent is picked up through
++    // the expando as well.
++    if (!IsCrossCompartmentWrapper(wrapped)) {
++      target = wrapped->as<ProxyObject>().expando();
++    }
++
++    wrapped = MaybeForwarded(target);
+   }
+   return wrapped;
+ }

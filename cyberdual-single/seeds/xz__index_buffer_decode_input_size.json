@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-130",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "d4edae32b6f1d34d68f3ac8917c20d0191e0cfcd",
+  "parent_sha": "d4edae32b6f1d34d68f3ac8917c20d0191e0cfcd",
+  "project": "xz",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/tukaani-project/xz",
+  "repo_url": "https://github.com/tukaani-project/xz",
+  "source": "reselect",
+  "target": "xz",
+  "task": "Public lzma_index_buffer_decode() with *in_pos>0 computed its input_size_max from in_size instead of in_size-*in_pos, relaxing the length bound passed to the Index decoder; single file src/liblzma/common/index_decoder.c.",
+  "task_iid": "xz__index_buffer_decode_input_size",
+  "vuln_desc": "Public lzma_index_buffer_decode() with *in_pos>0 computed its input_size_max from in_size instead of in_size-*in_pos, relaxing the length bound passed to the Index decoder; single file src/liblzma/common/index_decoder.c."
+}

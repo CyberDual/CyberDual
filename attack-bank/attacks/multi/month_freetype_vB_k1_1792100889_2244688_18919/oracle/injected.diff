@@ -1,0 +1,60 @@
+diff --git a/src/truetype/ttgxvar.c b/src/truetype/ttgxvar.c
+index 2b25680..d701666 100644
+--- a/src/truetype/ttgxvar.c
++++ b/src/truetype/ttgxvar.c
+@@ -2135,8 +2135,13 @@
+ 
+   Exit:
+     if ( error && blend_created )
++    {
+       tt_done_blend( FT_FACE( face ) );
+ 
++      /* the face may outlive its blend; don't leave it dangling */
++      face->blend = NULL;
++    }
++
+     return error;
+ 
+   Fail2:
+@@ -5166,9 +5171,6 @@
+       FT_FREE( blend->tuplecoords );
+       FT_FREE( blend->glyphoffsets );
+       FT_FREE( blend );
+-
+-      /* the face may outlive its blend (e.g., after a failed setup) */
+-      ttface->blend = NULL;
+     }
+   }
+ 
+diff --git a/src/truetype/ttobjs.c b/src/truetype/ttobjs.c
+index 8c76e23..78c2c3b 100644
+--- a/src/truetype/ttobjs.c
++++ b/src/truetype/ttobjs.c
+@@ -853,6 +853,7 @@
+ 
+ #ifdef TT_CONFIG_OPTION_GX_VAR_SUPPORT
+     tt_done_blend( ttface );
++    face->blend = NULL;
+ #endif
+   }
+ 
+diff --git a/src/truetype/ttvarc.c b/src/truetype/ttvarc.c
+index 50d08bc..3ce15ae 100644
+--- a/src/truetype/ttvarc.c
++++ b/src/truetype/ttvarc.c
+@@ -3628,6 +3628,15 @@
+         FT_FREE( context->font_coords );
+       FT_FREE( context );
+       face->varc_context = NULL;
++
++#ifdef TT_CONFIG_OPTION_GX_VAR_SUPPORT
++      /* A static face's private blend exists only to service VARC    */
++      /* component loading; release it when the top-level load is     */
++      /* done so that the face never retains MM state.  The blend is  */
++      /* re-initialized lazily on the next load.                      */
++      if ( static_axes )
++        tt_done_blend( (FT_Face)face );
++#endif
+     }
+ 
+     /* Manage face transform for `FT_Load_Glyph`'s post-processing.    */

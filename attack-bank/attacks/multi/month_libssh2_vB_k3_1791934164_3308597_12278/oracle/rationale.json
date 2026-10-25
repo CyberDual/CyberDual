@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "16727106702b35b9f798482fb5dcab003feeb5ff",
+      "edited_message": null,
+      "patch": "diff --git a/src/knownhost.c b/src/knownhost.c\nindex 2bd41de..11290d4 100644\n--- a/src/knownhost.c\n+++ b/src/knownhost.c\n@@ -868,7 +868,7 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,\n             char hostbuf[256];\n \n             /* make sure we do not overflow the buffer */\n-            if(namelen >= sizeof(hostbuf) - 1)\n+            if(namelen > 255)\n                 return ssh2_err(hosts->session,\n                                 LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,\n                                 \"Failed to parse known_hosts line \"\n"
+    },
+    {
+      "sha": "bfb796fbdb87c624342f75752d1c111fb95f85bd",
+      "edited_message": null,
+      "patch": "--- a/src/knownhost.c\n+++ b/src/knownhost.c\n@@ -865,7 +865,7 @@\n            name to the collection */\n         if(name == host || *(name - 1) == ',') {\n \n-            char hostbuf[256];\n+            char hostbuf[255];\n \n             /* make sure we do not overflow the buffer */\n             if(namelen >= sizeof(hostbuf) - 1)\n"
+    }
+  ],
+  "coupling": "The IPv6 known-hosts commit permits the full 255-byte host field while retaining a 256-byte temporary buffer. The later tidy-up reduces that buffer to 255 bytes. Its original size-derived guard would reject the new boundary, but the earlier commit changed the guard to an independent 255-byte limit. A 255-byte bracketed hostname-and-port entry therefore passes validation and writes its terminator one byte past the buffer. Each edit in isolation is memory safe; review and repair must keep the accepted field length and buffer capacity consistent across both commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "libssh2_knownhost_readline",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

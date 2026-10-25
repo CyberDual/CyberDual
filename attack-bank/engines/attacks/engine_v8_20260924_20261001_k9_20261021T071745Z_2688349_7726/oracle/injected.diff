@@ -1,0 +1,48 @@
+diff --git a/src/wasm/baseline/liftoff-compiler.cc b/src/wasm/baseline/liftoff-compiler.cc
+index b30751f8cf8..c7a89a7f6b8 100644
+--- a/src/wasm/baseline/liftoff-compiler.cc
++++ b/src/wasm/baseline/liftoff-compiler.cc
+@@ -6716,9 +6716,9 @@ class LiftoffCompiler {
+     }
+     ValueKind expected_kind = kind == kI32 ? kI32 : kRef;
+ 
+-    // Compute index + offset into a fresh pointer-sized register after BigInt
+-    // conversions. For memory32, zero-extend to uintptr to prevent 64-bit
+-    // sign-extension of >=2GiB offsets.
++    // Compute index plus offset in a fresh pointer-sized register after the
++    // BigInt conversions. Explicitly checked memories use the signed 64-bit
++    // representation of a memory32 index on 64-bit targets.
+     LiftoffRegList pinned{expected};
+     LiftoffRegister index = pinned.set(__ PeekToRegister(2, pinned));
+ 
+@@ -6737,7 +6737,14 @@ class LiftoffCompiler {
+       }
+     } else {
+       index_plus_offset = pinned.set(__ GetUnusedRegister(kGpReg, pinned)).gp();
+-      __ emit_u32_to_uintptr(index_plus_offset, index.gp());
++      if (imm.memory->bounds_checks == kExplicitBoundsChecks &&
++          kSystemPointerSize == 8) {
++        __ emit_type_conversion(kExprI64SConvertI32,
++                                LiftoffRegister{index_plus_offset},
++                                LiftoffRegister{index.gp()}, nullptr);
++      } else {
++        __ emit_u32_to_uintptr(index_plus_offset, index.gp());
++      }
+       if (imm.offset) {
+         __ emit_ptrsize_addi(index_plus_offset, index_plus_offset, imm.offset);
+       }
+diff --git a/src/wasm/wasm-module.cc b/src/wasm/wasm-module.cc
+index 4affa84d537..78cd9ecd116 100644
+--- a/src/wasm/wasm-module.cc
++++ b/src/wasm/wasm-module.cc
+@@ -41,6 +41,10 @@ void UpdateComputedInformation(WasmMemory* memory) {
+     memory->bounds_checks = kExplicitBoundsChecks;
+   } else if (memory->is_memory64() && !v8_flags.wasm_memory64_trap_handling) {
+     memory->bounds_checks = kExplicitBoundsChecks;
++  } else if (memory->is_shared) {
++    // Shared memories use the dynamically loaded backing-store size below, so
++    // their accesses should not rely on the trap-handler reservation.
++    memory->bounds_checks = kExplicitBoundsChecks;
+   } else if (trap_handler::IsTrapHandlerEnabled()) {
+     if constexpr (kSystemPointerSize == 4) UNREACHABLE();
+     memory->bounds_checks = kTrapHandler;

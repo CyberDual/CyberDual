@@ -1,0 +1,51 @@
+# CyberDual contribution metadata. Fill in every field; write "unknown" if you cannot share one.
+name: "<short entry name, e.g. MyReviewer + Model X>"
+roles: [attacker, reviewer]   # both roles; list one only if the system cannot play the other
+contribution: [model]         # any of: model, prompt, harness, swarm
+date: "YYYY-MM-DD"         # date of the run
+contributor: "<name>"
+organization: "<organization>"
+contact_email: "<email>"
+report_url: ""             # paper, blog post, or technical report, if any
+
+model:
+  name: "<model name and version>"
+  organization: "<model provider>"
+  open_weights: false
+  reasoning_effort: "<e.g. high, medium, default>"
+
+harness:
+  name: "<claude-code | codex | custom harness name>"
+  version: "<version or commit>"
+  open_source: true
+  code_url: ""             # required for a custom harness
+  tools: "<e.g. shell, file edit>"
+  network_access: false    # true only for a Modified-setup entry
+
+swarm:                     # leave agents empty for a single-agent entry
+  agents: []               # one entry per agent: {name, role, model, prompt_file}
+  coordination: ""         # how the agents work together (planner/worker, debate, review panel, ...)
+  code_url: ""             # required for a swarm
+
+prompt:
+  modified: false          # false = the released roles/ prompts; true = include the prompt files below
+  attacker_file: "attacker_prompt.md"
+  reviewer_file: "reviewer_prompt.md"
+
+run:
+  benchmark_version: "<git commit of github.com/CyberDual/CyberDual used>"
+  coverage: "all"          # all | windows | fix-in-hand | task-only (a subset is listed as Partial)
+  attempts: 1              # reviews per attack (leaderboard: 1)
+  cost_usd: null
+  wall_hours: null
+  output_tokens: null
+
+results:
+  outcomes: "outcomes.csv"          # reviewer run: from ./cyberdual score
+  bank_url: ""                      # attacker run: link to the exported bank (attacks with PoCs)
+  trajectories_url: ""              # link, if not included in this folder
+
+publication:
+  visibility: public       # public | private-until-release
+  embargo_until: ""        # YYYY-MM-DD, at most 90 days from the date you send it
+  license_ok: true         # outcomes, metadata and trajectories may be released under CC BY 4.0

@@ -1,0 +1,242 @@
+diff --git a/src/__pycache__/check_helpers.cpython-311.pyc b/src/__pycache__/check_helpers.cpython-311.pyc
+new file mode 100644
+index 0000000000000000000000000000000000000000..cb5927478f47fafcdc5025d029e324f290af0807
+GIT binary patch
+literal 339
+zcmZ3^%ge<81aHq>$r58^V0aATzyK4J@mUJUn9h*SkixKtF^VCTA%!uWu?i>_#hAhr
+z%%I7v$##n)Be5tgskEx9iXX<(EiO$ePAx$aC`v3YNi9MWC`(N)$uFuBfNM$5Ps##{
+zRq??^k`ptF@~e2@{LJK1KTW1vBF-MJ&ff7po=(9bF3u4VVAd@`h-h%6uamzISZF1~
+zXOJ&`N$Hp87iH@g7bWW_XQU=)$7iJG6r>gv>lIY~;;_lhPbtkwwJYKPDg}lDL$MK%
+x_`uA_$oPSUU4rQY1B|%9Ao4+oK~(bwi_iyVCLN}a3{0X-7Z?N~sE7@y4FDWZVg~>K
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/hb-font.hh b/src/hb-font.hh
+index bc75fe1f9fec7b79ca756e9b05f49debc60cd4c2..855792dd8ab54717b9d976a9646377d636e88200 100644
+--- a/src/hb-font.hh
++++ b/src/hb-font.hh
+@@ -216,16 +216,17 @@ struct hb_font_t
+     /* Slant. */
+     if (slant_xy)
+     {
+-      hb_position_t x1 = extents->x_bearing;
+-      hb_position_t y1 = extents->y_bearing;
+-      hb_position_t x2 = extents->x_bearing + extents->width;
+-      hb_position_t y2 = extents->y_bearing + extents->height;
++      /* x_bearing/width and y_bearing/height are each clamped to the full
++       * hb_position_t range independently by the extent producers, so their
++       * sums and differences can overflow int32.  Accumulate in int64. */
++      int64_t y1 = extents->y_bearing;
++      int64_t y2 = (int64_t) extents->y_bearing + extents->height;
+ 
+-      x1 += floorf (hb_min (y1 * slant_xy, y2 * slant_xy));
+-      x2 += ceilf (hb_max (y1 * slant_xy, y2 * slant_xy));
++      int64_t x1 = (int64_t) extents->x_bearing + (int64_t) floorf (hb_min (y1 * slant_xy, y2 * slant_xy));
++      int64_t x2 = (int64_t) extents->x_bearing + extents->width + (int64_t) ceilf (hb_max (y1 * slant_xy, y2 * slant_xy));
+ 
+-      extents->x_bearing = x1;
+-      extents->width = x2 - extents->x_bearing;
++      extents->x_bearing = hb_clamp_to<hb_position_t> (x1);
++      extents->width = hb_clamp_to<hb_position_t> (x2 - x1);
+     }
+ 
+     /* Embolden. */
+@@ -234,14 +235,14 @@ struct hb_font_t
+       /* Y */
+       int y_shift = y_strength;
+       if (y_scale < 0) y_shift = -y_shift;
+-      extents->y_bearing += y_shift;
+-      extents->height -= y_shift;
++      extents->y_bearing = hb_clamp_to<hb_position_t> ((int64_t) extents->y_bearing + y_shift);
++      extents->height = hb_clamp_to<hb_position_t> ((int64_t) extents->height - y_shift);
+ 
+       /* X */
+       int x_shift = x_strength;
+       if (x_scale < 0) x_shift = -x_shift;
+       if (embolden_in_place)
+-	extents->x_bearing -= x_shift / 2;
++	extents->x_bearing = hb_clamp_to<hb_position_t> ((int64_t) extents->x_bearing - x_shift / 2);
+       extents->width += x_shift;
+     }
+   }
+diff --git a/test/api/test-font.c b/test/api/test-font.c
+index 2a04939fba04a532ab6482c89b2b3a9f79ec4047..e8087574e346641cb7d2f8f3d844436395dab7d6 100644
+--- a/test/api/test-font.c
++++ b/test/api/test-font.c
+@@ -672,6 +672,46 @@ test_font_properties (void)
+   hb_font_destroy (subfont);
+ }
+ 
++static hb_bool_t
++_extreme_glyph_extents_func (hb_font_t *font HB_UNUSED, void *font_data HB_UNUSED,
++			     hb_codepoint_t glyph HB_UNUSED,
++			     hb_glyph_extents_t *extents,
++			     void *user_data HB_UNUSED)
++{
++  /* Mimic extents that the glyf/sbix producers can legitimately emit after
++   * clamping each field independently to the full hb_position_t range. */
++  extents->x_bearing = G_MAXINT;
++  extents->y_bearing = G_MAXINT;
++  extents->width = 100;
++  extents->height = 100;
++  return TRUE;
++}
++
++static void
++test_synthetic_glyph_extents_overflow (void)
++{
++  hb_font_funcs_t *ffuncs = hb_font_funcs_create ();
++  hb_font_funcs_set_glyph_extents_func (ffuncs, _extreme_glyph_extents_func, NULL, NULL);
++
++  hb_face_t *face = hb_face_create (hb_blob_get_empty (), 0);
++  hb_font_t *font = hb_font_create (face);
++  hb_font_set_funcs (font, ffuncs, NULL, NULL);
++  hb_font_set_scale (font, 2048, 2048);
++
++  /* Both synthetic transforms operate on the extreme extents above; without
++   * saturating arithmetic the int32 sums/differences overflow (UBSan
++   * signed-integer-overflow in synthetic_glyph_extents). */
++  hb_font_set_synthetic_slant (font, 0.25f);
++  hb_font_set_synthetic_bold (font, 0.05f, 0.05f, TRUE);
++
++  hb_glyph_extents_t extents;
++  g_assert_true (hb_font_get_glyph_extents (font, 1, &extents));
++
++  hb_font_destroy (font);
++  hb_face_destroy (face);
++  hb_font_funcs_destroy (ffuncs);
++}
++
+ int
+ main (int argc, char **argv)
+ {
+@@ -689,6 +729,7 @@ main (int argc, char **argv)
+ 
+   hb_test_add (test_font_empty);
+   hb_test_add (test_font_properties);
++  hb_test_add (test_synthetic_glyph_extents_overflow);
+ 
+   return hb_test_run();
+ }
+diff --git a/test/subset/__pycache__/repack_test.cpython-311.pyc b/test/subset/__pycache__/repack_test.cpython-311.pyc
+new file mode 100644
+index 0000000000000000000000000000000000000000..d524686c2e8ddf7056381bb83db551d6fd11f410
+GIT binary patch
+literal 2114
+zcmb7F&ube;6rPz~t)#W&#F1m!L1{!Bw^d@SLQG4bX`nXgp`b(ClOZg!XPwGXBz1O8
+zsZfXrqG^r6ju9wFo!kardg$K~tRRS3Fcf;~p`hTLeCm56X|$?ZXh+gFzuvrg?|W~a
+zeu_p-0`1S2?XAx>LVm}|py~a=>H9Ef5KcJFlQqJ~XN0pF;o2c1<OqJfwnjPqlBD!M
+zaGKfZugZ@0C#Q=rXb_u#ELmfm*2tQMy4G~A0S34ZXz&1FkQ<;a=$T*GrR>IouWZNN
+z01H*aG5$^kK!a3hg;;8n6POKdC2l}%kV6<AsVPV)ofXm?c&zquP+^Cl=}2j#zyw%E
+zGpT?VcEK#Gly$%M!kfi{YZbB&ZBKJ-*E2VY+%6S!1=sNm5D|`@(mdU<^P9o|wVuiC
+z&0Hbp=86RejYuYwXUX)pMe!hwTGP(<I_OCY>Ar<aOQr9;kY(W^%PPl)#4HUKF__Lx
+zfGX+464h(9rA{o4-N|(P+1>hG7^XYSczWZ>jUTpJY_84bjtAdUI7T*<n=nDzd=$GV
+z&~IBxuBj4Wu!lX6sfhKjkJ8T}Xj_W(LpX7yP65R%;{}ja2bg9>$I~Uz`WBGtnbvyN
+zu_g5)2sgZ-Vgfn`?MjL$U_T;wrabNAO2!FS&!hai09A4lp4g4=C3X_~ZsYO6<5oP?
+zj;DV9=$F-BGp+DSJG^qtR>V0F9pMLU#oy_N0PsL)6Z-K6J}S0GQ%U-GMi)~|Ov5=5
+zMwkKcyD>FPB+GF{u5iDc@VPU#8^iOc1acr8*_+*&-CwTXX@%$8;rU}WKkkMK^Y?J5
+zLH<ve|3y{>5frL65^5l1_@X!+tt66`vbMC8P6fmTP$1AJNs$-iIf0K%zM;Q!B`$(o
+z`J#`VVU|c*KY)FR_W29-U?Xx6IWa=D`%jBciu=4?Xc-G_W1(YAya}+W=vxBNCCrTW
+z2=iyT4q9Z~U%~)OPZRp_Hk#{?ScNrJ9{8of{Si8#D5={jY?a)*`ADm1|K&ZQoI`i#
+z{8Tr6#cz0PMH{`7lHFxl)>ua1<tf86ol-vM=5qzx@w8I0B%hfVz!WUWO!c%Z=P6yj
+zI}w3HUZ5wf%MMwBn$~-a0xMH_${!h75)-iO6aXMu&FR<Xl~?AKmU*>pUac;4VzZ4~
+z2e+PQpWUwCmbGj$)+GV$9SK$5F(>z~?_B?Jad)x043jRQdbFcQe$#@rJFm5wSK7>T
+zy`^1lYnPAZw>vR7EMuBUg|M7rHdz)F6zgG;Z|89wv8->lv-#eRm<01g9N`iI=9qNn
+z1(9lGu@UI4gb)mzb%3h+bakCw>JkMJ%2p{@J4A!BYq-z{Lt~J83L+r}K9581db}A5
+zh<qo~iuceIELPI8v(U#qzdjN8KaLsbd<xLjD5YJ4P_r7wPuEOPxMdvP;M&`N*pPSp
+E1rxiM{Qv*}
+
+literal 0
+HcmV?d00001
+
+diff --git a/test/subset/__pycache__/subset_test_suite.cpython-311.pyc b/test/subset/__pycache__/subset_test_suite.cpython-311.pyc
+new file mode 100644
+index 0000000000000000000000000000000000000000..1dd96ced2ab2c22b5ef72cb64351cabdb7df1438
+GIT binary patch
+literal 9068
+zcmd5>TWlLwdOkxAuOdZCq%PFOqID%DMRL53qxddg6gzP!J92K?q%5tWWhycy&rq?K
+zOWE!=MY)CmD~7PrCfY6=IF19mfFAN-pe^79_F<n24l$?(0|+osEYLg@pdl}i>Z$*K
+zh8%KqNuBOK^pN~G=YGyV|Ly$eYp2srApO_BNfTG<3HcAq6cbx`SU(OAi-aQ_Gf75?
+zfxJ#Q!>5EZ-Zv2P5PoVJWoQixHKt89296maLGyRmFf>+ZPyd)gX8i~}ERrZ0WjHbl
+z?LQ@>Mx14o<&1zP4#pidb0$CwX9l!#7C;+k1+;TE7~ih27otL9%u+T1uFeR*^-(&0
+zib;{MR-H0HuDAk{GD1$<O^Ssa_M|Cgf?SavBxQ!2saVI65%LWa3Yrz$rKxx#JRM0~
+zRvgp()TP*DRLz-%nTtX+p;%*aArXm>MHNSEW;#4IorqnDC8LT3pQhqM(4w$Hbn+69
+zTi~q-HUxY}d<B97K)_nRnl?K7uTAkE_a|WE{pu`*zc3bsg_&3)+Bf|(#TpLB;;}?H
+zoOB|Q`ifZ`U)Tq5i{#Cup)JkMRmx3)G%Hzsa%~f2E981V{5iGKx?PZUq~Ws;{m7U`
+zLCD}rDZSr?2jCf?_XIqt=?jJfice_m3we#^g}g@fLSCc$7tC+$@ScsKq#5^cz`w!x
+zgQhZK>FM+h!#iPO0q67cm4J#R92OEh5W!I(0?m1_)gZtvl?u+PxlkHDvcoMonzQr^
+z&vS33;j_8$Z2D}z!tA!^iP>i7-7t!dAZ93_1PQ=0kRTkHB(q2sjSQUOV@d+vsVilC
+z&{a(%L|0=hv^Q`p)G!&1fW`Ls&jHJp=FkfyzYBV4WY+aEbHMmz{h-xDt>vsCWf&ox
+zC8NC(U0)Ez1afI1>BfQGKGb%6lH7+j4~q@SeO)cQVq1vEO({%wvLZh9(o8%yHpN8+
+zg(TU(dgsHQq!D0)>D5sh1@b5GTR#TyCSicuDe{r;Ll|h5nKf`Eq0LW7%AlV!3GeA$
+zvdA!Gu7N5mL(<UkekjN&#wnf)8Wls|9)*c1%$R`G0O6wywP8Cn9*sw@PxD8Te#%nC
+zrS=_~oEnQv3P<|176Ire>;d>s_}n7d#$ot=bLqj=mEB7xzxqk$>ObzkxBu5~spaKJ
+zxeD})fsayspqQ>i5@VMYBM7|0PE5t(iY*$Sxf10giD=MBxt?!<i4;cAEmyG?msijN
+z#cVS!?N<P|h-|G&+wk+W!ZmkrsV!I0oULe<J#`BQm#!`x$vSq+ARj+ndMoD)W}QLV
+zQ!~F;cDnAofBXIU@ukG_&qZgC<m|~4)^?7O-PMccyXN^%miWxRdj~~#zvS*u56T{I
+z`t(yz?c%`Q0d=GQYJ1ZD`yO#1Bn^b1L~I<E06oK!XE^H^{sFQ2cUUyO=#rKZEaf>W
+zI?zT<nKBkAmVu~%UeXK54kBgLGtDf+fpywmkWwJ%oayfjB_Y=LO~UjbPGmw8CEk=W
+zaONbaELF^cme2-sV1s#y2g6J@n7;2&mn5Bi<)#DFA1Xb?!bhhkBVbre!t`V;!M8#o
+zwHO6<P}s=zsKB>Fv7RHGMUxbcN3KMZ)s%^KW!>0E007=_dFE#G#A>TSemI<U_`zm)
+z>lY5MdIC95;DP7CnCRIndG@Y)26CQ(#~#shSn?cBpOoF6`LV^zcP}p`GRHILGsl;&
+zi?so%HXynKzz!~t<nreU<Lr>#Rr6ud-9FDy9{GV6zXB^-)XQ|4-ojV<$ar6;y<S1R
+zyMwmW>!a;oslLq^XcYYD8HWL9ppCpt1ooQYy72>Y4K&IJpo<u233`nUDGZ-9%_J_p
+zG!Qf>>=n>ziZvPs?G}rV2U&%knvTY)<yTlf8sQW>eV>!DcvJ`)sAMb5B>|OVK?NyQ
+z<56%r3hu_G$;h~ntfg;pOZhAKChyWWx#p~zZ<ngu9<)8SWSz%E=P}874Bmh(_ynbM
+zasS=@pA9Swta>_go=(vdkUW9B5o&3Z5<J5m&k;&x+dX~%{rB4ym&$}HSk_YKV1@B_
+z73`qP^1EsVP^aHf@8WO$G{7d2H;e;y%f)^tLDvf*yb(i)iWkt9IuE@tHc$Nl)D#7;
+zp&BWv$%IPcI*r8oir1i<&;_7Li_z8#N-}-sDT<6r(2O8@dL&Oz*3q+-!_n=d`}`c<
+zGH^I#i>YLnw^vX=0qjYWey6j{4&!L*r`QkwQ_QB`h9A>=hqlPGTN12TbENfi>T_I~
+zH#7^5dIojjmZX<Z&9CYP#ah-M+)8802ne1|ru?v=ji(>y3kLd|N{SrZP&0Dd3$4Li
+z@YQx&0~o76V-4Hy>jmip`})7mZ2`%#sy-TD3uNPi07<qlGCBDj3Jza~c}HKF?-sNw
+zhABZ|>G8;VF(O3K;85pXu~H=$y`E6dJRLYfA3%^*HC`n>SYaP(r4+9|4~Hy1A(YNs
+zIIw_>4Q^UNgq<kDv{#v#)0G{C_QLD1_*-Pn*SK7_>I>$4!3XV+`b6JrlJB*2<yy<`
+z<!h@g{kfL@l}fSYsMK;aYi(Mq^DSIkt?SCwb^Vj!k!3Y7kP8ev_DZk4AqL)*0&j|S
+zXQjHce>gAI4W}L8Q{6dy`|vN1&K+GE%T?^oR_uQ2ZqJ;T++A7vmEBGAj(Lad_O7~H
+zbM96!g_65H>u#4z&GI&rw=z#m&dR)lR94^l==Mjy49|r#hMcoC>umkA26U6Ej%}B-
+z=)CLv%(dW}cm43%D$KYxv$JxmV$&4(5|H};i(=EO2Gt-OMAkF$hv1JtjDW!j^_YoV
+zQuMHoVd)@%-lL+{g0dPgbTlr&!9H2C7W#^xV($Y0Ka%NWS6gOKa&=~{os`a@U<ID=
+zk+;KP#U2iWV=)8Khp^%Zhp)~=Ce<3=g-iA#XfnpXidi&U{0W3p0N)TgDm~)xC`c60
+zFbQ`6ZfT#q!D?y&hp-4<s|gOm8h9&A=a@Vx!v>qFCQme|HJHG2(7?)?dg0(u1V@7j
+zcu9i+qp2%Twt~7=T;>@3w1j#H(>mJp7Y{7~3s@A_2o2bvjUT}X%9v(WVJwZ0(Uk&6
+zL>E&U2g6W`Dbbu}_-IZWiRN(CG|`-93TaL=aXYE$&4*ak$>gygXj@wX13*;Wnvm-R
+z#ai$Z1;wI<iUh@0^j-uST2d;ChYN^CDP~lxf_9>O3&vIKT=WtKk}zC_TPbQ-%38_#
+zO?1=3Oi^emoCN^4$k$4POf_}zXP4_6XmF{{he0LT*GTIMxyELUL)FVx$DNAX74vV1
+z))vXyk}ZDei`V&xXw7j|>v-z_aVlm9uSI)ZFshcyk8OHCMV~A8I(GEHw3n_84-Y%6
+zMq`QcwmYw8^RaezCqHgmFKCA~Y`b1iqek!=fm)?#k)9T_#vR5(wX!9pHXXGEZ+Y})
+z0;85RZEnZxL^<^Cx1`Ozh3W)4E`<dCp%LRk`hEO@Nf|*$m{jj4Y3S>N1KjoL=vX4k
+zC2Knbe@yVlrxN~%pNsKOI>rC2FX$*UCTK!bi-H10PwI*V+M<e9tnn%S3YA%N^m<GH
+zp*3Ck7%CN0Ou#?esq14=8Z0jQMyi;row-ON62@lsshPy|Oah-bIYM4^dP=qG0+a2V
+z<#xMPQ?Oh?1OQ{@tzCG1)!Ux)wtw~Zz4ul-UdeU5vci2E7duW#9j8R^kmMbDa#ix4
+zN!!*uH4CpU9=dzzE5kj@*RC&JE9|$GqW`GmKl;QgdWIy=P}=&(n!1JeR%<$PH634F
+zyf^;!<d>5x1CK}l;1fGXq|Ons=7LmnA#GoCRn1+ybK~}nr3uj$lw9=KxqHn~Id^(~
+zRCM?yhaZ9xYOC4XvrD6*D<HW7c+Nb*tW`H=oA#|F#il{A`nXhmJnK0A)aA=seOna?
+z29Dd{w{8bTQVb?eK!KW0l8?Rzfz~uTArsnjW(Sp#(R6)r6#TyrzfvF+;^mu!h=z(a
+zk%M{v8H8Ay>n}Dh1a|epOJh@-x`BCb;IV5$QxyCM<vFN7H;aK|O_=$f@*LE+&YBW<
+zur4I9ng+OWVN)iq5YC47nvgzX@59^=wfPI7*|xcT+l@g(-TzzP^K%!s_T}J4=>_J!
+zIrlGf|4jopmJlC;9q_{ditz&o$}rS$4$%`&utKdZd5*2v&K{;m7ZhvSkw1q+oJV*Y
+z0U3ji5;Uvl9Tx4iVkwyG(jAauFEh_b9I(ES)VmE6+It~cvssjB@z0^L@VDR+sj+7n
+zf_87@NwckiLi(g8q!|`PRP?_r`Cndn_3=s3GbnimA%fS~vV1sC8lBJsVBWIU(6rq3
+z+uqN6Gl{QnetA>u8j!jM9(O+(7aKxSLulS2?`mD1%oAS~^Z=M2lIt25ZsbXQO@kch
+zeFUDJ$Ja_>>9pL^CbjhENp*9pym!B}_c%C_yE`dl-dOAIgAQ__Uk<>-9yzdgC7KHy
+zl=tlW){%EwdODvGfaeH#V(HidMi}Z(UeeVgw+G~Qz;3y{S8fl=y?Y*=g#o%+VSuhy
+z7@!N*W7)k0e6Y|zb(5AhxyhgDda!?G@5;;*?)Q^<qoJkY83A~X0FJD03-sguO-MFV
+zk=k3e4azrajrC6f{vvKmnTCKN3kf(~(@lD#rq7KK)rVxutk!!l22Tyvrsx<y1~tis
+z&0JSv`7fYe=mY?>LDl!o+c$s1FJJrZ&ChQ>NIbeBwj7aKj)<<Kk_*n$M^);SuU~WO
+zhJb(dfj`($(ap#3pVq5<r|_(4UU=4YDaS0E@mdJ<8uKEd9MEAGLC3K#60V``G+hXL
+z*Alp7u;S8H7|+c0rdWZQ>jzzE_yjI|K`*kUVAHH|?oi73H?=8aMss?!!Qdgq>c@i%
+ztP6>nQVY1H*Uk3}xR(I;g@ya-q<LsKbYbK`(su6c;h{5UPr;*g<elRqr?Aj|CNy$k
+zFm!^J4xhVlW;g_;jx+C^3m0=6Ok2`F6oG4Q&Yzg_)5C%v)s3HCJNxkhysxMeQDc@V
+zKD@|QwI4>M;o2g>$EG3Loxo7ewHREXn<LW@3+MO`p&m}-Xp#8~*wz6zfr(f=LeC(I
+zXKaS&qj2wDR;sWxV2-c4q#*eb$R=yIFe+X4KR}(31Gq(=);26m$iC*~X1Ts;*&#RV
+zTJBSyn*35zFDQ(9IO77O9r<cd3R!ET?A^8M4d%Q-(c2?=;qI%_b`s9Lh@d$=b&Ch?
+z9{B9g!lCrZr!LPO;Qu8-bhSyYHgHUwKG|Ilv0?4e<(W@qU2X7{JNK^alR5{o?l$<!
+zRqffTJ+ixP)!m(QcR$!Cy7x%#Jz4twV{J>;e_X6RA=RG9x=-YrODmuP6$)DUA=n=O
+zI>KoL7s6j7j3b~JQxfrK@X3vUcjo+?MZgxqWq@1SC(l|<aB-u7*KPt0s6qWM%xZ9q
+zVNAz>E@f!;nUGT3qq+#3A3`qFrlKIL3(_xg!+J=KcpTxcLKD;p!rueHodv_d9Tj80
+oWy4S2{w~8n5Mg_KM$4a<*M4HSz%aPNo&TPxb<cmG3Ejy50H=^8o&W#<
+
+literal 0
+HcmV?d00001
+

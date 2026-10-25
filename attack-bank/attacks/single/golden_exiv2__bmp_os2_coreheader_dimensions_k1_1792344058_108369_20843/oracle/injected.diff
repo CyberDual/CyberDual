@@ -1,0 +1,47 @@
+diff --git a/src/bmpimage.cpp b/src/bmpimage.cpp
+index e3377b62895585ac9c1f2ae4780ab52382feaaaf..818079c7f97da5f302459282cd8583236e748350 100644
+--- a/src/bmpimage.cpp
++++ b/src/bmpimage.cpp
+@@ -82,8 +82,15 @@ void BmpImage::readMetadata() {
+   */
+   byte buf[26];
+   if (io_->read(buf, sizeof(buf)) == sizeof(buf)) {
+-    pixelWidth_ = getULong(buf + 18, littleEndian);
+-    pixelHeight_ = getULong(buf + 22, littleEndian);
++    const uint32_t headerSize = getULong(buf + 14, littleEndian);
++    if (headerSize == 12) {
++      pixelWidth_ = getUShort(buf + 18, littleEndian);
++      const std::array<byte, 2> height{buf[20], buf[21]};
++      pixelHeight_ = getULong(height.data(), littleEndian) & 0xffff;
++    } else {
++      pixelWidth_ = getULong(buf + 18, littleEndian);
++      pixelHeight_ = getULong(buf + 22, littleEndian);
++    }
+   }
+ }
+ 
+diff --git a/unitTests/test_bmpimage.cpp b/unitTests/test_bmpimage.cpp
+index 0c3eab0650482baf3d9dfbb5e0d7dbaa1d4095dc..d591854c2a440382582c3ef699b3a2dd3ee1d117 100644
+--- a/unitTests/test_bmpimage.cpp
++++ b/unitTests/test_bmpimage.cpp
+@@ -94,6 +94,20 @@ TEST(BmpImage, readMetadataReadsImageDimensionsWhenDataIsAvailable) {
+   ASSERT_EQ(800u, bmp.pixelHeight());
+ }
+ 
++TEST(BmpImage, readMetadataReadsImageDimensionsForOs2V1Header) {
++  const std::array<unsigned char, 26> header{
++      'B',  'M',               0x1A, 0x0E, 0x0E, 0x00, 0x00, 0x00, 0x00, 0x00,
++      0x1A, 0x00, 0x00, 0x00, 0x0C, 0x00, 0x00, 0x00, 0x80, 0x02,
++      0xE0, 0x01, 0x01, 0x00, 0x18, 0x00,
++  };
++
++  auto memIo = std::make_unique<MemIo>(header.data(), header.size());
++  BmpImage bmp(std::move(memIo), defaultImageCtorParams(false));
++  ASSERT_NO_THROW(bmp.readMetadata());
++  ASSERT_EQ(640u, bmp.pixelWidth());
++  ASSERT_EQ(480u, bmp.pixelHeight());
++}
++
+ TEST(BmpImage, readMetadataThrowsWhenImageIsNotBMP) {
+   const std::array<unsigned char, 26> header{
+       'B',  'A',               // Signature                                                         off:0   size:2

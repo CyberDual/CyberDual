@@ -1,0 +1,23 @@
+diff --git a/src/pcre2_jit_simd_inc.h b/src/pcre2_jit_simd_inc.h
+index e4cb40f6..392423ae 100644
+--- a/src/pcre2_jit_simd_inc.h
++++ b/src/pcre2_jit_simd_inc.h
+@@ -482,7 +482,8 @@ fast_forward_char_simd(compiler_common *common, PCRE2_UCHAR char1, PCRE2_UCHAR c
+    two vector registers for its bounds; beyond this the code unit at a time
+    bitmap scan is likely to be the better option anyway, since every extra
+    range adds three or four instructions to each loop iteration. */
+-#define X86_START_BITS_MAX_RANGES 4
++#define X86_START_BITS_MAX_RANGES 5
++#define X86_START_BITS_STORAGE_RANGES 4
+ 
+ /* Largest number of accepted code units before the class counts as dense and
+    the code unit at a time scan is left to do the job. A vector scan only pays
+@@ -573,7 +574,7 @@ fast_forward_start_bits_simd(compiler_common *common, const sljit_u8 *start_bits
+   struct sljit_label *restart;
+ #endif
+   struct sljit_jump *quit;
+-  start_bits_range ranges[X86_START_BITS_MAX_RANGES];
++  start_bits_range ranges[X86_START_BITS_STORAGE_RANGES];
+   sljit_s32 tmp1_reg_ind = sljit_get_register_index(SLJIT_GP_REGISTER, TMP1);
+   sljit_s32 data_ind = sljit_get_register_index(reg_type, SLJIT_VR0);
+   sljit_s32 acc_ind = sljit_get_register_index(reg_type, SLJIT_VR1);

@@ -1,0 +1,22 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 08ef9f72d53db713126e3461acab78c1578eb8c3..bf9d1db0dcb286156e41214e35e69f3b356c174e 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2434,6 +2434,17 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal) {
+     return XML_STATUS_ERROR;
+   }
+ 
++  // The caller must not hand us more bytes than the buffer obtained from a
++  // prior XML_GetBuffer() call can actually hold.
++  char *const newBufferEnd = parser->m_bufferEnd + len;
++  if (newBufferEnd > parser->m_bufferLim) {
++    parser->m_errorCode = XML_ERROR_NO_BUFFER;
++    parser->m_eventPtr = parser->m_eventEndPtr = NULL;
++    parser->m_processor = errorProcessor;
++    return XML_STATUS_ERROR;
++  }
++  *newBufferEnd = 0;
++
+   start = parser->m_bufferPtr;
+   parser->m_positionPtr = start;
+   parser->m_bufferEnd += len;

@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "376f1ed38c174c283ddc3c00af063d054b464bb5",
+      "edited_message": null,
+      "patch": "diff --git a/libheif/color-conversion/rgb2yuv.cc b/libheif/color-conversion/rgb2yuv.cc\n--- a/libheif/color-conversion/rgb2yuv.cc\n+++ b/libheif/color-conversion/rgb2yuv.cc\n@@ -39,11 +39,9 @@\n     return {};\n   }\n \n-  // All three colour planes are read through the same 'Pixel' type and converted with one\n-  // set of range constants, so they must share one bit depth and be stored with\n-  // sizeof(Pixel) bytes per sample.\n-  if (!input_state.color_channels_have_same_bpp() ||\n-      !input_state.color_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel)))) {\n+  // The red plane selects the sample type. The other plane depths are checked\n+  // before the conversion reads them.\n+  if (input_state.get_bytes_per_sample(heif_channel_R) != static_cast<int>(sizeof(Pixel))) {\n     return {};\n   }\n \n"
+    },
+    {
+      "sha": "33bab896e893f51014a91b8ec42f05b94e004a3f",
+      "edited_message": null,
+      "patch": "diff --git a/libheif/color-conversion/rgb2yuv.cc b/libheif/color-conversion/rgb2yuv.cc\n--- a/libheif/color-conversion/rgb2yuv.cc\n+++ b/libheif/color-conversion/rgb2yuv.cc\n@@ -120,14 +120,6 @@\n     return Error::InternalError;\n   }\n \n-  // All three colour planes are reinterpreted as the same 'Pixel' type below, so their\n-  // bit depths (and hence plane strides) must match. Differing bit depths would make the\n-  // shared stride assumption read past the smaller plane.\n-  if (input->get_bits_per_pixel(heif_channel_G) != bpp ||\n-      input->get_bits_per_pixel(heif_channel_B) != bpp) {\n-    return Error::InternalError;\n-  }\n-\n   bool has_alpha = input->has_channel(heif_channel_Alpha);\n \n   if (has_alpha && input->get_bits_per_pixel(heif_channel_Alpha) != bpp) {\n"
+    }
+  ],
+  "coupling": "The sample-width commit changes pipeline eligibility to choose the 16-bit RGB converter from the red plane alone; its runtime check still rejects narrower green or blue planes. The later layout-validation commit removes that runtime depth check while adding a layout check that verifies plane presence and dimensions but not sample widths. Either edit alone leaves a rejecting guard. Together a valid RGB image with 12-bit red and 8-bit green/blue enters the 16-bit converter, which reads two bytes per sample from an 8-bit plane. Repair requires reconciling the planner eligibility with the runtime plane-width contract across both commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "heif_decode_image via public uncompressed encode/read APIs",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "7ad3e8412c496807de49ee8df66d079bea93c411",
+      "edited_message": null,
+      "patch": "diff --git a/lib/mprintf.c b/lib/mprintf.c\nindex abe0df4..df292da 100644\n--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -31,7 +31,7 @@\n #define BUFFSIZE 326 /* buffer for long-to-str and float-to-str calcs, should\n                         fit negative DBL_MAX (317 letters) */\n #define MAX_PARAMETERS 128 /* number of input arguments */\n-#define MAX_SEGMENTS   128 /* number of output segments */\n+#define MAX_SEGMENTS   256 /* number of output segments */\n \n /* Lower-case digits. */\n const unsigned char Curl_ldigits[] = \"0123456789abcdef\";\n"
+    },
+    {
+      "sha": "939b9af468c194528e5c4d0660290ce0fc106ff5",
+      "edited_message": null,
+      "patch": "diff --git a/lib/mprintf.c b/lib/mprintf.c\nindex 1ad26d3..17fcd33 100644\n--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -548,7 +548,7 @@ static int parsefmt(const char *format,\n       /* Handle the specifier */\n       if(param < 0)\n         param = param_num++;\n-      if(param >= MAX_PARAMETERS)\n+      if(param >= MAX_SEGMENTS)\n         return PFMT_MANYARGS;\n       if(param >= max_param)\n         max_param = param;\n"
+    }
+  ],
+  "coupling": "The earlier mprintf commit permits up to 256 output segments while leaving the 128-entry argument array and its bitmap bounded by MAX_PARAMETERS. This is safe by itself because the argument-index check still uses MAX_PARAMETERS. The later error-handling commit changes the conversion argument check to MAX_SEGMENTS; in the unedited batch those caps are both 128, so this change alone is safe. Together, a 129-conversion format passes the segment and argument checks, then writes input[128] past the stack array. Preserving support for the longer format requires keeping the segment and argument capacities independent at every argument use, including the argument bitmap; merely reviewing either local maintenance change without the other misses the mismatched bounds.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "curl_maprintf from <curl/mprintf.h>",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

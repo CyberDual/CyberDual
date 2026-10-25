@@ -1,0 +1,202 @@
+diff --git a/src/lib/OpenEXRCore/internal_ht.cpp b/src/lib/OpenEXRCore/internal_ht.cpp
+index 6e3cf25d94f257c63157605ef3ccec744efa9dc3..d02b245532b7ebc5bebf70905001f87ed93fa387 100644
+--- a/src/lib/OpenEXRCore/internal_ht.cpp
++++ b/src/lib/OpenEXRCore/internal_ht.cpp
+@@ -3,6 +3,7 @@
+ ** Copyright Contributors to the OpenEXR Project.
+ */
+ 
++#include <algorithm>
+ #include <cmath>
+ #include <limits>
+ #include <string>
+@@ -286,19 +287,31 @@ ht_undo_impl (
+     ojph::ui32 image_width =
+         siz.get_image_extent ().x - siz.get_image_offset ().x;
+ 
+-    if (decode->chunk.width != image_width
+-        || decode->chunk.height != image_height
+-        || decode->channel_count != siz.get_num_components())
++    exr_compression_t comp = EXR_COMPRESSION_HTJ2K256;
++    exr_get_compression (decode->context, decode->part_index, &comp);
++    bool padded = comp == EXR_COMPRESSION_LJ2K &&
++        image_width > decode->chunk.width &&
++        image_height > decode->chunk.height;
++    int padding_x = padded ? std::min (64, decode->chunk.width) : 0;
++    int padding_y = padded ? std::min (64, decode->chunk.height) : 0;
++
++    if ((!padded && (decode->chunk.width != image_width ||
++                     decode->chunk.height != image_height)) ||
++        decode->channel_count != siz.get_num_components())
+         return EXR_ERR_CORRUPT_CHUNK;
+ 
+     for (int cs_i = 0; cs_i < decode->channel_count; cs_i++)
+     {
+         int file_i = cs_to_file_ch[cs_i].file_index;
+ 
+-        if (decode->channels[file_i].height != siz.get_recon_height (cs_i) ||
+-            decode->channels[file_i].width != siz.get_recon_width (cs_i) ||
+-            decode->channels[file_i].height != image_height / siz.get_downsampling (cs_i).y ||
+-            decode->channels[file_i].width != image_width / siz.get_downsampling (cs_i).x)
++        if ((padded &&
++             (decode->channels[file_i].height > siz.get_recon_height (cs_i) ||
++              decode->channels[file_i].width > siz.get_recon_width (cs_i))) ||
++            (!padded &&
++             (decode->channels[file_i].height != siz.get_recon_height (cs_i) ||
++              decode->channels[file_i].width != siz.get_recon_width (cs_i) ||
++              decode->channels[file_i].height != image_height / siz.get_downsampling (cs_i).y ||
++              decode->channels[file_i].width != image_width / siz.get_downsampling (cs_i).x)))
+             return EXR_ERR_CORRUPT_CHUNK;
+     }
+ 
+@@ -314,6 +327,8 @@ ht_undo_impl (
+     }
+     if (bpl > INT32_MAX || bpl * decode->chunk.height > (int64_t) PTRDIFF_MAX)
+         return EXR_ERR_CORRUPT_CHUNK;
++    if (padded && is_planar)
++        return EXR_ERR_CORRUPT_CHUNK;
+     cs.set_planar (is_planar);
+ 
+     cs.create ();
+@@ -392,8 +407,10 @@ ht_undo_impl (
+     else
+     {
+         uint8_t* line_pixels = static_cast<uint8_t*> (uncompressed_data);
++        std::vector<int32_t> padded_line;
++        if (padded) padded_line.resize (image_width);
+ 
+-        assert (bpl * image_height == uncompressed_size);
++        assert (bpl * decode->chunk.height == uncompressed_size);
+ 
+         for (uint32_t y = 0; y < image_height; ++y)
+         {
+@@ -402,6 +419,14 @@ ht_undo_impl (
+                 int file_c = cs_to_file_ch[c].file_index;
+                 cur_line   = cs.pull (next_comp);
+                 assert (next_comp == c);
++                if (y < padding_y || y >= padding_y + decode->chunk.height)
++                    continue;
++                const int32_t* samples = cur_line->i32;
++                if (padded)
++                {
++                    std::copy_n (samples, image_width, padded_line.data ());
++                    samples = padded_line.data ();
++                }
+                 if (decode->channels[file_c].data_type == EXR_PIXEL_HALF)
+                 {
+                     int16_t* channel_pixels =
+@@ -410,9 +435,9 @@ ht_undo_impl (
+                          p++)
+                     {
+                         if (!cod.is_reversible(c))
+-                            *channel_pixels++ = (int16_t) int16_to_half(cur_line->i32[p]).bits();
++                            *channel_pixels++ = (int16_t) int16_to_half(samples[p + padding_x]).bits();
+                         else
+-                            *channel_pixels++ = cur_line->i32[p];
++                            *channel_pixels++ = samples[p + padding_x];
+                     }
+                 }
+                 else
+@@ -423,13 +448,14 @@ ht_undo_impl (
+                          p++)
+                     {
+                         if (!cod.is_reversible(c))
+-                            *((float*) channel_pixels++) = int32_to_float(cur_line->i32[p]);
++                            *((float*) channel_pixels++) = int32_to_float(samples[p + padding_x]);
+                         else
+-                            *channel_pixels++ = (uint32_t) cur_line->i32[p];
++                            *channel_pixels++ = (uint32_t) samples[p + padding_x];
+                     }
+                 }
+             }
+-            line_pixels += bpl;
++            if (y >= padding_y && y < padding_y + decode->chunk.height)
++                line_pixels += bpl;
+         }
+     }
+ 
+@@ -494,7 +520,6 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+     cs.set_planar (isPlanar);
+ 
+     siz.set_image_offset (ojph::point (0, 0));
+-    siz.set_image_extent (ojph::point (image_width, image_height));
+ 
+     exr_compression_t comp = EXR_COMPRESSION_HTJ2K256;
+     exr_get_compression (encode->context, encode->part_index, &comp);
+@@ -521,6 +546,14 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+         }
+     }
+ 
++    int padding_x = lossy && !isPlanar ? std::min (64, image_width) : 0;
++    int padding_y = lossy && !isPlanar ? std::min (64, image_height) : 0;
++    if (image_width > INT32_MAX - 2 * padding_x ||
++        image_height > INT32_MAX - 2 * padding_y)
++        return EXR_ERR_INVALID_ARGUMENT;
++    siz.set_image_extent (ojph::point (image_width + 2 * padding_x,
++                                       image_height + 2 * padding_y));
++
+     if (lossy)
+     {
+         cod.set_reversible (false);
+@@ -545,6 +578,7 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+         {
+             double scaled_q = (qfactor - 97.)/53.;
+             double delta_ref = 0.005 * pow(2, -28.478*scaled_q) + 0.001 * pow(2, -10.534*scaled_q);
++            if (padding_x) delta_ref *= 0.5;
+ 
+             /*
+              * Setting Qstep taking into account the gain from the ICT
+@@ -680,8 +714,11 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+ 
+             assert (bpl * image_height == encode->packed_bytes);
+ 
+-            for (int y = 0; y < image_height; y++)
++            for (int y = 0; y < image_height + 2 * padding_y; y++)
+             {
++                int source_y = std::max (0, std::min (y - padding_y, image_height - 1));
++                line_pixels = static_cast<const uint8_t*> (encode->packed_buffer) +
++                    source_y * bpl;
+                 for (int16_t c = 0; c < encode->channel_count; c++)
+                 {
+                     int file_c = cs_channel_info[c].file_index;
+@@ -690,32 +727,33 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+                     {
+                         int16_t* channel_pixels =
+                             (int16_t*) (line_pixels + cs_channel_info[c].raster_line_offset);
+-                        for (int32_t p = 0; p < encode->channels[file_c].width;
++                        for (int32_t p = 0; p < image_width + 2 * padding_x;
+                             p++)
+                         {
++                            int source_x = std::max (0, std::min (p - padding_x, image_width - 1));
+                             if (! cod.is_reversible(c))
+-                                cur_line->i32[p] = half_to_int16(half (half::FromBits, (uint16_t) (*channel_pixels++)));
++                                cur_line->i32[p] = half_to_int16(half (half::FromBits, (uint16_t) channel_pixels[source_x]));
+                             else
+-                                cur_line->i32[p] = *channel_pixels++;
++                                cur_line->i32[p] = channel_pixels[source_x];
+                         }
+                     }
+                     else
+                     {
+                         int32_t* channel_pixels =
+                             (int32_t*) (line_pixels + cs_channel_info[c].raster_line_offset);
+-                        for (int32_t p = 0; p < encode->channels[file_c].width;
++                        for (int32_t p = 0; p < image_width + 2 * padding_x;
+                             p++)
+                         {
++                            int source_x = std::max (0, std::min (p - padding_x, image_width - 1));
+                             if (! cod.is_reversible(c))
+-                                cur_line->i32[p] = float_to_int32(*((float *)channel_pixels++));
++                                cur_line->i32[p] = float_to_int32(((float *)channel_pixels)[source_x]);
+                             else
+-                                cur_line->i32[p] = *channel_pixels++;
++                                cur_line->i32[p] = channel_pixels[source_x];
+                         }
+                     }
+                     assert (next_comp == c);
+                     cur_line = cs.exchange (cur_line, next_comp);
+                 }
+-                line_pixels += bpl;
+             }
+         }
+ 

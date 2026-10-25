@@ -1,0 +1,22 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index 3fbb5b1..d582825 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -254,7 +254,8 @@ index_tree_append(index_tree *tree, index_tree_node *node, bool prepend)
+ {
+ 	node->parent = prepend ? tree->leftmost : tree->rightmost;
+ 	node->left = NULL;
+-	node->right = NULL;
++	if (!prepend || tree->root != NULL)
++		node->right = NULL;
+ 
+ 	++tree->count;
+ 
+@@ -408,7 +409,6 @@ index_stream_init(lzma_vli compressed_base, lzma_vli uncompressed_base,
+ 	s->node.compressed_base = compressed_base;
+ 	s->node.parent = NULL;
+ 	s->node.left = NULL;
+-	s->node.right = NULL;
+ 
+ 	s->number = stream_number;
+ 	s->block_number_base = block_number_base;

@@ -1,0 +1,589 @@
+diff --git a/build-emscripten.sh b/build-emscripten.sh
+deleted file mode 100755
+index 7fe4749a8aabee456a7f1471afabdae3c8473386..0000000000000000000000000000000000000000
+--- a/build-emscripten.sh
++++ /dev/null
+@@ -1,202 +0,0 @@
+-#!/bin/bash
+-set -e
+-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+-
+-if [[ $# -ne 1 ]] ; then
+-    echo "Usage: $0 SRCDIR"
+-    echo
+-    echo "It is recommended to build in a separate directory."
+-    echo "Then specify this directory as an argument to this script."
+-    echo "Example:"
+-    echo "  mkdir buildjs"
+-    echo "  cd buildjs"
+-    echo "  USE_WASM=0 ../build-emscripten.sh .."
+-    echo
+-    echo "This should generate a libheif.js and (optionally, without the USE_WASM=0) a libheif.wasm"
+-    exit 5
+-fi
+-
+-SRCDIR=$1
+-
+-CORES="${CORES:-`nproc --all`}"
+-
+-ENABLE_LIBDE265="${ENABLE_LIBDE265:-1}"
+-LIBDE265_VERSION="${LIBDE265_VERSION:-1.0.15}"
+-
+-ENABLE_AOM="${ENABLE_AOM:-0}"
+-AOM_VERSION="${AOM_VERSION:-3.6.1}"
+-
+-# Webcodecs is not on by default b/c asyncify increases the binary size considerably
+-ENABLE_WEBCODECS="${ENABLE_WEBCODECS:-0}"
+-
+-ENABLE_UNCOMPRESSED="${ENABLE_UNCOMPRESSED:-0}"
+-
+-# J2K still defunct. OpenJPEG compiles, but library is not picked up by libheif cmake.
+-ENABLE_OPENJPEG="${ENABLE_OPENJPEG:-0}"
+-OPENJPEG_VERSION="${OPENJPEG_VERSION:-2.5.4}"
+-
+-STANDALONE="${STANDALONE:-0}"
+-DEBUG="${DEBUG:-0}"
+-USE_ES6="${USE_ES6:-0}"
+-USE_WASM="${USE_WASM:-1}"
+-USE_TYPESCRIPT="${USE_TYPESCRIPT:-1}"
+-USE_UNSAFE_EVAL="${USE_UNSAFE_EVAL:-1}"
+-
+-echo "Build using ${CORES} CPU cores"
+-
+-LIBRARY_LINKER_FLAGS=""
+-LIBRARY_INCLUDE_FLAGS=""
+-
+-CONFIGURE_ARGS_LIBDE265=""
+-if [ "$ENABLE_LIBDE265" = "1" ]; then
+-    [ -s "libde265-${LIBDE265_VERSION}.tar.gz" ] || curl \
+-        -L \
+-        -o libde265-${LIBDE265_VERSION}.tar.gz \
+-        https://github.com/strukturag/libde265/releases/download/v${LIBDE265_VERSION}/libde265-${LIBDE265_VERSION}.tar.gz
+-    if [ ! -s "libde265-${LIBDE265_VERSION}/libde265/.libs/libde265.a" ]; then
+-        tar xf libde265-${LIBDE265_VERSION}.tar.gz
+-        cd libde265-${LIBDE265_VERSION}
+-        [ -x configure ] || ./autogen.sh
+-        CXXFLAGS=-O3 emconfigure ./configure --enable-static --disable-shared --disable-sse --disable-dec265 --disable-sherlock265
+-        emmake make -j${CORES}
+-        cd ..
+-    fi
+-    LIBDE265_DIR="$(pwd)/libde265-${LIBDE265_VERSION}"
+-    CONFIGURE_ARGS_LIBDE265="-DLIBDE265_INCLUDE_DIR=${LIBDE265_DIR} -DLIBDE265_LIBRARY=-L${LIBDE265_DIR}/libde265/.libs"
+-    LIBRARY_LINKER_FLAGS="$LIBRARY_LINKER_FLAGS -L${LIBDE265_DIR}/libde265/.libs -lde265"
+-fi
+-
+-CONFIGURE_ARGS_AOM=""
+-if [ "$ENABLE_AOM" = "1" ]; then
+-    [ -s "aom-${AOM_VERSION}.tar.gz" ] || curl \
+-        -L \
+-        -o aom-${AOM_VERSION}.tar.gz \
+-        "https://aomedia.googlesource.com/aom/+archive/v${AOM_VERSION}.tar.gz"
+-    if [ ! -s "aom-${AOM_VERSION}/libaom.a" ]; then
+-        mkdir -p aom-${AOM_VERSION}/aom-source
+-        tar xf aom-${AOM_VERSION}.tar.gz -C aom-${AOM_VERSION}/aom-source
+-        cd aom-${AOM_VERSION}
+-
+-        emcmake cmake aom-source \
+-            -DENABLE_CCACHE=1 \
+-            -DAOM_TARGET_CPU=generic \
+-            -DENABLE_DOCS=0 \
+-            -DENABLE_TESTS=0 \
+-            -DENABLE_EXAMPLES=0 \
+-            -DENABLE_TESTDATA=0 \
+-            -DENABLE_TOOLS=0 \
+-            -DCONFIG_MULTITHREAD=0 \
+-            -DCONFIG_RUNTIME_CPU_DETECT=0 \
+-            -DBUILD_SHARED_LIBS=0 \
+-            -DCMAKE_BUILD_TYPE=Release
+-
+-        emmake make -j${CORES}
+-
+-        cd ..
+-    fi
+-
+-    AOM_DIR="$(pwd)/aom-${AOM_VERSION}"
+-    CONFIGURE_ARGS_AOM="-DAOM_INCLUDE_DIR=${AOM_DIR}/aom-source -DAOM_LIBRARY=-L${AOM_DIR}"
+-    LIBRARY_LINKER_FLAGS="$LIBRARY_LINKER_FLAGS -L${AOM_DIR} -laom"
+-fi
+-
+-CONFIGURE_ARGS_OPENJPEG=""
+-if [ "$ENABLE_OPENJPEG" = "1" ]; then
+-    [ -s "openjpeg-${OPENJPEG__VERSION}.tar.gz" ] || curl \
+-        -L \
+-        -o openjpeg-${OPENJPEG_VERSION}.tar.gz \
+-	"https://github.com/uclouvain/openjpeg/archive/refs/tags/v${OPENJPEG_VERSION}.tar.gz"
+-    if [ ! -s "openjpeg-${OPENJPEG_VERSION}/bin/libopenjp2.a" ]; then
+-        mkdir -p openjpeg-${OPENJPEG_VERSION}/openjpeg-source
+-        tar xf openjpeg-${OPENJPEG_VERSION}.tar.gz -C openjpeg-${OPENJPEG_VERSION}/openjpeg-source
+-        cd openjpeg-${OPENJPEG_VERSION}
+-        emcmake cmake openjpeg-source/openjpeg-${OPENJPEG_VERSION} \
+-            -DBUILD_SHARED_LIBS=0 \
+-            -DCMAKE_BUILD_TYPE=Release \
+-	    -DCMAKE_INSTALL_PREFIX=openjpeg-install
+-
+-        emmake make -j${CORES}
+-        emmake make install -j${CORES}
+-
+-        cd ..
+-    fi
+-
+-    J2K_DIR="$(pwd)/openjpeg-${OPENJPEG_VERSION}"
+-    CONFIGURE_ARGS_OPENJPEG="-DWITH_OpenJPEG_DECODER=ON -DCMAKE_PREFIX_PATH=${J2K_DIR}/openjpeg-install -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH"
+-    LIBRARY_LINKER_FLAGS="$LIBRARY_LINKER_FLAGS -L${J2K_DIR}/bin -lopenjp2"
+-fi
+-
+-CONFIGURE_ARGS_WEBCODECS=""
+-if [ "$ENABLE_WEBCODECS" = "1" ]; then
+-    CONFIGURE_ARGS_WEBCODECS="-DWITH_WEBCODECS=ON"
+-fi
+-
+-CONFIGURE_ARGS_UNCOMPRESSED=""
+-if [ "$ENABLE_UNCOMPRESSED" = "1" ]; then
+-    CONFIGURE_ARGS_UNCOMPRESSED="-DWITH_UNCOMPRESSED_CODEC=ON"
+-fi
+-
+-EXTRA_EXE_LINKER_FLAGS="-lembind"
+-EXTRA_COMPILER_FLAGS=""
+-if [ "$STANDALONE" = "1" ]; then
+-    EXTRA_EXE_LINKER_FLAGS=""
+-    EXTRA_COMPILER_FLAGS="-D__EMSCRIPTEN_STANDALONE_WASM__=1"
+-fi
+-
+-CONFIGURE_ARGS="-DENABLE_MULTITHREADING_SUPPORT=OFF -DWITH_GDK_PIXBUF=OFF -DWITH_EXAMPLES=OFF -DBUILD_SHARED_LIBS=OFF -DENABLE_PLUGIN_LOADING=OFF"
+-emcmake cmake ${SRCDIR} $CONFIGURE_ARGS \
+-    -DCMAKE_BUILD_TYPE=Release \
+-    -DCMAKE_C_FLAGS="${EXTRA_COMPILER_FLAGS}" \
+-    -DCMAKE_CXX_FLAGS="${EXTRA_COMPILER_FLAGS}" \
+-    -DCMAKE_EXE_LINKER_FLAGS="${LIBRARY_LINKER_FLAGS} ${EXTRA_EXE_LINKER_FLAGS}" \
+-    $CONFIGURE_ARGS_LIBDE265 \
+-    $CONFIGURE_ARGS_AOM \
+-    $CONFIGURE_ARGS_WEBCODECS \
+-    $CONFIGURE_ARGS_UNCOMPRESSED \
+-    $CONFIGURE_ARGS_OPENJPEG
+-
+-VERBOSE=1 emmake make -j${CORES}
+-
+-LIBHEIFA="libheif/libheif.a"
+-EXPORTED_FUNCTIONS=$($EMSDK/upstream/bin/llvm-nm $LIBHEIFA --format=just-symbols | grep "^heif_\|^de265_\|^aom_" | grep "[^:]$" | sed 's/^/_/' | paste -sd "," -)
+-
+-echo "Running Emscripten..."
+-
+-BUILD_FLAGS="-lembind -o libheif.js --post-js ${SRCDIR}/post.js -sWASM=$USE_WASM -sDYNAMIC_EXECUTION=$USE_UNSAFE_EVAL"
+-
+-if [ "$ENABLE_WEBCODECS" = "1" ]; then
+-    BUILD_FLAGS="$BUILD_FLAGS -sASYNCIFY -sASYNCIFY_IMPORTS=['decode_with_browser_hevc']"
+-fi
+-
+-if [ "$USE_TYPESCRIPT" = "1" ]; then
+-    BUILD_FLAGS="$BUILD_FLAGS --emit-tsd libheif.d.ts"
+-fi
+-
+-RELEASE_BUILD_FLAGS="-O3"
+-
+-if [ "$STANDALONE" = "1" ]; then
+-    # Note: this intentionally overwrites the BUILD_FLAGS set above
+-    echo "Building in standalone (non-web) build mode"
+-    BUILD_FLAGS="-sSTANDALONE_WASM -sWASM -o libheif.wasm --no-entry"
+-fi
+-
+-if [ "$DEBUG" = "1" ]; then
+-    echo "Building in debug mode"
+-    RELEASE_BUILD_FLAGS="--profile -g"
+-fi
+-
+-if [ "$USE_ES6" = "1" ]; then
+-    BUILD_FLAGS="$BUILD_FLAGS -sEXPORT_ES6"
+-fi
+-
+-emcc -Wl,--whole-archive "$LIBHEIFA" -Wl,--no-whole-archive \
+-    -sEXPORTED_FUNCTIONS="$EXPORTED_FUNCTIONS,_free,_malloc,_memcpy" \
+-    -sMODULARIZE \
+-    -sEXPORT_NAME="libheif" \
+-    -sWASM_ASYNC_COMPILATION=0 \
+-    -sALLOW_MEMORY_GROWTH \
+-    -std=c++11 \
+-    $LIBRARY_INCLUDE_FLAGS \
+-    $LIBRARY_LINKER_FLAGS \
+-    $BUILD_FLAGS \
+-    $RELEASE_BUILD_FLAGS
+diff --git a/libheif/codecs/uncompressed/unc_codec.cc b/libheif/codecs/uncompressed/unc_codec.cc
+index 00f8af1d93610b01840493d968e1f266182e160d..2aaa102f6e167a486b1e7d8822cf62ff92019662 100644
+--- a/libheif/codecs/uncompressed/unc_codec.cc
++++ b/libheif/codecs/uncompressed/unc_codec.cc
+@@ -240,6 +240,14 @@ Result<std::shared_ptr<HeifPixelImage>> UncompressedImageCodec::create_image(con
+   // uncC entry first, in order, so the first N descriptions in m_components
+   // (where N == uncC->get_components().size()) correspond positionally to
+   // the uncC entries we're walking here.
++  //
++  // Capture the number of pre-populated descriptions once, before the loop.
++  // The fallback branch below calls add_component(), which appends a new
++  // description; comparing desc_idx against the live size would let those
++  // freshly added descriptions flip later iterations onto the pre-populated
++  // branch. A 3-component YCbCr sequence (no pre-populated descriptions)
++  // would then create Y and reuse it for Cb, dropping the Cb plane.
++  const size_t num_prepopulated_descriptions = img->get_component_descriptions().size();
+   uint32_t desc_idx = 0;
+   for (Box_uncC::Component component : uncC->get_components()) {
+     if (component.component_index >= components.size()) {
+@@ -250,17 +258,24 @@ Result<std::shared_ptr<HeifPixelImage>> UncompressedImageCodec::create_image(con
+       };
+     }
+ 
+-    if (desc_idx >= img->get_component_descriptions().size()) {
+-      // Fallback: source did not populate descriptions (shouldn't happen
+-      // for an item that went through populate_component_descriptions, but
+-      // keep the historical add_component path as a safety net).
++    if (desc_idx >= num_prepopulated_descriptions) {
++      // Fallback: source did not populate descriptions. This is the path the
++      // sequence ('uncv') decoder takes; it builds properties from the sample
++      // entry and does not clone descriptions from an ImageItem.
+       auto component_type = components[component.component_index].component_type;
+       uint32_t plane_w = width;
+       uint32_t plane_h = height;
+       if (component_type == heif_cmpd_component_type_Cb ||
+           component_type == heif_cmpd_component_type_Cr) {
+-        plane_w = width / chroma_h_subsampling(chroma);
+-        plane_h = height / chroma_v_subsampling(chroma);
++        // Floor division undersizes Cb/Cr when the luma size is odd, and the
++        // RGB conversion (Op_YCbCr420_to_RGB24) indexes chroma with x/2 and
++        // y/2 for every luma sample. Round each plane extent up to an even
++        // sample count, same as rounded_size(), so the last chroma sample of
++        // an odd dimension has storage.
++        uint32_t sub_h = chroma_h_subsampling(chroma);
++        uint32_t sub_v = chroma_v_subsampling(chroma);
++        plane_w = (width / sub_h + 1U) & ~1U;
++        plane_h = (height / sub_v + 1U) & ~1U;
+       }
+       auto result = img->add_component(plane_w, plane_h, component_type,
+                                        unc_component_format_to_datatype(component.component_format),
+@@ -319,7 +334,7 @@ Result<std::shared_ptr<HeifPixelImage>> UncompressedImageCodec::create_image(con
+       if (it != cpat_cmpd_idx_to_comp_id.end()) {
+         comp_id = it->second;
+       }
+-      else if (desc_idx < img->get_component_descriptions().size()) {
++      else if (desc_idx < num_prepopulated_descriptions) {
+         comp_id = img->get_component_descriptions()[desc_idx].component_id;
+         desc_idx++;
+         cpat_cmpd_idx_to_comp_id[p.cmpd_index] = comp_id;
+diff --git a/tests/CMakeLists.txt b/tests/CMakeLists.txt
+index 8056f1b41a153fbd86d7965c0e9121763b5d1e8b..3abb79e0a0e1e7152ef8a1e0732aa83bebb5b08e 100644
+--- a/tests/CMakeLists.txt
++++ b/tests/CMakeLists.txt
+@@ -126,6 +126,7 @@ if (WITH_UNCOMPRESSED_CODEC)
+     add_libheif_test(uncompressed_decode_ycbcr)
+     add_libheif_test(uncompressed_decode_ycbcr420)
+     add_libheif_test(uncompressed_decode_ycbcr422)
++    add_libheif_test(uncompressed_sequence_odd_chroma)
+     add_libheif_test(uncompressed_encode)
+ 
+     if (ENABLE_EXPERIMENTAL_FEATURES)
+diff --git a/tests/uncompressed_sequence_odd_chroma.cc b/tests/uncompressed_sequence_odd_chroma.cc
+new file mode 100644
+index 0000000000000000000000000000000000000000..97380b6b39c1e2895d1506db44f841901cded68f
+--- /dev/null
++++ b/tests/uncompressed_sequence_odd_chroma.cc
+@@ -0,0 +1,304 @@
++/*
++  libheif integration test for GHSA-4h82-g446-83fm.
++
++  MIT License
++
++  Copyright (c) 2026 Dirk Farin <dirk.farin@gmail.com>
++
++  Permission is hereby granted, free of charge, to any person obtaining a copy
++  of this software and associated documentation files (the "Software"), to deal
++  in the Software without restriction, including without limitation the rights
++  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++  copies of the Software, and to permit persons to whom the Software is
++  furnished to do so, subject to the following conditions:
++
++  The above copyright notice and this permission notice shall be included in all
++  copies or substantial portions of the Software.
++
++  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
++  SOFTWARE.
++*/
++
++// Decode a YCbCr 4:2:0 uncompressed ('uncv') sequence frame whose luma height
++// is odd. The sequence path sizes Cb/Cr in the create_image() fallback; an
++// undersized chroma plane used to be read past its end while converting to
++// RGB. The frame is built by hand and decoded through heif_track_decode_next_image().
++
++#include "catch_amalgamated.hpp"
++#include "libheif/heif.h"
++#include "libheif/heif_sequences.h"
++
++#include <cstdint>
++#include <vector>
++
++namespace {
++
++void put16(std::vector<uint8_t>& v, uint16_t x)
++{
++  v.push_back(static_cast<uint8_t>(x >> 8));
++  v.push_back(static_cast<uint8_t>(x));
++}
++
++void put32(std::vector<uint8_t>& v, uint32_t x)
++{
++  v.push_back(static_cast<uint8_t>(x >> 24));
++  v.push_back(static_cast<uint8_t>(x >> 16));
++  v.push_back(static_cast<uint8_t>(x >> 8));
++  v.push_back(static_cast<uint8_t>(x));
++}
++
++void put_fourcc(std::vector<uint8_t>& v, const char* s)
++{
++  v.push_back(static_cast<uint8_t>(s[0]));
++  v.push_back(static_cast<uint8_t>(s[1]));
++  v.push_back(static_cast<uint8_t>(s[2]));
++  v.push_back(static_cast<uint8_t>(s[3]));
++}
++
++std::vector<uint8_t> box(const char* type, const std::vector<uint8_t>& payload)
++{
++  std::vector<uint8_t> b;
++  put32(b, static_cast<uint32_t>(8 + payload.size()));
++  put_fourcc(b, type);
++  b.insert(b.end(), payload.begin(), payload.end());
++  return b;
++}
++
++std::vector<uint8_t> concat(std::initializer_list<std::vector<uint8_t>> parts)
++{
++  std::vector<uint8_t> out;
++  for (const auto& p : parts) {
++    out.insert(out.end(), p.begin(), p.end());
++  }
++  return out;
++}
++
++constexpr uint16_t WIDTH  = 128;
++constexpr uint16_t HEIGHT = 131;
++
++// Minimal HEIF image sequence: one 'pict' track, one 4:2:0 'uncv' sample in
++// component-interleave layout (Y, then Cb, then Cr).
++std::vector<uint8_t> build_uncv_sequence_file()
++{
++  std::vector<uint8_t> ftyp_p;
++  put_fourcc(ftyp_p, "msf1");
++  put32(ftyp_p, 0);
++  put_fourcc(ftyp_p, "msf1");
++  put_fourcc(ftyp_p, "iso8");
++  std::vector<uint8_t> ftyp = box("ftyp", ftyp_p);
++
++  std::vector<uint8_t> mvhd_p;
++  put32(mvhd_p, 0);
++  put32(mvhd_p, 0);
++  put32(mvhd_p, 0);
++  put32(mvhd_p, 1000);
++  put32(mvhd_p, 1);
++  put32(mvhd_p, 0x00010000);
++  put16(mvhd_p, 0x0100);
++  put16(mvhd_p, 0);
++  put32(mvhd_p, 0);
++  put32(mvhd_p, 0);
++  for (uint32_t m : {0x00010000u, 0u, 0u, 0u, 0x00010000u, 0u, 0u, 0u, 0x40000000u}) put32(mvhd_p, m);
++  for (int i = 0; i < 6; i++) put32(mvhd_p, 0);
++  put32(mvhd_p, 2);
++  std::vector<uint8_t> mvhd = box("mvhd", mvhd_p);
++
++  std::vector<uint8_t> tkhd_p;
++  put32(tkhd_p, 0x00000007);
++  put32(tkhd_p, 0);
++  put32(tkhd_p, 0);
++  put32(tkhd_p, 1);
++  put32(tkhd_p, 0);
++  put32(tkhd_p, 1);
++  put32(tkhd_p, 0);
++  put32(tkhd_p, 0);
++  put16(tkhd_p, 0);
++  put16(tkhd_p, 0);
++  put16(tkhd_p, 0);
++  put16(tkhd_p, 0);
++  for (uint32_t m : {0x00010000u, 0u, 0u, 0u, 0x00010000u, 0u, 0u, 0u, 0x40000000u}) put32(tkhd_p, m);
++  put32(tkhd_p, static_cast<uint32_t>(WIDTH) << 16);
++  put32(tkhd_p, static_cast<uint32_t>(HEIGHT) << 16);
++  std::vector<uint8_t> tkhd = box("tkhd", tkhd_p);
++
++  std::vector<uint8_t> mdhd_p;
++  put32(mdhd_p, 0);
++  put32(mdhd_p, 0);
++  put32(mdhd_p, 0);
++  put32(mdhd_p, 1000);
++  put32(mdhd_p, 1);
++  put16(mdhd_p, 0x55c4);
++  put16(mdhd_p, 0);
++  std::vector<uint8_t> mdhd = box("mdhd", mdhd_p);
++
++  std::vector<uint8_t> hdlr_p;
++  put32(hdlr_p, 0);
++  put32(hdlr_p, 0);
++  put_fourcc(hdlr_p, "pict");
++  put32(hdlr_p, 0);
++  put32(hdlr_p, 0);
++  put32(hdlr_p, 0);
++  hdlr_p.push_back(0);
++  std::vector<uint8_t> hdlr = box("hdlr", hdlr_p);
++
++  std::vector<uint8_t> vmhd_p;
++  put32(vmhd_p, 0x00000001);
++  put16(vmhd_p, 0);
++  put16(vmhd_p, 0);
++  put16(vmhd_p, 0);
++  put16(vmhd_p, 0);
++  std::vector<uint8_t> vmhd = box("vmhd", vmhd_p);
++
++  std::vector<uint8_t> cmpd_p;
++  put32(cmpd_p, 3);
++  put16(cmpd_p, 1);
++  put16(cmpd_p, 2);
++  put16(cmpd_p, 3);
++  std::vector<uint8_t> cmpd = box("cmpd", cmpd_p);
++
++  std::vector<uint8_t> uncC_p;
++  put32(uncC_p, 0);
++  put32(uncC_p, 0);
++  put32(uncC_p, 3);
++  for (uint16_t idx = 0; idx < 3; idx++) {
++    put16(uncC_p, idx);
++    uncC_p.push_back(7);
++    uncC_p.push_back(0);
++    uncC_p.push_back(0);
++  }
++  uncC_p.push_back(2); // sampling_type = 4:2:0
++  uncC_p.push_back(0); // interleave_type = component
++  uncC_p.push_back(0);
++  uncC_p.push_back(0);
++  put32(uncC_p, 0);
++  put32(uncC_p, 0);
++  put32(uncC_p, 0);
++  put32(uncC_p, 0);
++  put32(uncC_p, 0);
++  std::vector<uint8_t> uncC = box("uncC", uncC_p);
++
++  std::vector<uint8_t> vse;
++  for (int i = 0; i < 6; i++) vse.push_back(0);
++  put16(vse, 1);
++  put16(vse, 0);
++  put16(vse, 0);
++  put32(vse, 0);
++  put32(vse, 0);
++  put32(vse, 0);
++  put16(vse, WIDTH);
++  put16(vse, HEIGHT);
++  put32(vse, 0x00480000);
++  put32(vse, 0x00480000);
++  put32(vse, 0);
++  put16(vse, 1);
++  for (int i = 0; i < 32; i++) vse.push_back(0);
++  put16(vse, 0x0018);
++  put16(vse, 0xFFFF);
++  std::vector<uint8_t> uncv = box("uncv", concat({vse, cmpd, uncC}));
++
++  std::vector<uint8_t> stsd_p;
++  put32(stsd_p, 0);
++  put32(stsd_p, 1);
++  stsd_p.insert(stsd_p.end(), uncv.begin(), uncv.end());
++  std::vector<uint8_t> stsd = box("stsd", stsd_p);
++
++  std::vector<uint8_t> stts_p;
++  put32(stts_p, 0);
++  put32(stts_p, 1);
++  put32(stts_p, 1);
++  put32(stts_p, 1);
++  std::vector<uint8_t> stts = box("stts", stts_p);
++
++  std::vector<uint8_t> stsc_p;
++  put32(stsc_p, 0);
++  put32(stsc_p, 1);
++  put32(stsc_p, 1);
++  put32(stsc_p, 1);
++  put32(stsc_p, 1);
++  std::vector<uint8_t> stsc = box("stsc", stsc_p);
++
++  const uint32_t sample_size =
++      static_cast<uint32_t>(WIDTH) * HEIGHT +
++      2u * (WIDTH / 2) * (HEIGHT / 2);
++
++  std::vector<uint8_t> stsz_p;
++  put32(stsz_p, 0);
++  put32(stsz_p, sample_size);
++  put32(stsz_p, 1);
++  std::vector<uint8_t> stsz = box("stsz", stsz_p);
++
++  auto assemble = [&](uint32_t chunk_offset) {
++    std::vector<uint8_t> stco_p;
++    put32(stco_p, 0);
++    put32(stco_p, 1);
++    put32(stco_p, chunk_offset);
++    std::vector<uint8_t> stco = box("stco", stco_p);
++
++    std::vector<uint8_t> stbl = box("stbl", concat({stsd, stts, stsc, stsz, stco}));
++    std::vector<uint8_t> minf = box("minf", concat({vmhd, stbl}));
++    std::vector<uint8_t> mdia = box("mdia", concat({mdhd, hdlr, minf}));
++    std::vector<uint8_t> trak = box("trak", concat({tkhd, mdia}));
++    return box("moov", concat({mvhd, trak}));
++  };
++
++  std::vector<uint8_t> moov0 = assemble(0);
++  uint32_t mdat_payload_off = static_cast<uint32_t>(ftyp.size() + moov0.size() + 8);
++  std::vector<uint8_t> moov = assemble(mdat_payload_off);
++
++  std::vector<uint8_t> mdat_payload;
++  mdat_payload.reserve(sample_size);
++  for (uint32_t y = 0; y < HEIGHT; y++)
++    for (uint32_t x = 0; x < WIDTH; x++)
++      mdat_payload.push_back(static_cast<uint8_t>((x + y) & 0xFF));
++  for (int plane = 0; plane < 2; plane++)
++    for (uint32_t y = 0; y < HEIGHT / 2u; y++)
++      for (uint32_t x = 0; x < WIDTH / 2u; x++)
++        mdat_payload.push_back(0x80);
++  REQUIRE(mdat_payload.size() == sample_size);
++  std::vector<uint8_t> mdat = box("mdat", mdat_payload);
++
++  return concat({ftyp, moov, mdat});
++}
++
++} // namespace
++
++
++TEST_CASE("uncv 4:2:0 sequence with odd luma height decodes without OOB")
++{
++  std::vector<uint8_t> file = build_uncv_sequence_file();
++
++  heif_context* ctx = heif_context_alloc();
++  REQUIRE(ctx != nullptr);
++
++  heif_error err = heif_context_read_from_memory(ctx, file.data(), file.size(), nullptr);
++  REQUIRE(err.code == heif_error_Ok);
++  REQUIRE(heif_context_has_sequence(ctx) == 1);
++
++  heif_track* track = heif_context_get_track(ctx, 0);
++  REQUIRE(track != nullptr);
++
++  uint16_t tw = 0, th = 0;
++  REQUIRE(heif_track_get_image_resolution(track, &tw, &th).code == heif_error_Ok);
++  REQUIRE(tw == WIDTH);
++  REQUIRE(th == HEIGHT);
++
++  heif_image* img = nullptr;
++  heif_error derr = heif_track_decode_next_image(track, &img,
++                                                 heif_colorspace_RGB,
++                                                 heif_chroma_interleaved_RGB,
++                                                 nullptr);
++  REQUIRE(derr.code == heif_error_Ok);
++  REQUIRE(img != nullptr);
++
++  REQUIRE(heif_image_get_width(img, heif_channel_interleaved) == WIDTH);
++  REQUIRE(heif_image_get_height(img, heif_channel_interleaved) == HEIGHT);
++
++  heif_image_release(img);
++  heif_track_release(track);
++  heif_context_free(ctx);
++}

@@ -1,0 +1,14 @@
+{
+ "project": "pcre2",
+ "window_id": "283f8ee9a850903f041e20f8fc5872123c83b1f6d94baa04cf380f3f388a5ebe",
+ "base": "d9115cc0f2c91a00a5af46a46c85354779210e31",
+ "maint_batch_tip": "2d3a98a9f7c908cfd7c6ac81620580fa85c67acf",
+ "tree": "08002eb8315c0f6ee8ace373be57a52fe17762a0",
+ "n_commits": 101,
+ "n_editable": 63,
+ "list_sha1": "043e865ddd9b0feeda946e00fecfc4d6546efd6a",
+ "tar_sha256": "f910099a235a3a07a380dbaeac6a3993cbd16ee0944c63b25fb7d05293d1dffc",
+ "tar_bytes": 47431680,
+ "built_utc": "2026-10-17T20:12:36Z",
+ "cyberdual": "f685a97c"
+}

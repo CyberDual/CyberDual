@@ -1,0 +1,102 @@
+diff --git a/src/mat.c b/src/mat.c
+index fc7626902b797e0c928eeb620cc2b9ebf8722613..516e299045cd3e72e7beb9c5ce40d5da1f0d3b0b 100644
+--- a/src/mat.c
++++ b/src/mat.c
+@@ -471,6 +471,31 @@ ClassType2DataType(enum matio_classes class_type)
+     }
+ }
+ 
++/** @brief Returns the length of a UTF-8 sequence for a lead byte
++ *
++ * Determines the number of bytes (1-4) that make up a UTF-8 code point whose
++ * first byte is @c c. Returns 0 for bytes that cannot start a valid UTF-8
++ * sequence (continuation bytes and bytes 0xF8-0xFF).
++ *
++ * @ingroup MAT
++ * @param c first byte of the UTF-8 sequence
++ * @returns length of the sequence in bytes, or 0 if @c c is not a lead byte
++ */
++size_t
++Mat_Utf8SeqLen(mat_uint8_t c)
++{
++    if ( c <= 0x7F )
++        return 1;
++    else if ( (c & 0xE0) == 0xC0 )
++        return 2;
++    else if ( (c & 0xF0) == 0xE0 )
++        return 3;
++    else if ( (c & 0xF8) == 0xF0 )
++        return 4;
++    else
++        return 0;
++}
++
+ /** @brief Gets number of elements from a variable
+  *
+  * Gets number of elements from a variable by overflow-safe
+diff --git a/src/mat5.c b/src/mat5.c
+index 9726ba2b9bd6c8e0b690100e98a46b3b961e60d9..246f29adc2e5da9b70c3b6b20dca7ee170c38b97 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -3453,6 +3453,34 @@ Mat_VarReadNumeric5(mat_t *mat, matvar_t *matvar, void *data, size_t N)
+     return err;
+ }
+ 
++/** @brief Validates a UTF-8 character data element
++ *
++ * Walks @c nbytes bytes of UTF-8 data, verifying that every multi-byte
++ * sequence is complete. Used by the reader to reject malformed character
++ * data before it is handed back to the caller, which may re-wrap the
++ * buffer with Mat_VarCreate (which trusts the buffer bounds while
++ * recomputing @c nbytes).
++ *
++ * @ingroup mat_internal
++ * @param data pointer to the UTF-8 data
++ * @param nbytes number of bytes in @c data
++ * @retval MATIO_E_NO_ERROR if the data is valid, MATIO_E_FILE_FORMAT_VIOLATION otherwise
++ */
++static int
++ValidateUtf8CharData(const mat_uint8_t *data, size_t nbytes)
++{
++    size_t i = 0;
++
++    while ( i < nbytes ) {
++        const size_t len = Mat_Utf8SeqLen(data[i]);
++        if ( len == 0 || i + len > nbytes )
++            return MATIO_E_FILE_FORMAT_VIOLATION;
++        i += len;
++    }
++
++    return MATIO_E_NO_ERROR;
++}
++
+ /** @if mat_devman
+  * @brief Reads the data of a version 5 MAT variable
+  *
+@@ -3700,6 +3728,14 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                 }
+ #endif
+             }
++            if ( matvar->data_type == MAT_T_UTF8 ) {
++                err = ValidateUtf8CharData((const mat_uint8_t *)matvar->data, matvar->nbytes);
++                if ( err ) {
++                    free(matvar->data);
++                    matvar->data = NULL;
++                    matvar->nbytes = 0;
++                }
++            }
+             break;
+         case MAT_C_STRUCT: {
+             matvar_t **fields;
+diff --git a/src/matio_private.h b/src/matio_private.h
+index 67639ccfd1ec0eea0f8eb75795e1384a4654ffb6..69d0ef3a5f32746bc2d954f62a76fccd6f286e9f 100644
+--- a/src/matio_private.h
++++ b/src/matio_private.h
+@@ -270,6 +270,7 @@ EXTERN int InflateData(mat_t *mat, z_streamp z, void *buf, unsigned int nBytes);
+ EXTERN mat_complex_split_t *ComplexCalloc(size_t nbytes);
+ EXTERN void ComplexFree(mat_complex_split_t *complex_data);
+ EXTERN enum matio_types ClassType2DataType(enum matio_classes class_type);
++EXTERN size_t Mat_Utf8SeqLen(mat_uint8_t c);
+ EXTERN int Add(size_t *res, size_t a, size_t b);
+ EXTERN int Mul(size_t *res, size_t a, size_t b);
+ EXTERN int Mat_MulDims(const matvar_t *matvar, size_t *nelems);

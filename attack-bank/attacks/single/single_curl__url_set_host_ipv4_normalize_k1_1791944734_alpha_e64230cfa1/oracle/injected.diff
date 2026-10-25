@@ -1,0 +1,281 @@
+diff --git a/docs/libcurl/curl_url_set.md b/docs/libcurl/curl_url_set.md
+index 35ed109fcd534c4ff9d140d627a9ff557283edec..106fe586b2056721a54f1619182eee74ff59e20f 100644
+--- a/docs/libcurl/curl_url_set.md
++++ b/docs/libcurl/curl_url_set.md
+@@ -126,6 +126,10 @@ encoded as your locale says or UTF-8 (when WinIDN is used). If it is a
+ bracketed IPv6 numeric address it may contain a zone id (or you can use
+ *CURLUPART_ZONEID*).
+ 
++A legacy numerical IPv4 address, like '127.1', '0177.1' or '0x7f.1', is stored
++normalized as a dotted decimal IPv4 address - the same way such addresses are
++treated when a full URL is parsed.
++
+ Note that if you set an IPv6 address, it gets ruined and causes an error if
+ you also set the CURLU_URLENCODE flag.
+ 
+diff --git a/lib/urlapi.c b/lib/urlapi.c
+index 1c4db04e46388df390e037b5147724b62e40d809..128a50e5b199a6305ca1726f087da8f68081d128 100644
+--- a/lib/urlapi.c
++++ b/lib/urlapi.c
+@@ -54,6 +54,8 @@
+ /* scheme is not URL encoded, the longest libcurl supported ones are... */
+ #define MAX_SCHEME_LEN 40
+ #define MAX_ZONEID_LEN 16
++/* the number of digits in the longest decimal 32 bit number */
++#define IPV4_NUM_MAX 10
+ 
+ /*
+  * If USE_IPV6 is disabled, we still want to parse IPv6 addresses, so make
+@@ -2038,6 +2040,147 @@ nomem:
+   return CURLUE_OK;
+ }
+ 
++/*
++ * 'host' is the plain host name. If it is a legacy numerical IPv4 address,
++ * like '127.1', '0177.1' or '0x7f.1', 'encp' is replaced with the address
++ * written in normalized dotted decimal form - the same way such addresses
++ * are treated when a full URL is parsed.
++ *
++ * A single dot at the end of the address is accepted and treated as if it
++ * was not there.
++ */
++static CURLUcode urlhost_ipv4(struct dynbuf *encp, const char *host)
++{
++  unsigned int parts[4] = { 0, 0, 0, 0 };
++  const char *c = host;
++  bool done = FALSE;
++  int n = 0;
++
++  if(!ISDIGIT(*c))
++    /* cannot be a numerical IPv4 address */
++    return CURLUE_OK;
++
++  while(!done) {
++    char num[IPV4_NUM_MAX + 1]; /* room for a 32 bit number */
++    const char *p = num;
++    size_t len = 0;
++    curl_off_t val = 0;
++    int base = 10;
++    int rc;
++
++    if((*c == '0') && ((c[1] | 0x20) == 'x')) {
++      /* hexadecimal number */
++      num[len++] = *c++;
++      num[len++] = *c++;
++      p += 2; /* skip the prefix for the number conversion */
++      base = 16;
++    }
++    else if(*c == '0')
++      /* octal number */
++      base = 8;
++
++    while(((base == 16) ? ISXDIGIT(*c) : ISDIGIT(*c)) &&
++          (len < sizeof(num)))
++      num[len++] = *c++;
++
++    num[len] = 0;
++
++    if((base == 16) ? ISXDIGIT(*c) : ISDIGIT(*c))
++      /* more digits than what fits in a 32 bit number */
++      return CURLUE_OK;
++
++    rc = (base == 16) ? curlx_str_hex(&p, &val, UINT_MAX) :
++      (base == 8) ? curlx_str_octal(&p, &val, UINT_MAX) :
++      curlx_str_number(&p, &val, UINT_MAX);
++    if(rc) {
++      if(!n || len || *c)
++        /* not a numerical IPv4 address */
++        return CURLUE_OK;
++      /* an empty last part: the address ends with a dot */
++      n--;
++    }
++    else
++      parts[n] = (unsigned int)val;
++
++    switch(*c) {
++    case '.':
++      if(n == 3) {
++        if(c[1])
++          /* something follows this dot */
++          return CURLUE_OK;
++        done = TRUE;
++      }
++      else {
++        n++;
++        c++;
++      }
++      break;
++
++    case '\0':
++      done = TRUE;
++      break;
++
++    default:
++      /* not a numerical IPv4 address */
++      return CURLUE_OK;
++    }
++  }
++
++  /* a numerical IPv4 address: store it in normalized dotted decimal form */
++  {
++    struct dynbuf plain;
++    CURLcode result;
++
++    curlx_dyn_init(&plain, CURL_MAX_INPUT_LENGTH);
++    switch(n) {
++    case 0: /* a -- 32 bits */
++      result = curlx_dyn_addf(&plain, "%u.%u.%u.%u",
++                              (parts[0] >> 24),
++                              ((parts[0] >> 16) & 0xff),
++                              ((parts[0] >> 8) & 0xff),
++                              (parts[0] & 0xff));
++      break;
++    case 1: /* a.b -- 8.24 bits */
++      if((parts[0] > 0xff) || (parts[1] > 0xffffff))
++        return CURLUE_OK;
++      result = curlx_dyn_addf(&plain, "%u.%u.%u.%u",
++                              parts[0],
++                              ((parts[1] >> 16) & 0xff),
++                              ((parts[1] >> 8) & 0xff),
++                              (parts[1] & 0xff));
++      break;
++    case 2: /* a.b.c -- 8.8.16 bits */
++      if((parts[0] > 0xff) || (parts[1] > 0xff) || (parts[2] > 0xffff))
++        return CURLUE_OK;
++      result = curlx_dyn_addf(&plain, "%u.%u.%u.%u",
++                              parts[0],
++                              parts[1],
++                              ((parts[2] >> 8) & 0xff),
++                              (parts[2] & 0xff));
++      break;
++    case 3: /* a.b.c.d -- 8.8.8.8 bits */
++    default:
++      if((parts[0] > 0xff) || (parts[1] > 0xff) || (parts[2] > 0xff) ||
++         (parts[3] > 0xff))
++        return CURLUE_OK;
++      result = curlx_dyn_addf(&plain, "%u.%u.%u.%u",
++                              parts[0],
++                              parts[1],
++                              parts[2],
++                              parts[3]);
++      break;
++    }
++    if(result)
++      return CURLUE_OUT_OF_MEMORY;
++
++    /* the normalized address only consists of digits and dots so it is fine
++       to store it like this */
++    curlx_dyn_free(encp);
++    *encp = plain;
++  }
++  return CURLUE_OK;
++}
++
+ static CURLUcode url_sethost(CURLU *u, struct dynbuf *encp,
+                              bool urlencode,
+                              unsigned int flags)
+@@ -2045,6 +2188,7 @@ static CURLUcode url_sethost(CURLU *u, struct dynbuf *encp,
+   size_t n = curlx_dyn_len(encp);
+   bool bad = FALSE;
+   char *newp = curlx_dyn_ptr(encp);
++  CURLUcode uc = CURLUE_OK;
+   if(!n)
+     /* an empty hostname is okay if told so */
+     bad = (flags & CURLU_NO_AUTHORITY) ? FALSE : TRUE;
+@@ -2056,13 +2200,19 @@ static CURLUcode url_sethost(CURLU *u, struct dynbuf *encp,
+     CURLcode result = Curl_urldecode(newp, n, &decoded, &dlen, REJECT_CTRL);
+     if(result || hostname_check6(u, decoded, dlen))
+       bad = TRUE;
++    else if(ISDIGIT(*decoded))
++      /* possibly a legacy numerical IPv4 address */
++      uc = urlhost_ipv4(encp, decoded);
+     curlx_free(decoded);
+   }
+   else if(hostname_check6(u, newp, n))
+     bad = TRUE;
+-  if(bad) {
++  else if(ISDIGIT(*newp))
++    /* possibly a legacy numerical IPv4 address */
++    uc = urlhost_ipv4(encp, newp);
++  if(bad || uc) {
+     curlx_dyn_free(encp);
+-    return CURLUE_BAD_HOSTNAME;
++    return bad ? CURLUE_BAD_HOSTNAME : uc;
+   }
+   return CURLUE_OK;
+ }
+@@ -2159,8 +2309,12 @@ CURLUcode curl_url_set(CURLU *u, CURLUPart what,
+ 
+       if(appendquery && newp)
+         return url_append_query(u, &enc);
+-      else if(what == CURLUPART_HOST)
++      else if(what == CURLUPART_HOST) {
+         status = url_sethost(u, &enc, urlencode, flags);
++        if(!status)
++          /* the host name might have been replaced with a normalized one */
++          newp = curlx_dyn_ptr(&enc);
++      }
+     }
+     if(status)
+       return status;
+diff --git a/tests/libtest/lib1560.c b/tests/libtest/lib1560.c
+index 03d99ccbbf3b9444aa6e316eeeeea7fb5c50476d..f173be564124352ac341de5cbac083023609fe3f 100644
+--- a/tests/libtest/lib1560.c
++++ b/tests/libtest/lib1560.c
+@@ -1295,13 +1295,53 @@ static const struct setcase set_parts_list[] = {
+    0, /* set */
+    CURLUE_OK, CURLUE_BAD_HOSTNAME},
+   {"https://example.com/",
+-   "host=0xff,", /* '++' there is no automatic URL decode when setting this
+-                  part */
+-   "https://0xff/",
++   "host=0xff,", /* a legacy numerical IPv4 address is stored normalized. There
++                    is no automatic URL decode when setting this part */
++   "https://0.0.0.255/",
+    0, /* get */
+    0, /* set */
+    CURLUE_OK, CURLUE_OK},
+ 
++  /* legacy numerical IPv4 addresses set as host are stored normalized, the
++     same way they are when a full URL is parsed */
++  {"https://example.com/",
++   "host=2130706433,",
++   "https://127.0.0.1/",
++   0, 0, CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=0177.1,",
++   "https://127.0.0.1/",
++   0, 0, CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=0x7f.1,",
++   "https://127.0.0.1/",
++   0, 0, CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=0,",
++   "https://0.0.0.0/",
++   0, 0, CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=127.1,",
++   "https://127.0.0.1/",
++   0, 0, CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=127.0.0.1.,",
++   "https://127.0.0.1/",
++   0, 0, CURLUE_OK, CURLUE_OK},
++  /* not numerical IPv4 addresses: kept as hostnames */
++  {"https://example.com/",
++   "host=256.1.2.3,",
++   "https://256.1.2.3/",
++   0, 0, CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=1.2.3.4.5,",
++   "https://1.2.3.4.5/",
++   0, 0, CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=4294967296,",
++   "https://4294967296/",
++   0, 0, CURLUE_OK, CURLUE_OK},
++
+   {"https://example.com/",
+    "query=Al2cO3tDkcDZ3EWE5Lh+LX8TPHs,", /* contains '+' */
+    "https://example.com/?Al2cO3tDkcDZ3EWE5Lh%2BLX8TPHs",

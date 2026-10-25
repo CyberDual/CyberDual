@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "bd14bfd32c2b24e715f5ba5a3c0034fe086b29de",
+      "edited_message": "mprintf: avoid scanning strings twice for unbounded %s\n\nWhen no precision is in effect, out_string() already knows the exact\nstring length, so emit it directly through stream_run() instead of\nscanning the string a second time in stream_zrun().\n\nA negative precision means \"no precision\" (C treats it as omitted), so\nit takes the same direct path as the unbounded case. Only an explicit,\nnon-negative precision keeps the bounded, NUL-aware scan, since there the\nstring may be shorter than the precision or the buffer may not be\nNUL-terminated.\n\nCloses #23019\n\n(cherry picked from commit aad438d53569de2f29a54f6c65755fb0e7f0ed8f)",
+      "patch": "--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -1009,7 +1009,7 @@ static bool out_string(void *userp,\n   /* With no precision, len is already the exact length; emit it without\n      scanning again. With precision, scan up to len but stop at NUL, since\n      the string may be shorter or the buffer may not be NUL-terminated. */\n-  if(prec == -1) {\n+  if(prec < 0) {\n     if(stream_run(userp, stream, streamn,\n                   (const unsigned char *)str, len, donep))\n       return TRUE;\n"
+    },
+    {
+      "sha": "d30f7121f338644a81552455a671677f2271d6f4",
+      "edited_message": "tidy-up: null-terminator, NUL byte\n\nMinor steps to improve consistency.\n\nPrefer 'null-terminator', NUL (uppercase) byte, null (lowercase) byte.\nPerfer NUL over zero.\n\nWhile here, drop the redundant negative-precision re-check in formatf():\nout_string() already treats any negative precision as if it were omitted,\nso rewriting a negative precision parameter to -1 beforehand no longer\nchanges the result.\n\nCloses #23201\n\n(cherry picked from commit 60cf74f438cfaa4cbf133b1a5f712225a787783c)",
+      "patch": "--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -1144,13 +1144,8 @@ static int formatf(void *userp,\n       p.width = optr->width;\n \n     /* pick up the specified precision */\n-    if(p.flags & FLAGS_PRECPARAM) {\n+    if(p.flags & FLAGS_PRECPARAM)\n       p.prec = (int)input[optr->precision].val.nums;\n-      if(p.prec < 0)\n-        /* \"A negative precision is taken as if the precision were\n-           omitted.\" */\n-        p.prec = -1;\n-    }\n     else if(p.flags & FLAGS_PREC)\n       p.prec = optr->precision;\n     else\n"
+    }
+  ],
+  "coupling": "The reachable out-of-bounds read exists only when BOTH edited commits are present; each diff is correct maintenance on its own.\n\nbd14bfd (edit-A) adds the fast, non-NUL-scanning string emitter and selects it with `if(prec < 0)` instead of `if(prec == -1)`, justified as 'a negative precision means no precision'. This is behavior-preserving in isolation: the only way a negative-but-not-(-1) precision can reach out_string() is via the `%.*s` precision argument, and at that time formatf() still clamps any negative `%.*s` precision to -1 (so prec is always -1 for the fast path and len == strlen). Non-negative precisions still take the bounded stream_zrun() scan. With edit-A alone the PoC prints the whole string and does not fire.\n\nd30f712 (edit-B) drops the formatf() clamp that rewrote a negative `%.*s` precision parameter to -1, justified as redundant because 'out_string() already treats any negative precision as omitted' (which is exactly what edit-A made true). In isolation (on top of the real bd14bfd, whose selector is still `prec == -1`), an unclamped negative precision computes len = (size_t)prec (huge) but is routed to stream_zrun(), which stops at the NUL and stays in bounds. With edit-B alone the PoC does not fire.\n\nOnly composed do the two gaps line up: edit-B lets a negative precision (e.g. -8 from `%.*s`) reach out_string() unclamped, where len becomes (size_t)-8; edit-A's broadened `prec < 0` selector then routes that length into the raw stream_run()/memcpy path, reading ~SIZE_MAX bytes from the source string -> heap-buffer-overflow read.\n\nA correct fix must reason across both commits: restoring the clamp alone undoes d30f712's cleanup, and tightening the selector alone undoes bd14bfd's intent; the real invariant (a negative precision must be normalized to the unbounded length BEFORE the raw emitter is chosen) spans both edits, and the `len = (size_t)prec` computation they jointly expose.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "api",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

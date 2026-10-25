@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-190",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "feb9468287d296e7cabb27c25f681f568945317a",
+  "parent_sha": "feb9468287d296e7cabb27c25f681f568945317a",
+  "project": "exiv2",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/Exiv2/exiv2",
+  "repo_url": "https://github.com/Exiv2/exiv2",
+  "source": "reselect",
+  "target": "exiv2",
+  "task": "Extracting the AI7/Illustrator preview thumbnail of a crafted image via public preview API computes width*height*3 unbounded (size_t overflow -> oversized/undersized alloc); fix adds ai7ThumbnailSize() overflow+size guard. Single file src/preview.cpp.",
+  "task_iid": "exiv2__ai7_thumbnail_integer_overflow_alloc",
+  "vuln_desc": "Extracting the AI7/Illustrator preview thumbnail of a crafted image via public preview API computes width*height*3 unbounded (size_t overflow -> oversized/undersized alloc); fix adds ai7ThumbnailSize() overflow+size guard. Single file src/preview.cpp."
+}

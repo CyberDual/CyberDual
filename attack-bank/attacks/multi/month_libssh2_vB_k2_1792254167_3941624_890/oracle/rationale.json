@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "acad471925c0bbe69b931edcb663031cb9f93d18",
+      "edited_message": null,
+      "patch": "diff --git a/src/knownhost.c b/src/knownhost.c\nindex 2bd41deb..8b11e652 100644\n--- a/src/knownhost.c\n+++ b/src/knownhost.c\n@@ -514,13 +514,19 @@ static int knownhost_parse_ipv6(const char *src, size_t len,\n     return 1;\n }\n \n+static const char *knownhost_ipv6_close(const char *host)\n+{\n+    return strchr(host + 1, ']');\n+}\n+\n static int knownhost_ipv6_part(const char *host, const char **address,\n                                size_t *address_len, const char **suffix)\n {\n     if(host[0] == '[') {\n-        const char *close = strchr(host + 1, ']');\n+        const char *close;\n         const char *port;\n \n+        close = knownhost_ipv6_close(host);\n         if(!close || close == host + 1 || close[1] != ':' || !close[2])\n             return 0;\n \n"
+    },
+    {
+      "sha": "d4b04ceadd8e1099320f9bdd0fcee685bd7e641d",
+      "edited_message": "tidy-up: miscellaneous\n\n- wincng: add version comments.\n  Follow-up to 7a26697ede3e8e8696501bc51ca230ad5f2262d9 #397\n- wincng: fix two version support comments.\n- tests/keys-generate.sh: add comment, newlines.\n- mbedtls: casing in comment.\n- wording: use `null-terminator` more.\n- typos: `ssh-dss`.\n- knownhost: drop obsolete comment and validate bracketed IPv6 lines.\n- include/libssh2.h: clarify comments.\n- include/libssh2.h: drop empty lines.\n- libssh2_knownhost_writeline.md: fix grammar.\n- GHA: reorder Cygwin settings, improve package search URL.\n- fixup newlines.\n\nCloses #2617\n",
+      "patch": "diff --git a/src/knownhost.c b/src/knownhost.c\nindex c9851b5b..ae53ee0c 100644\n--- a/src/knownhost.c\n+++ b/src/knownhost.c\n@@ -1158,6 +1158,17 @@ int libssh2_knownhost_readline(LIBSSH2_KNOWNHOSTS *hosts,\n     /* key length is the parsed span, naturally excluding newline */\n     keylen = cp - keyp;\n \n+    if(hostp[0] == '[') {\n+        const char *address;\n+        const char *suffix;\n+        size_t address_len;\n+\n+        if(!knownhost_ipv6_part(hostp, &address, &address_len, &suffix))\n+            return ssh2_err(hosts->session,\n+                            LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,\n+                            \"Failed to parse known_hosts line\");\n+    }\n+\n     /* deal with this one host+key line */\n     rc = knownhost_line(hosts, hostp, hostlen, keyp, keylen);\n     if(rc)\n"
+    }
+  ],
+  "coupling": "The IPv6 commit factors bracketed address extraction into knownhost_ipv6_close() and knownhost_ipv6_part(). Those helpers correctly assume the null-terminated host strings used by knownhost_plain_match(). The later cleanup adds bracketed-entry validation in libssh2_knownhost_readline() and passes hostp, a bounded substring of the explicit-length line buffer, to that earlier helper. With a line containing an opening bracket but no closing bracket, and with the caller allocating exactly len bytes, strchr() reads beyond the heap buffer. The unsafe access is not present in the first commit alone, and the later change is benign for the null-terminated strings its helper was written for; the defect appears when the later bounded parser consumes the earlier null-terminated-only interface. A correct fix must inspect both commits and reconcile the helper contract with readline's explicit length: making the helper length-aware also requires updating its later parser call, while merely changing either diff without reasoning about the cross-commit interface can leave an unbounded scan on the readline path.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "api: libssh2_knownhost_readline",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

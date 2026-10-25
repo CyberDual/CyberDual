@@ -1,0 +1,34 @@
+diff --git a/src/mat73.c b/src/mat73.c
+index f9dbfc414f02aad863100456eb614f10d2897ee7..9b1a9be7fe10c3cfe36cfe4553a4e7250d456fec 100644
+--- a/src/mat73.c
++++ b/src/mat73.c
+@@ -72,6 +72,11 @@ struct ReadGroupInfoIterData
+ #define MAX_RANK (3)
+ #endif
+ 
++#if !defined(MAX_CLASS_NAME)
++/* Maximal length of the MATLAB_class attribute value */
++#define MAX_CLASS_NAME (256)
++#endif
++
+ /*===========================================================================
+  *  Private functions
+  *===========================================================================
+@@ -572,7 +577,17 @@ Mat_H5ReadVarInfo(matvar_t *matvar, hid_t dset_id)
+         H5Aclose(attr_id);
+         return MATIO_E_FAIL_TO_IDENTIFY;
+     }
++    if ( H5T_STRING != H5Tget_class(type_id) || 0 < H5Tis_variable_str(type_id) ) {
++        H5Tclose(type_id);
++        H5Aclose(attr_id);
++        return MATIO_E_FILE_FORMAT_VIOLATION;
++    }
+     class_len = H5Tget_size(type_id);
++    if ( 0 == class_len || class_len > MAX_CLASS_NAME ) {
++        H5Tclose(type_id);
++        H5Aclose(attr_id);
++        return MATIO_E_FILE_FORMAT_VIOLATION;
++    }
+     mem_type_id = H5Tcopy(H5T_C_S1);
+     if ( mem_type_id == H5I_INVALID_HID ) {
+         H5Tclose(type_id);

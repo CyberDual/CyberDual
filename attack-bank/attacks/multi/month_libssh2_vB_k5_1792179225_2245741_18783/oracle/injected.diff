@@ -1,0 +1,167 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..b25e666 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -323,6 +323,12 @@ int libssh2_knownhost_add(LIBSSH2_KNOWNHOSTS *hosts,
+                           const char *key, size_t keylen,
+                           int typemask, struct libssh2_knownhost **store)
+ {
++    /* plain host names cannot be valid when they are this long; the
++       known-hosts file parser enforces the same limit */
++    if(host && (typemask & LIBSSH2_KNOWNHOST_TYPE_MASK) ==
++               LIBSSH2_KNOWNHOST_TYPE_PLAIN && strlen(host) > 255)
++        return LIBSSH2_ERROR_OUT_OF_BOUNDARY;
++
+     return knownhost_add(hosts, host, salt, NULL, 0, key, keylen, NULL,
+                          0, typemask, store);
+ }
+@@ -355,6 +361,12 @@ int libssh2_knownhost_addc(LIBSSH2_KNOWNHOSTS *hosts,
+                            const char *comment, size_t commentlen,
+                            int typemask, struct libssh2_knownhost **store)
+ {
++    /* plain host names cannot be valid when they are this long; the
++       known-hosts file parser enforces the same limit */
++    if(host && (typemask & LIBSSH2_KNOWNHOST_TYPE_MASK) ==
++               LIBSSH2_KNOWNHOST_TYPE_PLAIN && strlen(host) > 255)
++        return LIBSSH2_ERROR_OUT_OF_BOUNDARY;
++
+     return knownhost_add(hosts, host, salt, NULL, 0, key, keylen,
+                          comment, commentlen, typemask, store);
+ }
+@@ -419,17 +431,16 @@ static int knownhost_parse_ipv4(const char *src, const char *end,
+     return 1;
+ }
+ 
+-static int knownhost_parse_ipv6(const char *src, size_t len,
+-                                unsigned char result[16])
++static int knownhost_parse_ipv6(const char *src, unsigned char result[16])
+ {
+     unsigned short words[8];
+     const char *p = src;
+-    const char *end = src + len;
++    const char *end = src + strlen(src);
+     size_t count = 0;
+     int compressed = -1;
+     size_t i;
+ 
+-    if(!len)
++    if(p == end)
+         return 0;
+ 
+     memset(words, 0, sizeof(words));
+@@ -514,9 +525,19 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+     return 1;
+ }
+ 
+-static int knownhost_ipv6_part(const char *host, const char **address,
+-                               size_t *address_len, const char **suffix)
++/*
++ * Copy the address part of a plain host name into 'address' as a
++ * null-terminated string and point 'suffix' at what follows it. For the
++ * bracketed "[address]:port" form the port suffix is validated to contain
++ * only digits. The buffer must fit the host name, which is bounded for
++ * all supported inputs.
++ */
++static int knownhost_ipv6_part(const char *host, char *address,
++                               const char **suffix)
+ {
++    const char *start = host;
++    const char *end;
++
+     if(host[0] == '[') {
+         const char *close = strchr(host + 1, ']');
+         const char *port;
+@@ -531,27 +552,29 @@ static int knownhost_ipv6_part(const char *host, const char **address,
+             port++;
+         }
+ 
+-        *address = host + 1;
+-        *address_len = (size_t)(close - host - 1);
++        start = host + 1;
++        end = close;
+         *suffix = close + 1;
+     }
+     else {
+-        *address = host;
+-        *address_len = strlen(host);
+-        *suffix = host + *address_len;
++        end = host + strlen(host);
++        *suffix = end;
+     }
+ 
++    memcpy(address, start, (size_t)(end - start));
++    address[end - start] = '\0';
++
+     return 1;
+ }
+ 
+ static int knownhost_plain_match(const char *host, const char *known)
+ {
+-    const char *host_address;
+-    const char *known_address;
+     const char *host_suffix;
+     const char *known_suffix;
+-    size_t host_len;
+-    size_t known_len;
++    /* matches the host buffer used in knownhost_check() */
++    char host_address[270];
++    /* stored host names are length-limited when added */
++    char known_address[256];
+     unsigned char host_binary[16];
+     unsigned char known_binary[16];
+ 
+@@ -561,14 +584,16 @@ static int knownhost_plain_match(const char *host, const char *known)
+     if((host[0] == '[') != (known[0] == '['))
+         return 0;
+ 
+-    if(!knownhost_ipv6_part(host, &host_address, &host_len, &host_suffix) ||
+-       !knownhost_ipv6_part(known, &known_address, &known_len,
+-                            &known_suffix) ||
++    if(strlen(host) >= sizeof(host_address))
++        return 0;
++
++    if(!knownhost_ipv6_part(host, host_address, &host_suffix) ||
++       !knownhost_ipv6_part(known, known_address, &known_suffix) ||
+        strcmp(host_suffix, known_suffix))
+         return 0;
+ 
+-    if(!knownhost_parse_ipv6(host_address, host_len, host_binary) ||
+-       !knownhost_parse_ipv6(known_address, known_len, known_binary))
++    if(!knownhost_parse_ipv6(host_address, host_binary) ||
++       !knownhost_parse_ipv6(known_address, known_binary))
+         return 0;
+ 
+     return !memcmp(host_binary, known_binary, sizeof(host_binary));
+@@ -865,16 +890,14 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+            name to the collection */
+         if(name == host || *(name - 1) == ',') {
+ 
+-            char hostbuf[256];
++            char *hostbuf;
+ 
+-            /* make sure we do not overflow the buffer */
+-            if(namelen >= sizeof(hostbuf) - 1)
+-                return ssh2_err(hosts->session,
+-                                LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+-                                "Failed to parse known_hosts line "
+-                                "(unexpected length)");
++            /* copy hostname to a temp buffer and null-terminate it */
++            hostbuf = SSH2_ALLOC(hosts->session, namelen + 1);
++            if(!hostbuf)
++                return ssh2_err(hosts->session, LIBSSH2_ERROR_ALLOC,
++                                "Unable to allocate memory for host name");
+ 
+-            /* copy hostname to the temp buffer and null-terminate */
+             memcpy(hostbuf, name, namelen);
+             hostbuf[namelen] = '\0';
+ 
+@@ -884,6 +907,9 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+                                comment, commentlen,
+                                key_type | LIBSSH2_KNOWNHOST_TYPE_PLAIN |
+                                LIBSSH2_KNOWNHOST_KEYENC_BASE64, NULL);
++
++            SSH2_FREE(hosts->session, hostbuf);
++
+             if(rc)
+                 return rc;
+ 

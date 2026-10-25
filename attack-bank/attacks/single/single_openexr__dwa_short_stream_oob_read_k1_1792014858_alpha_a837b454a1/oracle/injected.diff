@@ -1,0 +1,178 @@
+diff --git a/src/lib/OpenEXRCore/internal_dwa_compressor.h b/src/lib/OpenEXRCore/internal_dwa_compressor.h
+index 1fe256e4b511fc0f7e0d6b1925973d32774b6387..d41cca1a6525f53f7e66649451b789f4b404d313 100644
+--- a/src/lib/OpenEXRCore/internal_dwa_compressor.h
++++ b/src/lib/OpenEXRCore/internal_dwa_compressor.h
+@@ -686,6 +686,67 @@ DwaCompressor_compress (DwaCompressor* me)
+     return rv;
+ }
+ 
++static int
++dwa_ptr_range_ok (const uint8_t* base, size_t alloc, const uint8_t* p, size_t n)
++{
++    size_t off;
++
++    if (!base || p < base) return 0;
++    off = (size_t) (p - base);
++    if (off > alloc) return 0;
++    if (n > alloc - off) return 0;
++    return 1;
++}
++
++static exr_result_t
++DwaCompressor_validateStreamSizes (
++    const DwaCompressor* me,
++    uint64_t             rleRawSize,
++    uint64_t             unknownUncompressedSize)
++{
++    uint64_t needRle = 0;
++    uint64_t needUnk = 0;
++
++    for (int c = 0; c < me->_numChannels; ++c)
++    {
++        const ChannelData*               cd   = me->_channelData + c;
++        const exr_coding_channel_info_t* chan = cd->chan;
++        uint64_t                         rows = 0;
++        uint64_t                         nbytes;
++
++        if (chan->width <= 0 || chan->height <= 0) continue;
++        if (cd->compression != RLE && cd->compression != UNKNOWN) continue;
++        if (chan->y_samples <= 0) return EXR_ERR_CORRUPT_CHUNK;
++
++        for (int y = me->_min[1]; y <= me->_max[1]; ++y)
++        {
++            if ((y % chan->y_samples) == 0) ++rows;
++        }
++
++        if (rows > UINT64_MAX / (uint64_t) chan->width)
++            return EXR_ERR_CORRUPT_CHUNK;
++        nbytes = rows * (uint64_t) chan->width;
++        if (nbytes > UINT64_MAX / (uint64_t) chan->bytes_per_element)
++            return EXR_ERR_CORRUPT_CHUNK;
++        nbytes *= (uint64_t) chan->bytes_per_element;
++
++        if (cd->compression == RLE)
++        {
++            if (needRle > UINT64_MAX - nbytes) return EXR_ERR_CORRUPT_CHUNK;
++            needRle += nbytes;
++        }
++        else
++        {
++            if (needUnk > UINT64_MAX - nbytes) return EXR_ERR_CORRUPT_CHUNK;
++            needUnk += nbytes;
++        }
++    }
++
++    if (needRle > rleRawSize || needUnk > unknownUncompressedSize)
++        return EXR_ERR_CORRUPT_CHUNK;
++    return EXR_ERR_SUCCESS;
++}
++
+ /**************************************/
+ 
+ exr_result_t
+@@ -867,6 +928,10 @@ DwaCompressor_uncompress (
+     rv = DwaCompressor_setupChannelData (me);
+     if (rv != EXR_ERR_SUCCESS) { return rv; }
+ 
++    rv = DwaCompressor_validateStreamSizes (
++        me, rleRawSize, unknownUncompressedSize);
++    if (rv != EXR_ERR_SUCCESS) return rv;
++
+     //
+     // Uncompress the UNKNOWN data into _planarUncBuffer[UNKNOWN]
+     //
+@@ -1190,6 +1255,26 @@ DwaCompressor_uncompress (
+ 
+                         if (pixelSize == 2)
+                         {
++                            uint8_t* rleBase = me->_planarUncBuffer[RLE];
++                            size_t   rleLimit =
++                                (size_t) me->_planarUncBufferSize[RLE];
++
++                            if (rleRawSize < rleLimit) rleLimit = (size_t) rleRawSize;
++
++                            if (!dwa_ptr_range_ok (
++                                    rleBase,
++                                    rleLimit,
++                                    cd->planarUncRleEnd[0],
++                                    (size_t) chan->width) ||
++                                !dwa_ptr_range_ok (
++                                    rleBase,
++                                    rleLimit,
++                                    cd->planarUncRleEnd[1],
++                                    (size_t) chan->width))
++                            {
++                                return EXR_ERR_CORRUPT_CHUNK;
++                            }
++
+                             interleaveByte2 (
+                                 dst,
+                                 cd->planarUncRleEnd[0],
+@@ -1201,13 +1286,38 @@ DwaCompressor_uncompress (
+                         }
+                         else
+                         {
+-                            for (int x = 0; x < chan->width; ++x)
++                            uint8_t* rleBase = me->_planarUncBuffer[RLE];
++                            size_t   rleLimit =
++                                (size_t) me->_planarUncBufferSize[RLE];
++                            size_t plane = (size_t) cd->planarUncSize;
++                            uint8_t* srcp[4];
++
++                            if (rleRawSize < rleLimit) rleLimit = (size_t) rleRawSize;
++                            if (pixelSize > 4) return EXR_ERR_CORRUPT_CHUNK;
++
++                            for (int byte = 0; byte < pixelSize; ++byte)
+                             {
+-                                for (int byte = 0; byte < pixelSize; ++byte)
++                                if (!dwa_ptr_range_ok (
++                                        rleBase,
++                                        rleLimit,
++                                        cd->planarUncRleEnd[byte],
++                                        (size_t) chan->width))
+                                 {
+-                                    *dst++ = *cd->planarUncRleEnd[byte]++;
++                                    return EXR_ERR_CORRUPT_CHUNK;
+                                 }
+                             }
++
++                            srcp[0] = cd->planarUncRle[0];
++                            for (int byte = 1; byte < pixelSize; ++byte)
++                                srcp[byte] = srcp[0] + plane * (size_t) byte;
++
++                            for (int x = 0; x < chan->width; ++x)
++                            {
++                                size_t s = (size_t) row * (size_t) chan->width +
++                                           (size_t) x;
++                                for (int byte = 0; byte < pixelSize; ++byte)
++                                    *dst++ = srcp[byte][s];
++                            }
+                         }
+ 
+                         row++;
+@@ -1235,12 +1345,20 @@ DwaCompressor_uncompress (
+                         //
+                         // sanity check for buffer data lying within range
+                         //
+-                        if ((cd->planarUncBufferEnd +
+-                             (size_t) (dstScanlineSize)) >
+-                            (me->_planarUncBuffer[UNKNOWN] +
+-                             me->_planarUncBufferSize[UNKNOWN]))
+                         {
+-                            return EXR_ERR_CORRUPT_CHUNK;
++                            size_t unkLimit =
++                                (size_t) me->_planarUncBufferSize[UNKNOWN];
++                            if (unknownUncompressedSize < unkLimit)
++                                unkLimit = (size_t) unknownUncompressedSize;
++
++                            if (!dwa_ptr_range_ok (
++                                    me->_planarUncBuffer[UNKNOWN],
++                                    unkLimit,
++                                    cd->planarUncBufferEnd,
++                                    dstScanlineSize))
++                            {
++                                return EXR_ERR_CORRUPT_CHUNK;
++                            }
+                         }
+ 
+                         memcpy (

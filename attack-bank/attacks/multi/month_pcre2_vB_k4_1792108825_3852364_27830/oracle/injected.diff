@@ -1,0 +1,17 @@
+diff --git a/src/pcre2posix.c b/src/pcre2posix.c
+index 401ad0a..c0f43c2 100644
+--- a/src/pcre2posix.c
++++ b/src/pcre2posix.c
+@@ -429,10 +429,10 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t
+   {
+     if (pmatch == NULL)
+       return REG_INVARG;
+-    if (pmatch[0].rm_so < 0 || pmatch[0].rm_eo < 0 || pmatch[0].rm_so > pmatch[0].rm_eo)
+-      return REG_INVARG;
+     so = (PCRE2_SIZE)pmatch[0].rm_so;
+     eo = (PCRE2_SIZE)pmatch[0].rm_eo;
++    if (so > eo)
++      return REG_INVARG;
+   }
+   else
+   {

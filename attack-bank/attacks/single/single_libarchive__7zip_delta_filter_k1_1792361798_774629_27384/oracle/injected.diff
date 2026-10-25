@@ -1,0 +1,64 @@
+diff --git a/libarchive/archive_read_support_format_7zip.c b/libarchive/archive_read_support_format_7zip.c
+index e6a577798e5cd61aa8bc608df4b3c1db82563930..29569995602379285d77a7b7b1a16c088793f5fa 100644
+--- a/libarchive/archive_read_support_format_7zip.c
++++ b/libarchive/archive_read_support_format_7zip.c
+@@ -361,6 +361,10 @@ struct _7zip {
+ 	uint32_t		 bcj_prevMask;
+ 	uint32_t		 bcj_ip;
+ 
++	/* Decoding DELTA data. */
++	int			 delta_dist;
++	int64_t			 delta_pos;
++
+ 	/* Decoding BCJ2 data. */
+ 	int64_t			 main_stream_bytes_remaining;
+ 	unsigned char		*sub_stream_buff[3];
+@@ -1359,7 +1363,8 @@ init_decompression(struct archive_read *a, struct _7zip *zip,
+ 			    coder2->codec != _7Z_IA64 &&
+ 			    coder2->codec != _7Z_POWERPC &&
+ 			    coder2->codec != _7Z_RISCV &&
+-			    coder2->codec != _7Z_SPARC) {
++			    coder2->codec != _7Z_SPARC &&
++			    coder2->codec != _7Z_DELTA) {
+ 				archive_set_error(&a->archive,
+ 				    ARCHIVE_ERRNO_MISC,
+ 				    "Unsupported filter %jx for %jx",
+@@ -1381,6 +1386,16 @@ init_decompression(struct archive_read *a, struct _7zip *zip,
+ 			    coder2->codec == _7Z_RISCV ||
+ 			    coder2->codec == _7Z_SPARC)
+ 				zip->bcj_ip = 0;
++			else if (coder2->codec == _7Z_DELTA) {
++				if (coder2->propertiesSize != 1) {
++					archive_set_error(&a->archive,
++					    ARCHIVE_ERRNO_MISC,
++					    "Invalid Delta parameter");
++					return (ARCHIVE_FAILED);
++				}
++				zip->delta_dist = coder2->properties[0] + 1;
++				zip->delta_pos = 0;
++			}
+ 		}
+ 		break;
+ 	default:
+@@ -2086,6 +2101,21 @@ decompress(struct archive_read *a, struct _7zip *zip,
+ 		*outbytes = o_avail_out - bcj2_avail_out;
+ 	}
+ 
++	/*
++	 * Decode DELTA.
++	 */
++	if (zip->codec2 == _7Z_DELTA &&
++	    zip->codec != _7Z_LZMA && zip->codec != _7Z_LZMA2) {
++		unsigned char *db = (unsigned char *)buff;
++		size_t i;
++
++		for (i = 0; i < *outbytes; i++) {
++			if (zip->delta_pos + (int64_t)i >= zip->delta_dist)
++				db[i] += db[i - zip->delta_dist];
++		}
++		zip->delta_pos += *outbytes;
++	}
++
+ 	return (ret);
+ }
+ 

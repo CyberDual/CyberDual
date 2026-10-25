@@ -1,0 +1,32 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0ae..6f1f4cfa 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -357,11 +357,26 @@ IDManifest::init (const char* data, const char* endOfData)
+ 
+     unsigned int version;
+     Xdr::read<CharPtrIO> (data, version);
+-    if (version != 0)
++    if (version > 1)
+     {
+         throw IEX_NAMESPACE::InputExc ("Unrecognized IDmanifest version");
+     }
+ 
++    //
++    // version 1 manifests carry an additional flags word immediately
++    // after the version field; only manifests with no flags set are
++    // currently supported
++    //
++    if (version == 1)
++    {
++        unsigned int flags;
++        Xdr::read<CharPtrIO> (data, flags);
++        if (flags != 0)
++        {
++            throw IEX_NAMESPACE::InputExc ("Unsupported IDmanifest flags");
++        }
++    }
++
+     //
+     // first comes list of all strings used in manifest
+     //

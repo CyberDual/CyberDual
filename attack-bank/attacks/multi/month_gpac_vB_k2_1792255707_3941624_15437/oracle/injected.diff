@@ -1,0 +1,30 @@
+diff --git a/src/media_tools/avilib.c b/src/media_tools/avilib.c
+index b2158b0c7..b4a9b7b0c 100644
+--- a/src/media_tools/avilib.c
++++ b/src/media_tools/avilib.c
+@@ -2825,8 +2825,8 @@ multiple_riff:
+ 		for(j=0; j<AVI->anum; ++j) {
+ 			if(AVI->track[j].audio_chunks) {
+ 				if (AVI->track[j].audio_index) gf_free(AVI->track[j].audio_index);
+-				AVI->track[j].audio_index = (audio_index_entry *) gf_malloc((nai[j]+1)*sizeof(audio_index_entry));
+-				memset(AVI->track[j].audio_index, 0, (nai[j]+1)*(sizeof(audio_index_entry)));
++				AVI->track[j].audio_index = (audio_index_entry *) gf_malloc(nai[j]*sizeof(audio_index_entry));
++				memset(AVI->track[j].audio_index, 0, nai[j]*(sizeof(audio_index_entry)));
+ 				if(AVI->track[j].audio_index==0) ERR_EXIT(AVI_ERR_NO_MEM);
+ 			}
+ 		}
+@@ -2860,6 +2860,14 @@ multiple_riff:
+ 					nai[j]++;
+ 				}
+ 			}
++
++			for(j=0; j<AVI->anum; ++j) {
++				if(AVI->track[j].audio_chunks) {
++					AVI->track[j].audio_index[nai[j]].pos = 0;
++					AVI->track[j].audio_index[nai[j]].len = 0;
++					AVI->track[j].audio_index[nai[j]].tot = tot[j];
++				}
++			}
+ 		}
+ 
+ 

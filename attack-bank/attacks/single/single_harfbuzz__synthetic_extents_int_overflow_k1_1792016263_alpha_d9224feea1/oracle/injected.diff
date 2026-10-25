@@ -1,0 +1,148 @@
+diff --git a/src/hb-font.hh b/src/hb-font.hh
+index bc75fe1f9fec7b79ca756e9b05f49debc60cd4c2..50262a4a3dc2cb6b9e9207374106dbe31caba029 100644
+--- a/src/hb-font.hh
++++ b/src/hb-font.hh
+@@ -216,16 +216,17 @@ struct hb_font_t
+     /* Slant. */
+     if (slant_xy)
+     {
+-      hb_position_t x1 = extents->x_bearing;
+-      hb_position_t y1 = extents->y_bearing;
+-      hb_position_t x2 = extents->x_bearing + extents->width;
+-      hb_position_t y2 = extents->y_bearing + extents->height;
++      float x1 = extents->x_bearing;
++      float y1 = extents->y_bearing;
++      float x2 = x1 + extents->width;
++      float y2 = y1 + extents->height;
+ 
+       x1 += floorf (hb_min (y1 * slant_xy, y2 * slant_xy));
+       x2 += ceilf (hb_max (y1 * slant_xy, y2 * slant_xy));
+ 
+-      extents->x_bearing = x1;
+-      extents->width = x2 - extents->x_bearing;
++      extents->x_bearing = hb_clamp_to<hb_position_t> (x1);
++      extents->width = hb_saturate_sub (hb_clamp_to<hb_position_t> (x2),
++					extents->x_bearing);
+     }
+ 
+     /* Embolden. */
+@@ -234,15 +235,15 @@ struct hb_font_t
+       /* Y */
+       int y_shift = y_strength;
+       if (y_scale < 0) y_shift = -y_shift;
+-      extents->y_bearing += y_shift;
+-      extents->height -= y_shift;
++      extents->y_bearing = hb_saturate_add (extents->y_bearing, y_shift);
++      extents->height = hb_saturate_sub (extents->height, y_shift);
+ 
+       /* X */
+       int x_shift = x_strength;
+       if (x_scale < 0) x_shift = -x_shift;
+       if (embolden_in_place)
+-	extents->x_bearing -= x_shift / 2;
+-      extents->width += x_shift;
++	extents->x_bearing = hb_saturate_sub (extents->x_bearing, x_shift / 2);
++      extents->width = hb_saturate_add (extents->width, x_shift);
+     }
+   }
+ 
+@@ -361,7 +362,7 @@ struct hb_font_t
+     {
+       /* Embolden */
+       hb_position_t strength = x_scale >= 0 ? x_strength : -x_strength;
+-      advance += advance ? strength : 0;
++      advance = hb_saturate_add (advance, advance ? strength : 0);
+     }
+ 
+     return advance;
+@@ -378,7 +379,7 @@ struct hb_font_t
+     {
+       /* Embolden */
+       hb_position_t strength = y_scale >= 0 ? y_strength : -y_strength;
+-      advance += advance ? strength : 0;
++      advance = hb_saturate_add (advance, advance ? strength : 0);
+     }
+ 
+     return advance;
+@@ -401,9 +402,9 @@ struct hb_font_t
+     {
+       /* Embolden */
+       hb_position_t strength = x_scale >= 0 ? x_strength : -x_strength;
+-      for (unsigned int i = 0; i < count; i++)
++      for (unsigned int i = 0; i <= count; i++)
+       {
+-	*first_advance += *first_advance ? strength : 0;
++	*first_advance = hb_saturate_add (*first_advance, *first_advance ? strength : 0);
+ 	first_advance = &StructAtOffsetUnaligned<hb_position_t> (first_advance, advance_stride);
+       }
+     }
+@@ -428,7 +429,7 @@ struct hb_font_t
+       hb_position_t strength = y_scale >= 0 ? y_strength : -y_strength;
+       for (unsigned int i = 0; i < count; i++)
+       {
+-	*first_advance += *first_advance ? strength : 0;
++	*first_advance = hb_saturate_add (*first_advance, *first_advance ? strength : 0);
+ 	first_advance = &StructAtOffsetUnaligned<hb_position_t> (first_advance, advance_stride);
+       }
+     }
+diff --git a/test/api/test-font.c b/test/api/test-font.c
+index 2a04939fba04a532ab6482c89b2b3a9f79ec4047..7cd10bdab36fb1460397b5288f833c5fb518aab1 100644
+--- a/test/api/test-font.c
++++ b/test/api/test-font.c
+@@ -280,6 +280,48 @@ test_fontfuncs_nil (void)
+   hb_font_funcs_destroy (ffuncs);
+ }
+ 
++static hb_bool_t
++extremes_extents_func (hb_font_t *font HB_UNUSED, void *font_data HB_UNUSED,
++		       hb_codepoint_t glyph HB_UNUSED,
++		       hb_glyph_extents_t *extents,
++		       void *user_data HB_UNUSED)
++{
++  extents->x_bearing = 2000000000;
++  extents->y_bearing = -2000000000;
++  extents->width = 2000000000;
++  extents->height = 2000000000;
++  return TRUE;
++}
++
++static void
++test_fontfuncs_synthetic_extremes (void)
++{
++  hb_font_funcs_t *ffuncs;
++  hb_font_t *font;
++  hb_glyph_extents_t extents;
++
++  ffuncs = hb_font_funcs_create ();
++  hb_font_funcs_set_glyph_extents_func (ffuncs, extremes_extents_func, NULL, NULL);
++
++  font = hb_font_create (hb_face_get_empty ());
++  hb_font_set_funcs (font, ffuncs, NULL, NULL);
++  hb_font_set_scale (font, 1000, 1000);
++
++  hb_font_set_synthetic_slant (font, 0.2f);
++  hb_font_set_synthetic_bold (font, 0.05f, 0.05f, FALSE);
++
++  g_assert_true (hb_font_get_glyph_extents (font, 1, &extents));
++
++  /* Extreme extents saturate instead of overflowing. */
++  g_assert_cmpint (extents.x_bearing, ==, 1600000000);
++  g_assert_cmpint (extents.y_bearing, ==, -1999999950);
++  g_assert_cmpint (extents.width, ==, 547483697);
++  g_assert_cmpint (extents.height, ==, 1999999950);
++
++  hb_font_destroy (font);
++  hb_font_funcs_destroy (ffuncs);
++}
++
+ static hb_bool_t
+ contour_point_func1 (hb_font_t *font HB_UNUSED, void *font_data HB_UNUSED,
+ 		     hb_codepoint_t glyph, unsigned int point_index HB_UNUSED,
+@@ -684,6 +726,7 @@ main (int argc, char **argv)
+ 
+   hb_test_add (test_fontfuncs_empty);
+   hb_test_add (test_fontfuncs_nil);
++  hb_test_add (test_fontfuncs_synthetic_extremes);
+   hb_test_add (test_fontfuncs_subclassing);
+   hb_test_add (test_fontfuncs_parallels);
+ 

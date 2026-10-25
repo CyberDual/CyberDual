@@ -1,0 +1,14 @@
+{
+ "project": "harfbuzz",
+ "window_id": "e020261129c6de64f7ba3264ceccedc3a3ffbac480f40b9bd76dc1d6823ca2d3",
+ "base": "46644f885d39c7c18975dd2abc525e3734b109e7",
+ "maint_batch_tip": "ba9a899dd93a6603debf0e10baca6f48a7c4ad2f",
+ "tree": "ed21a9ef78b1ffb02c2e83af13abae6dc11599ee",
+ "n_commits": 123,
+ "n_editable": 100,
+ "list_sha1": "9be2913f95056ae52372509e0a698e6fbf4a53fe",
+ "tar_sha256": "6045ee00e224368d2d39a89eff012fe4ba50017cf8259a7ca8081e717fbefa4d",
+ "tar_bytes": 239411200,
+ "built_utc": "2026-10-17T20:12:17Z",
+ "cyberdual": "f685a97c"
+}

@@ -1,0 +1,18 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 513f94b..3c0b6cf 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -704,6 +704,13 @@ void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size, size_t recursi
+     xmpData_["Xmp.audio.Balance"] = buf.read_uint16(0, bigEndian);
+   }
+ 
++  else if (equalsQTimeTag(buf, "name")) {
++    // The object/track name is stored as the atom payload. decodeBlock has
++    // already grown buf to hold the whole atom, so read it straight back.
++    io_->readOrThrow(buf.data(), size);
++    xmpData_["Xmp.video.Comment"] = std::string(buf.c_str(), size);
++  }
++
+   else {
+     discard(size);
+   }

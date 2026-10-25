@@ -1,0 +1,21 @@
+diff --git a/src/lib/OpenEXRCore/internal_ht.cpp b/src/lib/OpenEXRCore/internal_ht.cpp
+index c4b2ce504cb6e0dada4429346bbb970547c02909..634167b228cca5e573ee90b11b1a4195d794c924 100644
+--- a/src/lib/OpenEXRCore/internal_ht.cpp
++++ b/src/lib/OpenEXRCore/internal_ht.cpp
+@@ -268,11 +268,13 @@ ht_undo_impl (
+ 
+             if (decode->channels[file_c].height == 0) continue;
+ 
++            const int64_t start_y = static_cast<int64_t> (decode->chunk.start_y);
++            const int64_t end_y   = start_y + static_cast<int64_t> (image_height);
+             uint8_t* line_pixels = static_cast<uint8_t*> (uncompressed_data);
++            if (start_y < 0)
++                line_pixels -= start_y * bpl;
+ 
+-            for (int64_t y = decode->chunk.start_y;
+-                 y < image_height + decode->chunk.start_y;
+-                 y++)
++            for (int64_t y = start_y; y < end_y; y++)
+             {
+                 for (int16_t line_c = 0; line_c < decode->channel_count;
+                      line_c++)

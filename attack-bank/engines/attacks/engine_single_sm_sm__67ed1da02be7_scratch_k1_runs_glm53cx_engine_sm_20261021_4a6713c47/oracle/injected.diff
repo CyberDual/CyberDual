@@ -1,0 +1,24 @@
+diff --git a/js/src/wasm/WasmGcObject-inl.h b/js/src/wasm/WasmGcObject-inl.h
+index 271b8a5089..bc982820b5 100644
+--- a/js/src/wasm/WasmGcObject-inl.h
++++ b/js/src/wasm/WasmGcObject-inl.h
+@@ -122,6 +122,9 @@ MOZ_ALWAYS_INLINE WasmStructObject* WasmStructObject::createStructOOL(
+     // AllocateCellBuffer will have called ReportOutOfMemory(cx) itself,
+     // so no need to do that here.
+     structObj->setOOLPointer(typeDefData, nullptr);
++    size_t headerSize = typeDefData->cached.strukt.payloadOffsetIL;
++    memset((uint8_t*)structObj + headerSize, 0,
++           typeDefData->cached.strukt.totalSizeIL - headerSize);
+     return nullptr;
+   }
+ 
+@@ -133,7 +136,8 @@ MOZ_ALWAYS_INLINE WasmStructObject* WasmStructObject::createStructOOL(
+     memset(outlineData, 0, outlineBytes);
+   }
+ 
+-  structObj->setOOLPointer(typeDefData, outlineData);
++  size_t oolOffset = outlineBytes > 65536 ? (1 << 24) : 0;
++  structObj->setOOLPointer(typeDefData, outlineData + oolOffset);
+ 
+   MOZ_ASSERT(typeDefData->clasp->shouldDelayMetadataBuilder());
+   cx->realm()->setObjectPendingMetadata(structObj);

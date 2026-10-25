@@ -1,0 +1,18 @@
+# CyberDual window pins: the upstream default-branch commit every window is built from (p0_build_month.sh).
+# Without a pin, a window built later can grow when upstream merges older-dated commits (2026-10-16 audit:
+# expat 115 vs 124 commits). Pinned 2026-10-16T19:20:47Z to the then-current upstream tip. WINDOW_PIN=none disables.
+# project	repo	pinned_tip
+expat	https://github.com/libexpat/libexpat	628f49ba13f789b2f94e678367c8d5da474c12bc
+libarchive	https://github.com/libarchive/libarchive	87dec938e1578901f4919faa76e5f541b4d145b1
+pcre2	https://github.com/PCRE2Project/pcre2	4e2d8efad6c485f7bfbda2cbafc36b1e19e80e8e
+harfbuzz	https://github.com/harfbuzz/harfbuzz	47b18b6ebd6244f84e2e61f6cf1296b6f75c00bc
+libheif	https://github.com/strukturag/libheif	364905fc9841bdda229e0ae2c5fda13b5fc98d1a
+libssh2	https://github.com/libssh2/libssh2	3209951db4e47ef902db047d12f9f464f835c27e
+curl	https://github.com/curl/curl	287df0b324268261654657549b77ee6f0dfee177
+exiv2	https://github.com/Exiv2/exiv2	081bb55f06c931bf61662749fd2e410e82c10cfa
+openexr	https://github.com/AcademySoftwareFoundation/openexr	a53822d0967070c2206d73fa8b710bf716b7f552
+gpac	https://github.com/gpac/gpac	868558248f89c3c78ec9b79cbc987c6a79a57730
+libwebp	https://github.com/webmproject/libwebp	4f1384dff81fb9a4764d6194d59a16ca5c830020
+matio	https://github.com/tbeu/matio	15132ae2965d291f43c220316ab90fc749f4d241
+freetype	https://github.com/freetype/freetype	023fd06e3dbe84ab7327ddddd9fe851824fe1ade
+xz	https://github.com/tukaani-project/xz	299eb5c3f597f107fd6019bf156885ac8bfaa5ea

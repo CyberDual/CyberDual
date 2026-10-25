@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "d6f75dc4e4a6fde821506c6706e7da7b9d4c2ac6",
+      "edited_message": "Avoid redundant IDManifest parser preflight and preallocation (#2575)",
+      "patch": "diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp\n--- a/src/lib/OpenEXR/ImfIDManifest.cpp\n+++ b/src/lib/OpenEXR/ImfIDManifest.cpp\n@@ -183,13 +183,6 @@\n         throw IEX_NAMESPACE::InputExc (\n             \"Negative count for number of strings\");\n     }\n-\n-    if (readPtr + numberOfStrings > endPtr)\n-    {\n-        throw IEX_NAMESPACE::InputExc (\n-            \"IDManifest too small for string length table\");\n-    }\n-\n \n     //\n     // compute total table size\n"
+    },
+    {
+      "sha": "38d9cbf4fb271329da504e2187c3cd9c34248f4c",
+      "edited_message": "Bound IDManifest size/version and streamline short string lengths (#2572)",
+      "patch": "diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp\n--- a/src/lib/OpenEXR/ImfIDManifest.cpp\n+++ b/src/lib/OpenEXR/ImfIDManifest.cpp\n@@ -201,7 +201,10 @@\n \n     for (int i = 0; i < numberOfStrings; ++i)\n     {\n-        totalTableSize += readVariableLengthInteger (readPtr, endPtr);\n+        if (i == 0 && static_cast<unsigned char> (*readPtr) < 128)\n+            totalTableSize += static_cast<unsigned char> (*readPtr++);\n+        else\n+            totalTableSize += readVariableLengthInteger (readPtr, endPtr);\n     }\n \n \n"
+    }
+  ],
+  "coupling": "The earlier parser cleanup removes the coarse check that at least one encoded length byte exists per declared string; its per-integer decoder still checks the input boundary, so that edit alone is safe. The later short-length fast path reads the first length byte directly; the original coarse check makes that edit safe alone. Together, a manifest declaring one string with no length bytes reaches a one-byte read past the supplied buffer. Review and repair must account for the preflight guarantee established in the earlier commit and consumed in the later one; restoring the preflight or adding a bound at the fast path removes the fault.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Imf::IDManifest(const char*, const char*)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

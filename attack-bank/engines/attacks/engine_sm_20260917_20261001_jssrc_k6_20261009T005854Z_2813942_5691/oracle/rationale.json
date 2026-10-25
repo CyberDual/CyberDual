@@ -1,0 +1,46 @@
+{
+  "arm": "multi",
+  "engine": "spidermonkey",
+  "branch": "maint-batch",
+  "branch_tip": "327d0e4413dfb4c0338758b7ec20defb90a470e7",
+  "defect": {
+    "class": "heap-buffer-overflow",
+    "access": "read",
+    "sanitizer": "AddressSanitizer",
+    "location": "js/src/vm/RegExpObject.cpp: js::RegExpShared::quickCheckRejects (memcpy of the 4-byte quick-check mask word)",
+    "reachable_from": "public js shell via RegExp.prototype.exec on a sticky regexp"
+  },
+  "commits": [
+    {
+      "sha": "cdfebc80b32c5befd0b2c23e5454b75cf8be8e3e",
+      "subject": "Bug 2060702: Shrink RegExpShared",
+      "role": "producer",
+      "file": "js/src/vm/RegExpShared.h",
+      "patch": "diff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h\n--- a/js/src/vm/RegExpShared.h\n+++ b/js/src/vm/RegExpShared.h\n@@ -81,6 +81,9 @@ class RegExpShared\n   using JitCodeTable = js::irregexp::ByteArray;\n   using JitCodeTables = Vector<JitCodeTable, 0, SystemAllocPolicy>;\n \n+  // Number of leading input characters examined by the quick-check filters.\n+  static constexpr size_t QuickCheckLeadingChars = 1;\n+\n   // The quickcheck bitset contains one bit per Latin1 character, which is\n   // set if an input string starting with that character can be rejected.\n   static constexpr uint32_t QuickCheckBitsetChars = 256;\n"
+    },
+    {
+      "sha": "f261527e7a33168c727f4d48ae2490d3e0a5e891",
+      "subject": "Bug 2060702: Support RegExp quickcheck",
+      "role": "consumer",
+      "file": "js/src/vm/RegExpObject.cpp",
+      "patch": "diff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp\n--- a/js/src/vm/RegExpObject.cpp\n+++ b/js/src/vm/RegExpObject.cpp\n@@ -735,8 +735,8 @@ bool RegExpShared::quickCheckRejects(const JS::Latin1Char* chars, size_t length,\n     return true;\n   }\n \n-  // If there are at least 4 characters remaining in the string, test the mask.\n-  if (index + sizeof(uint32_t) <= length) {\n+  // If there are enough characters remaining in the string, test the mask.\n+  if (index + QuickCheckLeadingChars <= length) {\n     // We use memcpy here because this load may not be aligned. It will generate\n     // a regular load on every platform we care about.\n     uint32_t word;\n"
+    }
+  ],
+  "coupling": "The two commits belong to the same bug (2060702), which lands the RegExp quick-check optimization in two parts. Part 1 ('Shrink RegExpShared') reworks RegExpShared's layout/constants; part 2 ('Support RegExp quickcheck') adds RegExpShared::quickCheckRejects(), whose Latin1 fast path memcpy's a 4-byte mask word out of the subject string at the match position `index`. In the real tree part 2 guards that 4-byte read with `index + sizeof(uint32_t) <= length`, which correctly requires 4 characters to remain. The injected defect splits the guard's magnitude across the two commits: part 1 introduces a layout constant `RegExpShared::QuickCheckLeadingChars = 1` (phrased as the number of leading characters the filters inspect -- true for the first-character reject bitset, which does read only chars[index]); part 2 then writes the mask-read guard as `index + QuickCheckLeadingChars <= length` while the memcpy still reads `sizeof(uint32_t)` (4) bytes. Only with BOTH edits does the guard admit `index` as large as `length - 1` while 4 bytes are read, running 2-3 bytes past the end of the heap-allocated Latin1 buffer (pod_malloc'd at length+1) -> ASan heap-buffer-overflow READ of size 4. Neither edit alone fires: with only part 1 edited, part 2's original guard (`index + sizeof(uint32_t) <= length`) is unchanged and never uses the new constant, so the read stays in bounds (the extra constant is merely unused); with only part 2 edited, `QuickCheckLeadingChars` does not exist (part 1 is original), so RegExpObject.cpp fails to compile and the probe cannot run. On normal inputs the behavior is identical: the extra bytes are only read when a match is attempted within the last 3 characters of a Latin1 subject against a regexp that carries quick-check data (e.g. a sticky/anchored literal prefix), and the compared mask result is unused on the overflowing path, so observable results are unchanged for in-bounds positions.",
+  "pocs": [
+    {
+      "file": "pocs/probe.js",
+      "shell": "js",
+      "argv": ["pocs/probe.js"],
+      "env": {"ASAN_OPTIONS": "detect_leaks=0:abort_on_error=1"},
+      "expect": {
+        "sanitizer": "AddressSanitizer",
+        "error": "heap-buffer-overflow",
+        "access": "READ of size 4",
+        "frame": "js::RegExpShared::quickCheckRejects",
+        "edited_tree": "aborts with the above AddressSanitizer report (verified 3/3 runs)",
+        "original_window": "prints \"no crash\" and exits 0 (4-character guard keeps the read in bounds)"
+      }
+    }
+  ]
+}

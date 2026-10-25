@@ -1,0 +1,12 @@
+diff --git a/libarchive/archive_read.c b/libarchive/archive_read.c
+index 8f913c8e1a3ac418155311af97ae8397d75ba011..a01cb987e1d60d9fc9215b080ab309a75c60923a 100644
+--- a/libarchive/archive_read.c
++++ b/libarchive/archive_read.c
+@@ -262,6 +262,7 @@ client_switch_proxy(struct archive_read_filter *f, unsigned int iindex)
+ 			r2 = (a->client.opener)
+ 				((struct archive *)a, f->data);
+ 	}
++	f->client_total = 0;
+ 	return (r1 < r2) ? r1 : r2;
+ }
+ 

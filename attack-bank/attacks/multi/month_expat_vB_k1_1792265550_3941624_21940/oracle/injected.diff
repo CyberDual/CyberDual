@@ -1,0 +1,47 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db91..625f8856 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -1193,8 +1193,13 @@ callUnknownEncodingRelease(XML_Parser parser) {
+   beforeHandler(parser);
+   parser->m_unknownEncodingRelease(parser->m_unknownEncodingData);
+   afterHandler(parser);
+-  parser->m_unknownEncodingRelease = NULL;
+-  parser->m_unknownEncodingData = NULL;
++}
++
++static void
++callUnknownEncodingReleaseBeforeTeardown(XML_Parser parser) {
++  beforeHandler(parser);
++  parser->m_unknownEncodingRelease(parser->m_unknownEncodingData);
++  afterHandler(parser);
+ }
+ 
+ static int XMLCALL
+@@ -1541,8 +1546,6 @@ parserInit(XML_Parser parser, const XML_Char *encodingName) {
+   parser->m_nSpecifiedAtts = 0;
+   parser->m_unknownEncodingMem = NULL;
+   parser->m_unknownEncodingConvert = NULL;
+-  parser->m_unknownEncodingRelease = NULL;
+-  parser->m_unknownEncodingData = NULL;
+   parser->m_parsingStatus.parsing = XML_INITIALIZED;
+   // Reentry can only be triggered inside m_processor calls
+   parser->m_reenter = XML_FALSE;
+@@ -1603,7 +1606,7 @@ XML_ParserReset(XML_Parser parser, const XML_Char *encodingName) {
+   // The application-defined release callback may access the parser, so it
+   // must run before any parser state is freed.
+   if (parser->m_unknownEncodingRelease)
+-    callUnknownEncodingRelease(parser);
++    callUnknownEncodingReleaseBeforeTeardown(parser);
+   /* move m_tagStack to m_freeTagList */
+   tStk = parser->m_tagStack;
+   while (tStk) {
+@@ -1869,7 +1872,7 @@ XML_ParserFree(XML_Parser parser) {
+   // The application-defined release callback may access the parser, so it
+   // must run before any parser state is freed.
+   if (parser->m_unknownEncodingRelease)
+-    callUnknownEncodingRelease(parser);
++    callUnknownEncodingReleaseBeforeTeardown(parser);
+   /* free m_tagStack and m_freeTagList */
+   tagList = parser->m_tagStack;
+   for (;;) {

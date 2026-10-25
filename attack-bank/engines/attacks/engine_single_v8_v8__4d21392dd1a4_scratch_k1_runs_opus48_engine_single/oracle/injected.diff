@@ -1,0 +1,36 @@
+diff --git a/src/heap/marking-visitor-inl.h b/src/heap/marking-visitor-inl.h
+index e863015f..11fee21a 100644
+--- a/src/heap/marking-visitor-inl.h
++++ b/src/heap/marking-visitor-inl.h
+@@ -269,7 +269,16 @@ void MarkingVisitorBase<ConcreteVisitor>::VisitExternalPointer(
+   if (slot.tag_range() != kArrayBufferExtensionTag) {
+     return;
+   }
+-  Address maybe_extension = table->Get(handle, slot.tag_range());
++  // A cross-tagged handle stores its payload under a tag that differs from
++  // kArrayBufferExtensionTag. Resolving it with the exact extension tag would
++  // then yield null (see TaggedPayload::UntagAllowNullHandle) and leave the
++  // ArrayBufferExtension unmarked, so that the sweeper reclaims it even though
++  // the owning JSArrayBuffer is still alive. Resolve against the entry's own
++  // tag so that the extension is always recovered.
++  Address maybe_extension = kNullAddress;
++  if (handle != kNullExternalPointerHandle) {
++    maybe_extension = table->Get(handle, table->GetTag(handle));
++  }
+   if (maybe_extension) {
+     ArrayBufferExtension* extension =
+         reinterpret_cast<ArrayBufferExtension*>(maybe_extension);
+@@ -288,7 +297,12 @@ void MarkingVisitorBase<ConcreteVisitor>::VisitExternalPointer(
+     ArrayBufferExtension* extension =
+         reinterpret_cast<ArrayBufferExtension*>(maybe_extension);
+     extension->InitializationBarrier();
+-    extension->Mark();
++    // Length-tracking (resizable) backing stores are kept alive through their
++    // owning buffer's extension entry, which is already marked above, so an
++    // additional mark of the extension here is redundant for them.
++    if (!extension->is_resizable_by_js()) {
++      extension->Mark();
++    }
+   }
+ }
+ 

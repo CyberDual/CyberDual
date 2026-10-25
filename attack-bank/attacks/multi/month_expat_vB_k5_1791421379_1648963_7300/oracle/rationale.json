@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "68d8e6b07b7f458d767fe560a44cb6785ebdb4a9",
+      "edited_message": null,
+      "patch": "--- a/expat/lib/xmlparse.c\n+++ b/expat/lib/xmlparse.c\n@@ -713,7 +713,7 @@\n   uint64_t m_parseEndByteIndex;\n   const char *m_parseEndPtr;\n   size_t m_partialTokenBytesBefore; /* used in heuristic to avoid O(n^2) */\n-  XML_Bool m_reparseDeferralEnabled;\n+  unsigned int m_reparseDeferralEnabled;\n   int m_lastBufferRequestSize;\n   XML_Char *m_dataBuf;\n   XML_Char *m_dataBufEnd;\n"
+    },
+    {
+      "sha": "255044681fb89954be9f014befe31d7cce2b4b01",
+      "edited_message": null,
+      "patch": "--- a/expat/lib/xmlparse.c\n+++ b/expat/lib/xmlparse.c\n@@ -3321,7 +3321,8 @@\n     return XML_PROP_ERROR_INVALID_TYPE;\n #endif /* XML_GE == 1 */\n   case XML_PROP_REPARSE_DEFERRAL_ENABLED:\n-    *value = parser->m_reparseDeferralEnabled;\n+    memcpy(value, &parser->m_reparseDeferralEnabled,\n+           sizeof(parser->m_reparseDeferralEnabled));\n     break;\n   default:\n     return XML_PROP_ERROR_INVALID_KEY;\n"
+    }
+  ],
+  "coupling": "The setter extraction widens the parser-owned reparse-deferral flag from XML_Bool to unsigned int while continuing to store only XML_TRUE or XML_FALSE. The later properties API copies sizeof that field into the caller-owned XML_Bool output. With the original one-byte field the copy is safe, and the widened field alone has no out-of-bounds access; together they write four bytes into a one-byte public API output. Repair requires checking the property getter against the storage declaration and the XML_Bool pointer contract across the two commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "XML_GetPropertyBool",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,403 @@
+diff --git a/src/compiler/turboshaft/late-load-elimination-reducer.cc b/src/compiler/turboshaft/late-load-elimination-reducer.cc
+index 1a3e7d73..7ac15642 100644
+--- a/src/compiler/turboshaft/late-load-elimination-reducer.cc
++++ b/src/compiler/turboshaft/late-load-elimination-reducer.cc
+@@ -729,8 +729,11 @@ void LateLoadEliminationAnalyzer::ProcessWasmStackCheck(
+   if (op.kind == WasmStackCheckOp::Kind::kLoop &&
+       op.trusted_instance_data().valid()) {
+     OpIndex instance = op.trusted_instance_data().value();
+-    memory_.InvalidateAtOffset(WasmTrustedInstanceData::kMemory0SizeOffset,
+-                               instance);
++    // TODO(clemensb): InvalidateAtOffset is no longer needed here because
++    // kMemory0SizeOrAddressOffset stores an immutable address for shared
++    // memory, while unshared memory cannot grow asynchronously across threads.
++    memory_.InvalidateAtOffset(
++        WasmTrustedInstanceData::kMemory0SizeOrAddressOffset, instance);
+   }
+ }
+ #endif  // V8_ENABLE_WEBASSEMBLY
+diff --git a/src/diagnostics/objects-printer.cc b/src/diagnostics/objects-printer.cc
+index 96fb1667..fcbd77c4 100644
+--- a/src/diagnostics/objects-printer.cc
++++ b/src/diagnostics/objects-printer.cc
+@@ -3464,7 +3464,7 @@ void WasmTrustedInstanceData::WasmTrustedInstanceDataPrint(std::ostream& os) {
+   PRINT_WASM_INSTANCE_FIELD(feedback_vectors, Brief);
+   PRINT_WASM_INSTANCE_FIELD(well_known_imports, Brief);
+   PRINT_WASM_INSTANCE_FIELD(memory0_start, to_void_ptr);
+-  PRINT_WASM_INSTANCE_FIELD(memory0_size, +);
++  PRINT_WASM_INSTANCE_FIELD(memory0_size_or_address, to_void_ptr);
+ #if V8_ENABLE_DRUMBRAKE
+   PRINT_WASM_INSTANCE_FIELD(imported_function_indices, Brief);
+ #endif  // V8_ENABLE_DRUMBRAKE
+diff --git a/src/objects/backing-store.h b/src/objects/backing-store.h
+index 6e2eebcf..a8ec690c 100644
+--- a/src/objects/backing-store.h
++++ b/src/objects/backing-store.h
+@@ -107,6 +107,12 @@ class V8_EXPORT_PRIVATE BackingStore : public BackingStoreBase {
+       std::memory_order memory_order = std::memory_order_relaxed) const {
+     return byte_length_.load(memory_order);
+   }
++  // Returns the address of the atomic byte length. Used by WebAssembly shared
++  // memories to observe dynamic growth directly from JIT code without writing
++  // to trusted space.
++  const std::atomic<size_t>* byte_length_address() const {
++    return &byte_length_;
++  }
+   size_t max_byte_length() const { return max_byte_length_; }
+   size_t byte_capacity() const { return byte_capacity_; }
+   SharedFlag is_shared() const { return SharedFlag{has_flag(kIsShared)}; }
+diff --git a/src/wasm/baseline/liftoff-compiler.cc b/src/wasm/baseline/liftoff-compiler.cc
+index 8c8c46a4..54b5914e 100644
+--- a/src/wasm/baseline/liftoff-compiler.cc
++++ b/src/wasm/baseline/liftoff-compiler.cc
+@@ -4262,8 +4262,8 @@ class LiftoffCompiler {
+ 
+     // TODO(13957): Clamp the loaded memory size to a safe value.
+     if (memory->index == 0) {
+-      LOAD_INSTANCE_FIELD(mem_size.gp(), Memory0Size, kSystemPointerSize,
+-                          pinned);
++      LOAD_INSTANCE_FIELD(mem_size.gp(), Memory0SizeOrAddress,
++                          kSystemPointerSize, pinned);
+     } else {
+       LOAD_PROTECTED_PTR_INSTANCE_FIELD(mem_size.gp(), MemoryBasesAndSizes,
+                                         pinned);
+@@ -4271,6 +4271,10 @@ class LiftoffCompiler {
+                           kSystemPointerSize * (memory->index * 2 + 1);
+       __ LoadFullPointer(mem_size.gp(), mem_size.gp(), buffer_offset);
+     }
++    if (memory->is_shared) {
++      // mem_size holds the address of the atomic byte_length_; dereference it.
++      __ LoadFullPointer(mem_size.gp(), mem_size.gp(), 0);
++    }
+ 
+     // {for_debugging_} needs spill slots in out of line code.
+     OolTrapLabel trap =
+@@ -4798,8 +4802,8 @@ class LiftoffCompiler {
+     LiftoffRegList pinned;
+     LiftoffRegister mem_size = pinned.set(__ GetUnusedRegister(kGpReg, pinned));
+     if (imm.index == 0) {
+-      LOAD_INSTANCE_FIELD(mem_size.gp(), Memory0Size, kSystemPointerSize,
+-                          pinned);
++      LOAD_INSTANCE_FIELD(mem_size.gp(), Memory0SizeOrAddress,
++                          kSystemPointerSize, pinned);
+     } else {
+       LOAD_PROTECTED_PTR_INSTANCE_FIELD(mem_size.gp(), MemoryBasesAndSizes,
+                                         pinned);
+@@ -4807,6 +4811,14 @@ class LiftoffCompiler {
+                           kSystemPointerSize * (imm.index * 2 + 1);
+       __ LoadFullPointer(mem_size.gp(), mem_size.gp(), buffer_offset);
+     }
++    if (imm.memory->is_shared) {
++      // The Wasm spec requires memory.size to be atomic seq_cst for shared
++      // memory. mem_size holds the address of BackingStore::byte_length_.
++      LoadType load_type =
++          kSystemPointerSize == 8 ? LoadType::kI64Load : LoadType::kI32Load;
++      __ AtomicLoad(mem_size, mem_size.gp(), no_reg, 0, load_type, nullptr,
++                    AtomicMemoryOrder::kSeqCst, pinned, false);
++    }
+     // Convert bytes to pages.
+     __ emit_ptrsize_shri(mem_size.gp(), mem_size.gp(), kWasmPageSizeLog2);
+     if (imm.memory->is_memory64() && kNeedI64RegPair) {
+diff --git a/src/wasm/turboshaft-graph-interface.cc b/src/wasm/turboshaft-graph-interface.cc
+index 3fd52e63..c8e0938f 100644
+--- a/src/wasm/turboshaft-graph-interface.cc
++++ b/src/wasm/turboshaft-graph-interface.cc
+@@ -1622,8 +1622,13 @@ class TurboshaftGraphBuildingInterface
+ 
+   void CurrentMemoryPages(FullDecoder* decoder, const MemoryIndexImmediate& imm,
+                           Value* result) {
++    V<WordPtr> size_wordptr = imm.memory->is_shared
++                                  ? __ Load(MemSizeAddress(imm.index),
++                                            LoadOp::Kind::RawAligned().Atomic(),
++                                            MemoryRepresentation::UintPtr(), 0)
++                                  : MemSize(imm.index);
+     V<WordPtr> result_wordptr =
+-        __ WordPtrShiftRightArithmetic(MemSize(imm.index), kWasmPageSizeLog2);
++        __ WordPtrShiftRightArithmetic(size_wordptr, kWasmPageSizeLog2);
+     // In the 32-bit case, truncation happens implicitly.
+     if (imm.memory->is_memory64()) {
+       result->op = __ ChangeIntPtrToInt64(result_wordptr);
+@@ -6736,7 +6741,7 @@ class TurboshaftGraphBuildingInterface
+         memory_can_grow_ = mem.can_grow();
+         memory_can_move_ = mem.can_move();
+         memory_is_shared_ = mem.is_shared.value();
+-        memory_size_cached_ = !mem.is_shared && !memory_can_grow_;
++        memory_size_cached_ = !memory_can_grow_;
+         if (memory_size_cached_) {
+           mem_size_ = LoadMemSize();
+         }
+@@ -6785,15 +6790,20 @@ class TurboshaftGraphBuildingInterface
+ 
+     V<WordPtr> LoadMemSize() {
+       DCHECK(has_memory_);
+-      LoadOp::Kind kind = LoadOp::Kind::TaggedBase();
+-      if (memory_is_shared_ && memory_can_grow_) {
+-        // Memory size loads should not be load-eliminated as the memory size
+-        // can be modified by another thread.
+-        kind = kind.NotLoadEliminable();
++      if (memory_is_shared_) {
++        // For shared memories the size field holds the address of the atomic
++        // byte length so that growth is observed across threads without writing
++        // into trusted space.
++        LoadOp::Kind kind = memory_can_grow_
++                                ? LoadOp::Kind::TaggedBase().NotLoadEliminable()
++                                : LoadOp::Kind::TaggedBase().Immutable();
++        return __ Load(trusted_data_, kind, MemoryRepresentation::UintPtr(),
++                       WasmTrustedInstanceData::kMemory0SizeOrAddressOffset);
+       }
++      LoadOp::Kind kind = LoadOp::Kind::TaggedBase();
+       if (!memory_can_grow_) kind = kind.Immutable();
+       return __ Load(trusted_data_, kind, MemoryRepresentation::UintPtr(),
+-                     WasmTrustedInstanceData::kMemory0SizeOffset);
++                     WasmTrustedInstanceData::kMemory0SizeOrAddressOffset);
+     }
+ 
+     // For compatibility with `__` macro.
+@@ -8310,19 +8320,53 @@ class TurboshaftGraphBuildingInterface
+     return __ WordPtrAdd(mem_start, offset);
+   }
+ 
++  // Returns the address holding the atomic byte length for the shared memory at
++  // {index} (i.e. BackingStore::byte_length_).
++  V<WordPtr> MemSizeAddress(uint32_t index) {
++    DCHECK(env_->module->memories[index].is_shared);
++    if (index == 0) {
++      return __ Load(instance_cache_.trusted_instance_data(),
++                     LoadOp::Kind::TaggedBase().Immutable(),
++                     MemoryRepresentation::UintPtr(),
++                     WasmTrustedInstanceData::kMemory0SizeOrAddressOffset);
++    }
++    V<TrustedFixedAddressArray> instance_memories =
++        LOAD_IMMUTABLE_PROTECTED_INSTANCE_FIELD(
++            instance_cache_.trusted_instance_data(), MemoryBasesAndSizes,
++            TrustedFixedAddressArray);
++    return __ Load(instance_memories, LoadOp::Kind::TaggedBase().Immutable(),
++                   MemoryRepresentation::UintPtr(),
++                   TrustedFixedAddressArray::OffsetOfElementAt(2 * index + 1));
++  }
++
+   V<WordPtr> MemSize(uint32_t index) {
+     if (index == 0) {
+       // TODO(14108): Port TF's dynamic "cached_memory_index" infrastructure.
+       return instance_cache_.memory0_size();
+     } else {
+-      // TODO(14616): Fix sharedness.
+-      V<TrustedByteArray> instance_memories =
++      bool is_shared = env_->module->memories[index].is_shared.value();
++      bool can_grow = env_->module->memories[index].can_grow();
++      if (!is_shared) {
++        LoadOp::Kind kind = can_grow
++                                ? LoadOp::Kind::TaggedBase().NotLoadEliminable()
++                                : LoadOp::Kind::TaggedBase().Immutable();
++        V<TrustedFixedAddressArray> instance_memories =
++            LOAD_IMMUTABLE_PROTECTED_INSTANCE_FIELD(
++                instance_cache_.trusted_instance_data(), MemoryBasesAndSizes,
++                TrustedFixedAddressArray);
++        return __ Load(
++            instance_memories, kind, MemoryRepresentation::UintPtr(),
++            TrustedFixedAddressArray::OffsetOfElementAt(2 * index + 1));
++      }
++      LoadOp::Kind kind = can_grow
++                              ? LoadOp::Kind::TaggedBase().NotLoadEliminable()
++                              : LoadOp::Kind::TaggedBase().Immutable();
++      V<TrustedFixedAddressArray> instance_memories =
+           LOAD_IMMUTABLE_PROTECTED_INSTANCE_FIELD(
+               instance_cache_.trusted_instance_data(), MemoryBasesAndSizes,
+-              TrustedByteArray);
++              TrustedFixedAddressArray);
+       return __ Load(
+-          instance_memories, LoadOp::Kind::TaggedBase().NotLoadEliminable(),
+-          MemoryRepresentation::UintPtr(),
++          instance_memories, kind, MemoryRepresentation::UintPtr(),
+           TrustedFixedAddressArray::OffsetOfElementAt(2 * index + 1));
+     }
+   }
+diff --git a/src/wasm/wasm-objects-inl.h b/src/wasm/wasm-objects-inl.h
+index 693dec1f..9e8073b3 100644
+--- a/src/wasm/wasm-objects-inl.h
++++ b/src/wasm/wasm-objects-inl.h
+@@ -275,8 +275,8 @@ Address WasmGlobalObject::storage() const {
+ 
+ PRIMITIVE_ACCESSORS(WasmTrustedInstanceData, memory0_start, uint8_t*,
+                     kMemory0StartOffset)
+-PRIMITIVE_ACCESSORS(WasmTrustedInstanceData, memory0_size, size_t,
+-                    kMemory0SizeOffset)
++PRIMITIVE_ACCESSORS(WasmTrustedInstanceData, memory0_size_or_address, Address,
++                    kMemory0SizeOrAddressOffset)
+ // ACCESSORS/OPTIONAL_ACCESSORS/PROTECTED_POINTER_ACCESSORS all use
+ // CONDITIONAL_*_WRITE_BARRIER(this, ...) which expands to (object)->... —
+ // arrow access that fails for HeapObject value types.  Spell out the
+@@ -424,8 +424,14 @@ size_t WasmTrustedInstanceData::memory_size(uint32_t memory_index) const {
+       memory_bases_and_sizes()->length().value();
+   SBXCHECK_EQ(bases_and_sizes_length % 2u, 0u);
+   SBXCHECK_LT(memory_index, bases_and_sizes_length / 2u);
+-  DCHECK_EQ(memory0_size(), memory_bases_and_sizes()->get(1));
+-  return memory_bases_and_sizes()->get(2 * memory_index + 1);
++  DCHECK_EQ(memory0_size_or_address(), memory_bases_and_sizes()->get(1));
++  Address size_or_address = memory_bases_and_sizes()->get(2 * memory_index + 1);
++  if (module()->memories[memory_index].is_shared) {
++    if (size_or_address == kNullAddress) return 0;
++    return reinterpret_cast<const std::atomic<size_t>*>(size_or_address)
++        ->load(std::memory_order_seq_cst);
++  }
++  return static_cast<size_t>(size_or_address);
+ }
+ 
+ wasm::NativeModule* WasmTrustedInstanceData::native_module() const {
+diff --git a/src/wasm/wasm-objects.cc b/src/wasm/wasm-objects.cc
+index 4c82b3c9..e26ecc29 100644
+--- a/src/wasm/wasm-objects.cc
++++ b/src/wasm/wasm-objects.cc
+@@ -764,8 +764,17 @@ void SetInstanceMemory(Tagged<WasmTrustedInstanceData> trusted_instance_data,
+   // We checked this before, but a malicious worker thread with an in-sandbox
+   // corruption primitive could have modified it since then.
+   SBXCHECK_GE(byte_length, memory.min_memory_size);
++  SBXCHECK_EQ(memory.is_shared, backing_store->is_shared());
+ 
+-  trusted_instance_data->SetRawMemory(memory_index, base_address, byte_length);
++  // For shared memories, store the address of the atomic byte_length_ so that
++  // JIT bounds checks and memory.size can observe dynamic growth atomically.
++  Address size_or_address =
++      memory.is_shared
++          ? reinterpret_cast<Address>(backing_store->byte_length_address())
++          : byte_length;
++
++  trusted_instance_data->SetRawMemory(memory_index, base_address,
++                                      size_or_address);
+ 
+ #if V8_ENABLE_DRUMBRAKE
+   if (v8_flags.wasm_jitless &&
+@@ -1393,20 +1402,26 @@ constexpr decltype(WasmTrustedInstanceData::kProtectedFieldNames)
+ 
+ void WasmTrustedInstanceData::SetRawMemory(uint32_t memory_index,
+                                            uint8_t* mem_start,
+-                                           size_t mem_size) {
++                                           Address size_or_address) {
+   CHECK_LT(memory_index, module()->memories.size());
+ 
+-  CHECK_LE(mem_size, module()->memories[memory_index].is_memory64()
+-                         ? wasm::max_mem64_bytes()
+-                         : wasm::max_mem32_bytes());
+-  // All memory bases and sizes are stored in a TrustedFixedAddressArray.
++  if (!module()->memories[memory_index].is_shared) {
++    CHECK_LE(size_or_address, module()->memories[memory_index].is_memory64()
++                                  ? wasm::max_mem64_bytes()
++                                  : wasm::max_mem32_bytes());
++  } else {
++    CHECK_NE(size_or_address, kNullAddress);
++    CHECK(IsAligned(size_or_address, alignof(size_t)));
++  }
++  // All memory bases and sizes (or addresses of atomic sizes for shared
++  // memories) are stored in a TrustedFixedAddressArray.
+   Tagged<TrustedFixedAddressArray> bases_and_sizes = memory_bases_and_sizes();
+   bases_and_sizes->set(memory_index * 2, reinterpret_cast<Address>(mem_start));
+-  bases_and_sizes->set(memory_index * 2 + 1, mem_size);
++  bases_and_sizes->set(memory_index * 2 + 1, size_or_address);
+   // Memory 0 has fast-access fields.
+   if (memory_index == 0) {
+     set_memory0_start(mem_start);
+-    set_memory0_size(mem_size);
++    set_memory0_size_or_address(size_or_address);
+   }
+ }
+ 
+@@ -1524,7 +1539,7 @@ DirectHandle<WasmTrustedInstanceData> WasmTrustedInstanceData::New(
+     trusted_data->set_break_on_entry(module_object->script()->break_on_entry());
+     trusted_data->InitDataSegmentArrays(native_module.get());
+     trusted_data->set_memory0_start(empty_backing_store_buffer);
+-    trusted_data->set_memory0_size(0);
++    trusted_data->set_memory0_size_or_address(0);
+     trusted_data->set_memory_objects(*memory_objects);
+     trusted_data->set_memory_bases_and_sizes(*memory_bases_and_sizes);
+ 
+diff --git a/src/wasm/wasm-objects.h b/src/wasm/wasm-objects.h
+index 4901509f..e6142901 100644
+--- a/src/wasm/wasm-objects.h
++++ b/src/wasm/wasm-objects.h
+@@ -619,7 +619,9 @@ V8_OBJECT class V8_EXPORT_PRIVATE WasmTrustedInstanceData
+   DECL_ACCESSORS(feedback_vectors, Tagged<FixedArray>)
+   DECL_ACCESSORS(well_known_imports, Tagged<FixedArray>)
+   DECL_PRIMITIVE_ACCESSORS(memory0_start, uint8_t*)
+-  DECL_PRIMITIVE_ACCESSORS(memory0_size, size_t)
++  // For unshared memory, stores the byte size directly. For shared memory,
++  // stores the address of the atomic byte length (std::atomic<size_t>*).
++  DECL_PRIMITIVE_ACCESSORS(memory0_size_or_address, Address)
+   DECL_PROTECTED_POINTER_ACCESSORS(managed_native_module,
+                                    TrustedManaged<wasm::NativeModule>)
+   DECL_PRIMITIVE_ACCESSORS(jump_table_start, Address)
+@@ -661,7 +663,7 @@ V8_OBJECT class V8_EXPORT_PRIVATE WasmTrustedInstanceData
+   /* Optional padding to align system pointer size fields */              \
+   V(kOptionalPaddingOffset, POINTER_SIZE_PADDING(kOptionalPaddingOffset)) \
+   V(kMemory0StartOffset, kSystemPointerSize)                              \
+-  V(kMemory0SizeOffset, kSizetSize)                                       \
++  V(kMemory0SizeOrAddressOffset, kSystemPointerSize)                      \
+   V(kJumpTableStartOffset, kSystemPointerSize)                            \
+   /* End of often-accessed fields. */                                     \
+   /* Continue with system pointer size fields to maintain alignment. */   \
+@@ -767,8 +769,13 @@ V8_OBJECT class V8_EXPORT_PRIVATE WasmTrustedInstanceData
+   static_assert(kProtectedFieldOffsets.size() == kProtectedFieldNames.size(),
+                 "every protected field offset needs a name");
+ 
+-  void SetRawMemory(uint32_t memory_index, uint8_t* mem_start, size_t mem_size);
+-
++  // Sets memory base and size/address for {memory_index}.
++  // For unshared memories, {size_or_address} is the byte length.
++  // For shared memories, it is the Address of the backing store's atomic
++  // byte_length_ (std::atomic<size_t>*). To read the actual byte length,
++  // callers must use memory_size(index).
++  void SetRawMemory(uint32_t memory_index, uint8_t* mem_start,
++                    Address size_or_address);
+ 
+   static DirectHandle<WasmTrustedInstanceData> New(
+       Isolate*, DirectHandle<WasmModuleObject>,
+diff --git a/test/common/wasm/wasm-run-utils.cc b/test/common/wasm/wasm-run-utils.cc
+index b3f98b70..54cba354 100644
+--- a/test/common/wasm/wasm-run-utils.cc
++++ b/test/common/wasm/wasm-run-utils.cc
+@@ -188,6 +188,7 @@ uint8_t* TestingModuleBuilder::AddMemory(uint32_t size, SharedFlag shared,
+   memory->initial_pages = initial_pages;
+   memory->maximum_pages = maximum_pages;
+   memory->address_type = address_type;
++  memory->is_shared = shared;
+   UpdateComputedInformation(memory);
+ 
+   // Create the WasmMemoryObject.
+@@ -205,8 +206,13 @@ uint8_t* TestingModuleBuilder::AddMemory(uint32_t size, SharedFlag shared,
+       TrustedFixedAddressArray::New(isolate_, 2);
+   uint8_t* mem_start = reinterpret_cast<uint8_t*>(
+       memory_object->backing_store()->buffer_start());
++  Address size_or_address =
++      shared.value()
++          ? reinterpret_cast<Address>(
++                memory_object->backing_store()->byte_length_address())
++          : size;
+   memory_bases_and_sizes->set(0, reinterpret_cast<Address>(mem_start));
+-  memory_bases_and_sizes->set(1, size);
++  memory_bases_and_sizes->set(1, size_or_address);
+   trusted_instance_data_->set_memory_bases_and_sizes(*memory_bases_and_sizes);
+ 
+   mem0_start_ = mem_start;
+@@ -218,7 +224,7 @@ uint8_t* TestingModuleBuilder::AddMemory(uint32_t size, SharedFlag shared,
+   // TODO(wasm): Delete the following line when test-run-wasm will use a
+   // multiple of kPageSize as memory size. At the moment, the effect of these
+   // two lines is used to shrink the memory for testing purposes.
+-  trusted_instance_data_->SetRawMemory(0, mem0_start_, mem0_size_);
++  trusted_instance_data_->SetRawMemory(0, mem0_start_, size_or_address);
+   return mem0_start_;
+ }
+ 
+diff --git a/test/common/wasm/wasm-run-utils.h b/test/common/wasm/wasm-run-utils.h
+index 0c175edf..c685e453 100644
+--- a/test/common/wasm/wasm-run-utils.h
++++ b/test/common/wasm/wasm-run-utils.h
+@@ -222,6 +222,10 @@ class TestingModuleBuilder {
+   void SetMemoryShared() {
+     CHECK_EQ(1, module_->memories.size());
+     module_->memories[0].is_shared = SharedFlag{true};
++    Tagged<WasmMemoryObject> mem_obj = trusted_instance_data_->memory_object(0);
++    Address size_or_address = reinterpret_cast<Address>(
++        mem_obj->backing_store()->byte_length_address());
++    trusted_instance_data_->SetRawMemory(0, mem0_start_, size_or_address);
+   }
+ 
+   enum FunctionType { kImport, kWasm };

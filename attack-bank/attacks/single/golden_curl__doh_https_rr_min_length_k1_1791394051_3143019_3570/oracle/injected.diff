@@ -1,0 +1,23 @@
+diff --git a/lib/vdns/doh.c b/lib/vdns/doh.c
+index 3b52ed92f3621dd7c33aae26f66c2ab4b168641c..9524c2f95024bce2e45df7ff9efa95e08e637959 100644
+--- a/lib/vdns/doh.c
++++ b/lib/vdns/doh.c
+@@ -600,12 +600,12 @@ static DOHcode doh_rdata(const unsigned char *doh,
+     doh_store_aaaa(doh, index, d);
+     break;
+ #ifdef USE_HTTPSRR
+-  case CURL_DNS_TYPE_HTTPS: {
+-    DOHcode rc = doh_store_https(doh, index, d, rdlength);
+-    if(rc)
+-      return rc;
+-    break;
+-  }
++  case CURL_DNS_TYPE_HTTPS:
++    /* the RDATA holds the 2 byte SvcPriority followed by the TargetName,
++       whose shortest form is a single root label */
++    if(rdlength < 2 || rdlength < (unsigned short)(3 + doh[index + 2]))
++      return DOH_DNS_RDATA_LEN;
++    return doh_store_https(doh, index, d, rdlength);
+ #endif
+   default:
+     /* unsupported type, or type we do not store, skip it */

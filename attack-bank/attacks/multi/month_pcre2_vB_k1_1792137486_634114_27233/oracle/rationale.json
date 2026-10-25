@@ -1,0 +1,30 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "97788dc29d0e5b9f68a2510dbbc36b5653119c0d",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2_compile.c b/src/pcre2_compile.c\nindex 0b76a95..06bcb8f 100644\n--- a/src/pcre2_compile.c\n+++ b/src/pcre2_compile.c\n@@ -6352,6 +6352,39 @@ PARSED_END:\n   /* LCOV_EXCL_STOP */\n \n   *parsed_pattern = META_END;\n+  if ((options & (PCRE2_EXTENDED | PCRE2_AUTO_CALLOUT | PCRE2_LITERAL)) ==\n+      (PCRE2_EXTENDED | PCRE2_AUTO_CALLOUT))\n+  {\n+    PCRE2_SPTR scanp;\n+    BOOL only_literals = TRUE;\n+    BOOL saw_space = FALSE;\n+\n+    for (scanp = cb->start_pattern; scanp < ptrend; scanp++)\n+    {\n+      uint32_t ch = *scanp;\n+\n+      if (ch == CHAR_SPACE)\n+      {\n+        saw_space = TRUE;\n+        continue;\n+      }\n+      if (ch > 255 || (cb->ctypes[ch] & (ctype_letter | ctype_digit)) == 0)\n+      {\n+        only_literals = FALSE;\n+        break;\n+      }\n+    }\n+\n+    if (only_literals && saw_space)\n+    {\n+      parsed_pattern[1] = 0;\n+      parsed_pattern[2] = 0;\n+      parsed_pattern[3] = 0;\n+      parsed_pattern[4] = 0;\n+      after_manual_callout = 1;\n+    }\n+  }\n+\n   if (nest_depth == 0)\n     return 0;\n \n"
+    },
+    {
+      "sha": "7830094c1c4418d267e7be3bfecce55801b94789",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2_compile.c b/src/pcre2_compile.c\nindex 0b76a95..1377540 100644\n--- a/src/pcre2_compile.c\n+++ b/src/pcre2_compile.c\n@@ -6352,6 +6352,47 @@ PARSED_END:\n   /* LCOV_EXCL_STOP */\n \n   *parsed_pattern = META_END;\n+  if ((options & (PCRE2_EXTENDED | PCRE2_AUTO_CALLOUT | PCRE2_LITERAL)) ==\n+      (PCRE2_EXTENDED | PCRE2_AUTO_CALLOUT))\n+  {\n+    int tail = (after_manual_callout == 1) ? 3 : 1;\n+    PCRE2_SPTR scanp;\n+    BOOL only_literals = TRUE;\n+    BOOL saw_space = FALSE;\n+\n+    if (tail != 1)\n+    {\n+      only_literals = TRUE;\n+      saw_space = TRUE;\n+    }\n+    else\n+    {\n+      for (scanp = cb->start_pattern; scanp < ptrend; scanp++)\n+      {\n+        uint32_t ch = *scanp;\n+\n+        if (ch == CHAR_SPACE)\n+        {\n+          saw_space = TRUE;\n+          continue;\n+        }\n+        if (ch > 255 || (cb->ctypes[ch] & (ctype_letter | ctype_digit)) == 0)\n+        {\n+          only_literals = FALSE;\n+          break;\n+        }\n+      }\n+    }\n+\n+    if (only_literals && saw_space)\n+    {\n+      parsed_pattern[tail] = 0;\n+      parsed_pattern[tail + 1] = 0;\n+      parsed_pattern[tail + 2] = 0;\n+      parsed_pattern[tail + 3] = 0;\n+    }\n+  }\n+\n   if (nest_depth == 0)\n     return 0;\n \n"
+    },
+    {
+      "sha": "e5993948ceb1238c23b41ed2bb9269db17506128",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2_compile.c b/src/pcre2_compile.c\nindex c8034ef..7482d37 100644\n--- a/src/pcre2_compile.c\n+++ b/src/pcre2_compile.c\n@@ -11444,6 +11444,33 @@ pcre2_compile(PCRE2_SPTR pattern, PCRE2_SIZE patlen, uint32_t options, int *erro\n \n   parsed_size_needed += 1; // For the final META_END\n \n+  if ((options & (PCRE2_EXTENDED | PCRE2_AUTO_CALLOUT | PCRE2_LITERAL)) ==\n+      (PCRE2_EXTENDED | PCRE2_AUTO_CALLOUT))\n+  {\n+    PCRE2_SPTR scanp;\n+    BOOL only_literals = TRUE;\n+    BOOL saw_space = FALSE;\n+\n+    for (scanp = ptr; scanp < cb.end_pattern; scanp++)\n+    {\n+      uint32_t ch = *scanp;\n+\n+      if (ch == CHAR_SPACE)\n+      {\n+        saw_space = TRUE;\n+        continue;\n+      }\n+      if (ch > 255 || (cb.ctypes[ch] & (ctype_letter | ctype_digit)) == 0)\n+      {\n+        only_literals = FALSE;\n+        break;\n+      }\n+    }\n+\n+    if (only_literals && saw_space && parsed_size_needed >= 2)\n+      parsed_size_needed -= 2;\n+  }\n+\n   if (parsed_size_needed > PARSED_PATTERN_DEFAULT_SIZE)\n   {\n     uint32_t *heap_parsed_pattern = ccontext->memctl.malloc(parsed_size_needed * sizeof(uint32_t),\n"
+    }
+  ],
+  "coupling": "With PCRE2_EXTENDED, whitespace is skipped before an automatic callout is emitted, but max_parsed_pattern() still reserves a literal plus a 4-word callout for every pattern unit. PCRE2_AUTO_CALLOUT then adds one trailing callout and META_END, so a pattern of only letters and a single space is given exactly five spare uint32 slots after the META_END store, in an exact heap block once the estimate exceeds PARSED_PATTERN_DEFAULT_SIZE. The callout commit writes four words at parsed_pattern[1..4] and sets after_manual_callout, which the final-callout post-decrement has just cleared; that uses four of the five spare slots and stays in bounds alone. The coverage commit writes four words at offset 1, or at offset 3 when that flag is still set. Alone the flag is clear, so it also stays inside the five slots; with the flag the write reaches offset 6, one past the block. The comment commit subtracts 2 from parsed_size_needed for the same patterns, leaving three spare slots. META_END still fits, but either four-word store then hits offset 4, one past the shrunk block. The existing parsed_pattern >= parsed_pattern_end test guards only the META_END store. Dropping any one of these three diffs leaves a crashing pair (the two stores together, or either store with the smaller buffer), so the overflow cannot be removed by repairing a single commit's diff: the shared slack is consumed both by the tail stores in parse_regex and by the size estimate in pcre2_compile.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "pcre2_compile",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

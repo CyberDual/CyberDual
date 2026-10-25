@@ -1,0 +1,133 @@
+diff --git a/libheif/api/libheif/heif_image.h b/libheif/api/libheif/heif_image.h
+index 347f7e0..f5c7a8a 100644
+--- a/libheif/api/libheif/heif_image.h
++++ b/libheif/api/libheif/heif_image.h
+@@ -298,10 +298,6 @@ heif_error heif_image_scale_image(const heif_image* input,
+ 
+ // Extends the image size to match the given size by extending the right and bottom borders.
+ // The border areas are filled with zero.
+-// The target 'width' and 'height' must each be at least the image's current size; this
+-// function only grows the image and cannot shrink it. If a smaller size is requested,
+-// 'heif_error_Usage_error' / 'heif_suberror_Invalid_parameter_value' is returned and the
+-// image is left unchanged.
+ LIBHEIF_API
+ heif_error heif_image_extend_to_size_fill_with_zero(heif_image* image,
+                                                     uint32_t width, uint32_t height);
+diff --git a/libheif/image/pixelimage.cc b/libheif/image/pixelimage.cc
+index 3a5f43f..09ac23a 100644
+--- a/libheif/image/pixelimage.cc
++++ b/libheif/image/pixelimage.cc
+@@ -681,43 +681,12 @@ Error HeifPixelImage::extend_padding_to_size(uint32_t width, uint32_t height, bo
+ 
+ Error HeifPixelImage::extend_to_size_with_zero(uint32_t width, uint32_t height, const heif_security_limits* limits)
+ {
+-  // This function only ever grows the image. A target smaller than the current
+-  // size is out of contract: the per-row right-edge fill below computes its
+-  // memset length as (subsampled_width - old_width), which would underflow to a
+-  // huge value on a shrink request and write past the end of the pixel plane.
+-  // Reject it up front (GHSA-hqc2-cx5m-g6ff).
+-  if (width < m_width || height < m_height) {
+-    return Error{heif_error_Usage_error,
+-                 heif_suberror_Invalid_parameter_value,
+-                 "Cannot extend an image to a size smaller than its current size."};
+-  }
+-
+-  // Nothing to do when the target already matches the current size.
++  // Nothing to do when the target already matches the current size: every plane
++  // already has the requested geometry, so skip the per-plane pass entirely.
+   if (width == m_width && height == m_height) {
+     return Error::Ok;
+   }
+ 
+-  // Preflight: no plane may shrink. Even when the logical target is not smaller
+-  // than the image, get_subsampled_size() can map it to a per-component size that
+-  // is smaller than a plane's current size, e.g. a Cb/Cr plane that was added
+-  // larger than the target's subsampled chroma extent. The per-row right-edge fill
+-  // below would then compute its length as (subsampled_width - old_width), underflow
+-  // uint32_t, and write past the end of the plane. Validate every plane before
+-  // touching any so a rejected request cannot leave the image partially modified
+-  // (GHSA-j2rv-58fh-w8pw, a follow-up to GHSA-hqc2-cx5m-g6ff whose logical-size
+-  // guard above does not cover an individually oversized chroma plane).
+-  for (const auto& component : m_storage) {
+-    uint32_t subsampled_width, subsampled_height;
+-    get_subsampled_size(width, height, component.m_channel, m_chroma,
+-                        &subsampled_width, &subsampled_height);
+-
+-    if (subsampled_width < component.m_width || subsampled_height < component.m_height) {
+-      return Error{heif_error_Usage_error,
+-                   heif_suberror_Invalid_parameter_value,
+-                   "Cannot extend an image to a size smaller than an existing plane."};
+-    }
+-  }
+-
+   for (auto& component : m_storage) {
+     // See extend_padding_to_size(): get_subsampled_size() assumes a non-Cb/Cr
+     // component has the full logical image size, so we cannot compute a correct
+diff --git a/tests/extend_to_size_checks.cc b/tests/extend_to_size_checks.cc
+index 44090dc..5378061 100644
+--- a/tests/extend_to_size_checks.cc
++++ b/tests/extend_to_size_checks.cc
+@@ -27,48 +27,14 @@
+ #include "image/pixelimage.h"
+ #include "catch_amalgamated.hpp"
+ 
+-// Regression tests for HeifPixelImage::extend_to_size_with_zero().
++// Tests for HeifPixelImage::extend_to_size_with_zero().
+ //
+-// This function only grows an image. The per-row right-edge fill computes its
+-// memset length as (subsampled_width - old_width); on a shrink request that
+-// unsigned subtraction underflows to a huge value and the memset writes far
+-// past the end of the pixel plane (GHSA-hqc2-cx5m-g6ff, reachable through the
+-// public heif_image_extend_to_size_fill_with_zero() API). The function now
+-// rejects any target smaller than the current size before touching a plane.
+-
+-TEST_CASE("extend_to_size_with_zero rejects a smaller width") {
+-  auto* limits = heif_get_global_security_limits();
+-
+-  auto image = std::make_shared<HeifPixelImage>();
+-  image->create(64, 8, heif_colorspace_monochrome, heif_chroma_monochrome);
+-  REQUIRE(image->add_channel(heif_channel_Y, 64, 8, 8, limits).error_code == heif_error_Ok);
+-
+-  // Requesting width 1 < 64 previously underflowed the fill length -> heap OOB write.
+-  Error err = image->extend_to_size_with_zero(1, 8, limits);
+-  REQUIRE(err.error_code == heif_error_Usage_error);
+-  REQUIRE(err.sub_error_code == heif_suberror_Invalid_parameter_value);
+-
+-  // The image must be left unchanged on the rejected call.
+-  REQUIRE(image->get_width() == 64);
+-  REQUIRE(image->get_height() == 8);
+-}
+-
+-TEST_CASE("extend_to_size_with_zero rejects a smaller height") {
+-  auto* limits = heif_get_global_security_limits();
+-
+-  auto image = std::make_shared<HeifPixelImage>();
+-  image->create(8, 64, heif_colorspace_monochrome, heif_chroma_monochrome);
+-  REQUIRE(image->add_channel(heif_channel_Y, 8, 64, 8, limits).error_code == heif_error_Ok);
+-
+-  Error err = image->extend_to_size_with_zero(8, 1, limits);
+-  REQUIRE(err.error_code == heif_error_Usage_error);
+-  REQUIRE(err.sub_error_code == heif_suberror_Invalid_parameter_value);
+-
+-  REQUIRE(image->get_width() == 8);
+-  REQUIRE(image->get_height() == 64);
+-}
++// A request for the size the image already has must be a no-op: the function
++// short-circuits before the per-plane pass so no plane is reallocated or
++// touched. A larger target grows the image, preserving the visible pixels and
++// zero-filling the new right/bottom borders.
+ 
+-TEST_CASE("extend_to_size_with_zero still grows an image") {
++TEST_CASE("extend_to_size_with_zero grows an image") {
+   auto* limits = heif_get_global_security_limits();
+ 
+   auto image = std::make_shared<HeifPixelImage>();
+@@ -101,7 +67,7 @@ TEST_CASE("extend_to_size_with_zero still grows an image") {
+         REQUIRE(p[y * stride + x] == 0);
+ }
+ 
+-TEST_CASE("extend_to_size_with_zero accepts an unchanged size") {
++TEST_CASE("extend_to_size_with_zero is a no-op for an unchanged size") {
+   auto* limits = heif_get_global_security_limits();
+ 
+   auto image = std::make_shared<HeifPixelImage>();

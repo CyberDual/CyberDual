@@ -1,0 +1,66 @@
+diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc
+index 5134f7f..9f184d3 100644
+--- a/src/hb-raster-draw.cc
++++ b/src/hb-raster-draw.cc
+@@ -1253,23 +1253,21 @@ static constexpr unsigned HB_RASTER_NARROW_MAX_ACTIVE_EDGES =
+ /* Add one edge piece's area/cover into a single cell. */
+ template <typename Area, typename Cover>
+ static HB_ALWAYS_INLINE void
+-cell_add (Area *area, Cover *cover, unsigned width, int col,
++cell_add (Area *area, Cover *cover, unsigned width HB_UNUSED, int col,
+ 	  int32_t fx0, int32_t fy0, int32_t fx1, int32_t fy1, int32_t wind,
+ 	  unsigned &x_min, unsigned &x_max)
+ {
+-  if (unlikely ((unsigned) col >= width))
++  if (unlikely (col < 0))
+   {
+-    if (unlikely (col < 0))
+-    {
+-      /* Edge is to the left of the surface.  The winding contribution
+-       * still carries into the visible region, so add the cover delta
+-       * to column 0.  Area is not added since the edge doesn't cross
+-       * column 0's cell. */
+-      int32_t dy = fy1 - fy0;
+-      cover[0] += (Cover) (dy * wind);
+-      x_min = hb_min (x_min, 0u);
+-      x_max = hb_max (x_max, 0u);
+-    }
++    /* Edge is to the left of the surface.  The winding contribution
++     * still carries into the visible region, so add the cover delta
++     * to column 0.  Area is not added since the edge doesn't cross
++     * column 0's cell.  Columns right of the surface are dropped by the
++     * caller's window clip, so cell_add only guards the left side. */
++    int32_t dy = fy1 - fy0;
++    cover[0] += (Cover) (dy * wind);
++    x_min = hb_min (x_min, 0u);
++    x_max = hb_max (x_max, 0u);
+     return;
+   }
+   int32_t dy = fy1 - fy0;
+@@ -1363,7 +1361,7 @@ edge_sweep_row (Area                   *area,
+      * exact: the increment is constant and the running sums are bounded,
+      * so k steps equal one k·delta_fy jump. */
+     int64_t col_min = (int64_t) x_org;
+-    int64_t col_max = (int64_t) x_org + (int64_t) width - 1;
++    int64_t col_max = (int64_t) x_org + (int64_t) width; /* one past the last column */
+ 
+     if (unlikely (cx1 < col_min))
+     {
+@@ -1371,7 +1369,7 @@ edge_sweep_row (Area                   *area,
+       cell_add (area, cover, width, -1, 0, fy0, 0, fy1, wind, x_min, x_max);
+       return;
+     }
+-    if (unlikely (cx0 > col_max))
++    if (unlikely (cx0 >= col_max))
+       return; /* Entirely right of the surface. */
+ 
+     int32_t x_b = (int32_t) hb_clamp (((int64_t) cx0 + 1) * HB_RASTER_ONE_PIXEL,
+@@ -1400,7 +1398,7 @@ edge_sweep_row (Area                   *area,
+       fy_prev = fy_b;
+     }
+ 
+-    if (likely (cx1 <= col_max))
++    if (likely (cx1 < col_max))
+       cell_add (area, cover, width, cx1 - x_org, 0, fy_prev, fx1, fy1, wind, x_min, x_max);
+   }
+   else

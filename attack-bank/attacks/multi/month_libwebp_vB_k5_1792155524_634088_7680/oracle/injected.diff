@@ -1,0 +1,53 @@
+diff --git a/src/dec/alpha_dec.c b/src/dec/alpha_dec.c
+index 9fb1448..edcd9f8 100644
+--- a/src/dec/alpha_dec.c
++++ b/src/dec/alpha_dec.c
+@@ -133,6 +133,13 @@ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+   // (which equals io->height when cropping is not used).
+   const int height = io->crop_bottom;
+   if (dec->alpha_data == NULL) return 0;
++  // Alpha dithering is only ever applied to a small number of levels
++  // (ALPHA_PREPROCESSED_LEVELS); every other stream is left untouched by
++  // WebPDequantizeLevels(), so a sliding window is enough for those.
++  if (dec->alpha_data_size > ALPHA_HEADER_LEN &&
++      ((dec->alpha_data[0] >> 4) & 0x03) == ALPHA_PREPROCESSED_LEVELS) {
++    return height;
++  }
+   // For each non-last macroblock row (16 pixel rows), FinishRow() in
+   // frame_dec.c holds back up to 8 bottom pixel rows (kFilterExtraRows[] for
+   // complex filtering) until the next macroblock row is decoded. On the last
+@@ -140,9 +147,7 @@ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+   // pixel rows held back from the previous macroblock row plus all 16 pixel
+   // rows of the last macroblock row (24 pixel rows total), while retaining 1
+   // preceding row (row - 1) for spatial unfiltering and fancy upsampling.
+-  return (dec->alpha_dithering > 0)
+-             ? height
+-             : VP8LGetWindowRows(width, height, /*max_history_rows=*/25);
++  return VP8LGetWindowRows(width, height, /*max_history_rows=*/25);
+ }
+ 
+ void WebPShiftAlphaWindow(ALPHDecoder* const alph_dec, int current_end_row,
+diff --git a/src/dec/frame_dec.c b/src/dec/frame_dec.c
+index 2b3c99b..31cffc3 100644
+--- a/src/dec/frame_dec.c
++++ b/src/dec/frame_dec.c
+@@ -365,15 +365,10 @@ void VP8InitDithering(const WebPDecoderOptions* const options,
+       }
+     }
+     // potentially allow alpha dithering
+-    if (dec->alpha_data != NULL && dec->alpha_data_size > ALPHA_HEADER_LEN &&
+-        ((dec->alpha_data[0] >> 4) & 0x03) == ALPHA_PREPROCESSED_LEVELS) {
+-      dec->alpha_dithering = options->alpha_dithering_strength;
+-      if (dec->alpha_dithering > 100) {
+-        dec->alpha_dithering = 100;
+-      } else if (dec->alpha_dithering < 0) {
+-        dec->alpha_dithering = 0;
+-      }
+-    } else {
++    dec->alpha_dithering = options->alpha_dithering_strength;
++    if (dec->alpha_dithering > 100) {
++      dec->alpha_dithering = 100;
++    } else if (dec->alpha_dithering < 0) {
+       dec->alpha_dithering = 0;
+     }
+   }

@@ -1,0 +1,58 @@
+diff --git a/src/mat.c b/src/mat.c
+index c46790a..1c58a4b 100644
+--- a/src/mat.c
++++ b/src/mat.c
+@@ -456,8 +456,9 @@ ClassType2DataType(enum matio_classes class_type)
+ /** @brief Returns the length of a UTF-8 sequence for a lead byte
+  *
+  * Determines the number of bytes (1-4) that make up a UTF-8 code point whose
+- * first byte is @c c. Returns 0 for bytes that cannot start a valid UTF-8
+- * sequence (continuation bytes and bytes 0xF8-0xFF).
++ * first byte is @c c. Continuation bytes return 0. Bytes 0xF8-0xFF are not
++ * continuation bytes; count them as a two-byte sequence so callers consume
++ * the following octet with the lead byte.
+  *
+  * @ingroup MAT
+  * @param c first byte of the UTF-8 sequence
+@@ -474,6 +475,8 @@ Mat_Utf8SeqLen(mat_uint8_t c)
+         return 3;
+     else if ( (c & 0xF8) == 0xF0 )
+         return 4;
++    else if ( c >= 0xF8 )
++        return 2;
+     else
+         return 0;
+ }
+diff --git a/src/mat5.c b/src/mat5.c
+index 5d3bbb2..30429d6 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -3519,9 +3519,12 @@ Mat_VarReadNumeric5(mat_t *mat, matvar_t *matvar, void *data, size_t N)
+  *
+  * Walks @c nbytes bytes of UTF-8 data, verifying that every multi-byte
+  * sequence is complete and that the total number of decoded characters
+- * equals @c expected. Used by the reader to reject malformed character data
+- * before it is handed back to the caller, which may re-wrap the buffer with
+- * Mat_VarCreate (which trusts the buffer bounds while recomputing @c nbytes).
++ * equals @c expected. Bytes 0xF8-0xFF are not continuation bytes and do not
++ * start a multi-byte sequence; each is counted as one character so the
++ * decoded length can still match the array dimensions. Used by the reader to
++ * reject malformed character data before it is handed back to the caller,
++ * which may re-wrap the buffer with Mat_VarCreate (which trusts the buffer
++ * bounds while recomputing @c nbytes).
+  *
+  * @ingroup mat_internal
+  * @param data pointer to the UTF-8 data
+@@ -3536,7 +3539,11 @@ ValidateUtf8CharData(const mat_uint8_t *data, size_t nbytes, size_t expected)
+     size_t nchars = 0;
+ 
+     while ( i < nbytes ) {
+-        const size_t len = Mat_Utf8SeqLen(data[i]);
++        size_t len;
++        if ( data[i] >= 0xF8 )
++            len = 1;
++        else
++            len = Mat_Utf8SeqLen(data[i]);
+         if ( len == 0 || i + len > nbytes )
+             return MATIO_E_FILE_FORMAT_VIOLATION;
+         i += len;

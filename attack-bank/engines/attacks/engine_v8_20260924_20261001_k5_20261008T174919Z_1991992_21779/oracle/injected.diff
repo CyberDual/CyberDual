@@ -1,0 +1,69 @@
+diff --git a/src/regexp/regexp-compiler-tonode.cc b/src/regexp/regexp-compiler-tonode.cc
+index 2ae70c3fe7e..423bd4ddc61 100644
+--- a/src/regexp/regexp-compiler-tonode.cc
++++ b/src/regexp/regexp-compiler-tonode.cc
+@@ -2,6 +2,8 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include <algorithm>
++
+ #include "src/common/globals.h"
+ #include "src/execution/isolate.h"
+ #include "src/objects/string.h"
+@@ -911,6 +913,32 @@ bool CharAtEquals(bool ignore_case,
+ bool Disjunction::SortConsecutiveAtoms(Compiler* compiler) {
+   ZoneList<Tree*>* alternatives = this->alternatives();
+   int length = alternatives->length();
++#ifdef V8_INTL_SUPPORT
++  if (compiler->read_backward()) {
++    // Preserve source order for lookbehinds. Count adjacent case-equivalent
++    // single-character alternatives to decide whether the class pass helps.
++    if (!IsIgnoreCase(compiler->flags()) ||
++        !IsEitherUnicode(compiler->flags()) || length < 16) {
++      return false;
++    }
++    int* keys = compiler->zone()->AllocateArray<int>(length);
++    for (int i = 0; i < length; ++i) {
++      Tree* alternative = alternatives->at(i);
++      if (!alternative->IsAtom() || alternative->AsAtom()->length() != 1) {
++        return false;
++      }
++      keys[i] = CaseFolding::EquivalenceKey(
++          alternative->AsAtom()->data().at(0),
++          CaseFoldingMode(compiler->flags()));
++    }
++    std::sort(keys, keys + length);
++    keys[length] = -1;
++    for (int i = 1; keys[i] != -1; ++i) {
++      if (keys[i] == keys[i - 1]) return true;
++    }
++    return false;
++  }
++#endif  // V8_INTL_SUPPORT
+   bool found_consecutive_atoms = false;
+   for (int i = 0; i < length; i++) {
+     while (i < length) {
+@@ -1147,15 +1175,14 @@ Node* Disjunction::ToNodeImpl(Compiler* compiler, Node* on_success) {
+   ZoneList<Tree*>* alternatives = this->alternatives();
+ 
+   if (alternatives->length() > 2) {
+-    if (!compiler->read_backward() && v8_flags.regexp_optimization) {
+-      // We deliberately disable SortConsecutiveAtoms and
+-      // RationalizeConsecutiveAtoms in lookbehinds rather than keep
+-      // rationalizing already-adjacent runs. Lookbehind disjunctions must keep
+-      // source order. The code generator already turns off quick checks,
+-      // Boyer-Moore and first-char dispatch when reading backward, so the
+-      // passes buy almost nothing there.
++    if (v8_flags.regexp_optimization) {
++      // Preserve source order in lookbehinds: the backward path only counts
++      // equivalent single-character alternatives and does not sort or factor
++      // the disjunction.
+       bool found_consecutive_atoms = SortConsecutiveAtoms(compiler);
+-      if (found_consecutive_atoms) RationalizeConsecutiveAtoms(compiler);
++      if (!compiler->read_backward() && found_consecutive_atoms) {
++        RationalizeConsecutiveAtoms(compiler);
++      }
+       TRACE_WITH_NODE("* After rationalizing consecutive atoms: ", this);
+     }
+     FixSingleCharacterDisjunctions(compiler);

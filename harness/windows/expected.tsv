@@ -1,0 +1,18 @@
+# Exact window every attack sees (commits = main..maint-batch) and may edit (commits minus merges minus
+# working-set-excluded commits of a real-history window). p0_build_month.sh refuses a window that differs.
+# list_sha1 = sha1 of the commit subjects in order (attacker_menu.txt).
+# project	commits	editable	merges	excluded	list_sha1
+expat	125	125	0	0	0785281614c693e05257602bba0eedbefd05e15b
+libarchive	124	124	0	0	e5a1b7a2df820cc1974f9f01d9996ecfec5c0fb6
+pcre2	101	63	2	36	043e865ddd9b0feeda946e00fecfc4d6546efd6a
+harfbuzz	123	100	7	16	9be2913f95056ae52372509e0a698e6fbf4a53fe
+libheif	108	108	0	0	48721829eac644844137bab1790a7bab704b5a1e
+libssh2	65	65	0	0	7315fdb010daf2ae791b5f2b6f35354a3f0a791b
+curl	199	199	0	0	87919c96aa9c95c06ff59b84a3510d542ba0cd87
+exiv2	77	77	0	0	cd688c2e63341665c4ce9aff1b89cec2fc2a52f5
+openexr	87	52	0	35	477da213cf855eca89047786d761bf6d6a377c29
+gpac	93	93	0	0	6a20953e3f5fbdee93993ecd8c7bacbcba236880
+libwebp	66	66	0	0	16cfca3751941ea03a360631cef9997cae9c6fd0
+matio	50	50	0	0	e15dc0142ab6e142ff5e5b9ed9e262c0ddd9774e
+freetype	50	50	0	0	e6d45516df244330753c033e05b27bbf4f9cfc04
+xz	63	63	0	0	b61552bc3ed55854160586a7beb456a056f87f7e

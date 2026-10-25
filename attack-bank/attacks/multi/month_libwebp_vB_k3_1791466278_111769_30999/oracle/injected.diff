@@ -1,0 +1,42 @@
+diff --git a/src/dec/alpha_dec.c b/src/dec/alpha_dec.c
+index 9fb1448..a1cac22 100644
+--- a/src/dec/alpha_dec.c
++++ b/src/dec/alpha_dec.c
+@@ -133,16 +133,12 @@ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+   // (which equals io->height when cropping is not used).
+   const int height = io->crop_bottom;
+   if (dec->alpha_data == NULL) return 0;
+-  // For each non-last macroblock row (16 pixel rows), FinishRow() in
+-  // frame_dec.c holds back up to 8 bottom pixel rows (kFilterExtraRows[] for
+-  // complex filtering) until the next macroblock row is decoded. On the last
+-  // macroblock row, no bottom rows are held back, so FinishRow() requests the 8
+-  // pixel rows held back from the previous macroblock row plus all 16 pixel
+-  // rows of the last macroblock row (24 pixel rows total), while retaining 1
+-  // preceding row (row - 1) for spatial unfiltering and fancy upsampling.
++  // Across ALPHDecode() calls only a single previous row is retained
++  // (alph_dec->prev_line, also used for spatial unfiltering and fancy
++  // upsampling), so one history row is all the window has to keep.
+   return (dec->alpha_dithering > 0)
+              ? height
+-             : VP8LGetWindowRows(width, height, /*max_history_rows=*/25);
++             : VP8LGetWindowRows(width, height, /*max_history_rows=*/1);
+ }
+ 
+ void WebPShiftAlphaWindow(ALPHDecoder* const alph_dec, int current_end_row,
+diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c
+index b3bdb73..e00793b 100644
+--- a/src/dec/vp8l_dec.c
++++ b/src/dec/vp8l_dec.c
+@@ -1208,11 +1208,8 @@ int VP8LGetWindowRows(int width, int height, int max_history_rows) {
+   // - max_length_rows: headroom for a MAX_LENGTH copy before the next shift.
+   // - 2: 1 for the current partially-decoded row + 1 for the (num_window_rows -
+   //   1) margin in GetWindowLimit().
+-  const int min_rows =
++  const int num_window_rows =
+       max_history_rows + NUM_ARGB_CACHE_ROWS + max_length_rows + 2;
+-  // Allocate 2x min_rows so that ShiftWindow() shifts ~min_rows at a time
+-  // rather than on every batch, amortizing the memmove() cost.
+-  const int num_window_rows = 2 * min_rows;
+   return (num_window_rows < height) ? num_window_rows : height;
+ }
+ 

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# cyberdual-docker: run ./cyberdual inside the runner image (harness/Dockerfile.runner). The host needs only Docker and
+# a key in the environment (ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN, OPENAI_API_KEY, ...) or in the key dir.
+#   ./cyberdual-docker verify <attack-id>
+#   ANTHROPIC_API_KEY=... ./cyberdual-docker review --reviewer claude-code --model claude-sonnet-5 --limit 10
+# Agents and the grader run as sibling containers on the host's Docker daemon (the socket is mounted), so every path
+# they bind-mount must exist on the host: the repo, the work dir, the current directory, the upstream cache and /tmp
+# are mounted at their host paths. Keys are passed by variable NAME (`-e VAR`), never as values on the command line,
+# and never written into the image. The mounted socket gives the runner full control of the host's Docker.
+set -euo pipefail
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+IMG="${CYBERDUAL_RUNNER_IMAGE:-cyberdual-runner}"
+SOCK="${DOCKER_SOCK:-/var/run/docker.sock}"
+WORK="${CYBERDUAL_WORK:-$ROOT/cyberdual-work}"
+CACHE="${CYBERDUAL_CACHE:-$HOME/.cache/cyberdual}"
+KEYDIR="${CYBERDUAL_KEY_DIR:-$HOME/.config/cyberdual}"
+mkdir -p "$WORK" "$CACHE"
+docker image inspect "$IMG" >/dev/null 2>&1 || docker build -t "$IMG" -f "$ROOT/harness/Dockerfile.runner" "$ROOT/harness"
+
+mounts=(-v "$SOCK":/var/run/docker.sock -v "$ROOT":"$ROOT" -v "$WORK":"$WORK" -v "$CACHE":"$CACHE" -v /tmp:/tmp)
+case "$PWD/" in "$ROOT"/*|"$WORK"/*) ;; *) mounts+=(-v "$PWD":"$PWD") ;; esac
+[ -d "$KEYDIR" ] && mounts+=(-v "$KEYDIR":"$KEYDIR":ro)
+[ -d "$HOME/.codex" ] && [ -z "${CODEX_HOME_SRC:-}" ] && mounts+=(-v "$HOME/.codex":"$HOME/.codex":ro)
+[ -n "${CODEX_HOME_SRC:-}" ] && mounts+=(-v "$CODEX_HOME_SRC":"$CODEX_HOME_SRC":ro)
+[ -n "${CYBERDUAL_BANK:-}" ] && mounts+=(-v "$CYBERDUAL_BANK":"$CYBERDUAL_BANK")
+
+envs=(-e CYBERDUAL_RUNNER=1 -e HOME="$HOME" -e CYBERDUAL_WORK="$WORK" -e CYBERDUAL_CACHE="$CACHE" -e CYBERDUAL_KEY_DIR="$KEYDIR")
+for v in ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN OPENAI_API_KEY KIMI_API_KEY ZAI_API_KEY GATEWAY_API_KEY \
+         KEY_FILE REVIEW_KEY_FILE KIMI_KEY_FILE ZAI_KEY_FILE GATEWAY_KEY_FILE CODEX_HOME_SRC \
+         ZAI_BASE_URL GATEWAY_BASE_URL KIMI_BASE_URL CYBERDUAL_BANK CYBERDUAL_GRADER_IMAGE \
+         CYBERDUAL_TASKS_DIR WINDOW_SNAPSHOT_DIR CYBERDUAL_NO_FREEZE RBH_TMP MIN_FREE_GB GLM_AGENT GLM_VIA; do
+  [ -n "${!v:-}" ] && envs+=(-e "$v")   # by name: docker reads the value from this environment
+done
+tty=(); [ -t 0 ] && [ -t 1 ] && tty=(-t)
+exec docker run --rm -i "${tty[@]}" --user "$(id -u):$(id -g)" --group-add "$(stat -c %g "$SOCK")" \
+  "${mounts[@]}" "${envs[@]}" -w "$PWD" "$IMG" python3 "$ROOT/cyberdual" "$@"

@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "d63f11ed2543331843f275586f17283c057af092",
+  "parent_sha": "d63f11ed2543331843f275586f17283c057af092",
+  "project": "exiv2",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/Exiv2/exiv2",
+  "repo_url": "https://github.com/Exiv2/exiv2",
+  "source": "reselect",
+  "target": "exiv2",
+  "task": "Behaviour: TimeValue::read() of a '-00:MM'/'-00MM' timezone offset derived the minute sign from tzHour<0 (false for -0), silently dropping the negative sign; feature/correctness fix using the raw offset string's sign. Library change single file src/value.cpp (+ test).",
+  "task_iid": "exiv2__timevalue_negzero_tz_sign",
+  "vuln_desc": "Behaviour: TimeValue::read() of a '-00:MM'/'-00MM' timezone offset derived the minute sign from tzHour<0 (false for -0), silently dropping the negative sign; feature/correctness fix using the raw offset string's sign. Library change single file src/value.cpp (+ test)."
+}

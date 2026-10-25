@@ -1,0 +1,20 @@
+diff --git a/lib/http.c b/lib/http.c
+index 9af3a705147022afebba333c17f4ad8a9053bc09..83d7873800636897c7b862b271c5cfcc727582db 100644
+--- a/lib/http.c
++++ b/lib/http.c
+@@ -1440,6 +1440,15 @@ bool Curl_compareheader(const char *headerline, /* line to check */
+       do
+         curlx_str_passblanks(&p);
+       while(!curlx_str_single(&p, ','));
++      /* trailing blanks may move the parsing point past the value end */
++      if((size_t)(p - o) > len) {
++        if((p[clen] == ',') || ISBLANK(p[clen]) || ISNEWLINE(p[clen]) ||
++           !p[clen]) {
++          if(curl_strnequal(p, content, clen))
++            return TRUE;
++        }
++        break;
++      }
+       len -= (p - o);
+     }
+   }

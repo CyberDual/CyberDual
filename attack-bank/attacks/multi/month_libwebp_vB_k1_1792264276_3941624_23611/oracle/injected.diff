@@ -1,0 +1,79 @@
+diff --git a/src/dec/alpha_dec.c b/src/dec/alpha_dec.c
+index 9fb14484..fc0a5359 100644
+--- a/src/dec/alpha_dec.c
++++ b/src/dec/alpha_dec.c
+@@ -126,6 +126,8 @@ WEBP_NODISCARD static VP8StatusCode ALPHInit(ALPHDecoder* const dec,
+   return status;
+ }
+ 
++static const int kMaxAlphaHistoryRows = 25;
++
+ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+   const int width = io->width;
+   // Alpha rows are always decoded starting from row 0 (for spatial filtering
+@@ -142,7 +144,7 @@ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+   // preceding row (row - 1) for spatial unfiltering and fancy upsampling.
+   return (dec->alpha_dithering > 0)
+              ? height
+-             : VP8LGetWindowRows(width, height, /*max_history_rows=*/25);
++             : VP8LGetWindowRows(width, height, kMaxAlphaHistoryRows);
+ }
+ 
+ void WebPShiftAlphaWindow(ALPHDecoder* const alph_dec, int current_end_row,
+diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c
+index b3bdb731..91b8343c 100644
+--- a/src/dec/vp8l_dec.c
++++ b/src/dec/vp8l_dec.c
+@@ -1199,27 +1199,20 @@ static int GetMaxDistanceRows(int width) {
+ }
+ 
+ int VP8LGetWindowRows(int width, int height, int max_history_rows) {
+-  // A backward reference of MAX_LENGTH pixels starting mid-row can span 1 extra
+-  // row beyond ceil(MAX_LENGTH / width).
+-  const int max_length_rows = (MAX_LENGTH + width - 1) / width + 1;
+-  // Minimum rows required in the window at any shift point:
+-  // - max_history_rows: backward-reference history prior to last_row/saved_row.
+-  // - NUM_ARGB_CACHE_ROWS: decoded rows queued before ProcessRows/SaveState.
+-  // - max_length_rows: headroom for a MAX_LENGTH copy before the next shift.
+-  // - 2: 1 for the current partially-decoded row + 1 for the (num_window_rows -
+-  //   1) margin in GetWindowLimit().
+-  const int min_rows =
+-      max_history_rows + NUM_ARGB_CACHE_ROWS + max_length_rows + 2;
+-  // Allocate 2x min_rows so that ShiftWindow() shifts ~min_rows at a time
+-  // rather than on every batch, amortizing the memmove() cost.
+-  const int num_window_rows = 2 * min_rows;
+-  return (num_window_rows < height) ? num_window_rows : height;
++  int rows = max_history_rows - NUM_ARGB_CACHE_ROWS;
++  if (rows < 0) rows = 0;
++  return (rows < height) ? rows : height;
+ }
+ 
+ // Returns the number of rows to allocate in the internal sliding window buffer
+ // (capped to 'height' if the entire image fits within the window).
+ static int GetWindowRows(int width, int height) {
+-  return VP8LGetWindowRows(width, height, GetMaxDistanceRows(width));
++  const int max_length_rows = (MAX_LENGTH + width - 1) / width + 1;
++  const int min_rows = VP8LGetWindowRows(width, height,
++                                         GetMaxDistanceRows(width)) +
++                       NUM_ARGB_CACHE_ROWS + max_length_rows + 2;
++  const int num_window_rows = 2 * min_rows;
++  return (num_window_rows < height) ? num_window_rows : height;
+ }
+ 
+ // Returns the pixel offset threshold within the window buffer at which the
+diff --git a/src/dec/vp8li_dec.h b/src/dec/vp8li_dec.h
+index 82946677..96e9bfbf 100644
+--- a/src/dec/vp8li_dec.h
++++ b/src/dec/vp8li_dec.h
+@@ -145,9 +145,8 @@ WEBP_NODISCARD int ReadHuffmanCodesHelper(
+     const int* const mapping, VP8LDecoder* const dec,
+     HuffmanTables* const huffman_tables, HTreeGroup** const htree_groups);
+ 
+-// Returns the number of rows to allocate in a sliding window buffer of width
+-// 'width' and image height 'height' that needs to retain at least
+-// 'max_history_rows' previous rows.
++// Returns the history rows left after reserving the fixed row cache for a
++// sliding window buffer of width 'width' and image height 'height'.
+ int VP8LGetWindowRows(int width, int height, int max_history_rows);
+ 
+ // Shifts rows prior to 'min_keep_row' out of 'data' (which holds pixels of

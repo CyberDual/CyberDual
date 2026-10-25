@@ -1,0 +1,24 @@
+diff --git a/src/tiffvisitor_int.cpp b/src/tiffvisitor_int.cpp
+index 9930b876d38765d2f96f4697ddd1174f92c40867..24dda17f541391029a94f0d588856fc3bd040b8b 100644
+--- a/src/tiffvisitor_int.cpp
++++ b/src/tiffvisitor_int.cpp
+@@ -1210,8 +1210,19 @@ void TiffReader::visitIfdMakernote(TiffIfdMakernote* object) {
+     return;
+   }
+ 
++  enforce(object->ifdOffset() <= static_cast<size_t>(pLast_ - object->start()), ErrorCode::kerCorruptedMetadata);
+   object->ifd_.setStart(object->start() + object->ifdOffset());
+ 
++  // Skip Makernotes whose IFD does not contain any entries
++  const byte* pIfd = object->ifd_.start();
++  if (pIfd[0] == 0 && pIfd[1] == 0) {
++#ifndef SUPPRESS_WARNINGS
++    EXV_WARNING << "Makernote IFD " << groupName(object->ifd_.group()) << " is empty; skipping it.\n";
++#endif
++    setGo(geKnownMakernote, false);
++    return;
++  }
++
+   // Modify reader for Makernote peculiarities, byte order and offset
+   object->mnOffset_ = object->start() - pData_;
+   auto state = TiffRwState{object->byteOrder(), object->baseOffset()};

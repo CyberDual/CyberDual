@@ -1,0 +1,58 @@
+diff --git a/src/hb-ot-cff1-table.hh b/src/hb-ot-cff1-table.hh
+index 79f265050fc0cfac2f514576f9468f857f9da267..29b9cd059b0049df61b91b2ffa660ee0676a67bc 100644
+--- a/src/hb-ot-cff1-table.hh
++++ b/src/hb-ot-cff1-table.hh
+@@ -667,12 +667,13 @@ struct CFF1StringIndex : CFF1Index
+ struct cff1_top_dict_interp_env_t : num_interp_env_t
+ {
+   cff1_top_dict_interp_env_t ()
+-    : num_interp_env_t(), prev_offset(0), last_offset(0) {}
++    : num_interp_env_t(), prev_offset(0), last_offset(0), last_op(0) {}
+   cff1_top_dict_interp_env_t (const hb_ubytes_t &bytes)
+-    : num_interp_env_t(bytes), prev_offset(0), last_offset(0) {}
++    : num_interp_env_t(bytes), prev_offset(0), last_offset(0), last_op(0) {}
+ 
+   unsigned int prev_offset;
+   unsigned int last_offset;
++  op_code_t    last_op;
+ };
+ 
+ struct name_dict_values_t
+@@ -773,8 +774,7 @@ struct cff1_top_dict_opset_t : top_dict_opset_t<cff1_top_dict_val_t>
+ {
+   static void process_op (op_code_t op, cff1_top_dict_interp_env_t& env, cff1_top_dict_values_t& dictval)
+   {
+-    cff1_top_dict_val_t  val;
+-    val.last_arg_offset = (env.last_offset-1) - dictval.opStart;  /* offset to the last argument */
++    cff1_top_dict_val_t  val {};
+ 
+     switch (op) {
+       case OpCode_version:
+@@ -818,6 +818,19 @@ struct cff1_top_dict_opset_t : top_dict_opset_t<cff1_top_dict_val_t>
+ 	dictval.nameSIDs[name_dict_values_t::ordering] = env.argStack.pop_uint ();
+ 	dictval.nameSIDs[name_dict_values_t::registry] = env.argStack.pop_uint ();
+ 	env.clear_args ();
++	if (unlikely (env.in_error ())) return;
++	if (unlikely (env.last_offset <= dictval.opStart)) return;
++	{
++	  unsigned int operand_size = 1;
++	  if (env.last_op == OpCode_longintdict)
++	    operand_size = 5;
++	  else if (env.last_op == OpCode_shortint)
++	    operand_size = 3;
++	  else if (env.last_op >= OpCode_TwoBytePosInt0 &&
++		   env.last_op <= OpCode_TwoByteNegInt3)
++	    operand_size = 2;
++	  val.last_arg_offset = (env.last_offset - operand_size) - dictval.opStart;  /* offset to the last argument */
++	}
+ 	break;
+ 
+       case OpCode_Encoding:
+@@ -845,6 +858,7 @@ struct cff1_top_dict_opset_t : top_dict_opset_t<cff1_top_dict_val_t>
+ 
+       default:
+ 	env.last_offset = env.str_ref.get_offset ();
++	env.last_op = op;
+ 	top_dict_opset_t<cff1_top_dict_val_t>::process_op (op, env, dictval);
+ 	/* Record this operand below if stack is empty, otherwise done */
+ 	if (!env.argStack.is_empty ()) return;

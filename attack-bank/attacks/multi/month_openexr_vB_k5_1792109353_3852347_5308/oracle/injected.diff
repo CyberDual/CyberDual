@@ -1,0 +1,64 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0a..b98321f 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -484,11 +484,34 @@ IDManifest::init (const char* data, const char* endOfData)
+ 
+     _manifest.clear ();
+ 
+-    if (manifestEntries <0)
++    if (manifestEntries < 0)
+     {
+         throw IEX_NAMESPACE::InputExc ("bad number of ChannelGroupsManifests in IDManifest");
+     }
+ 
++    //
++    // channel-group manifests typically number from one to a few dozen
++    // (one per AOV); if a file declares substantially more than that,
++    // fail fast if there plainly isn't enough data left to hold them,
++    // rather than looping over an arbitrary declared count one entry at
++    // a time before eventually failing deep inside the loop
++    //
++    const size_t manifestTrackingHint = 64;
++    if ((size_t) manifestEntries > manifestTrackingHint &&
++        (size_t) (endOfData - data) < (size_t) manifestEntries)
++    {
++        throw IEX_NAMESPACE::InputExc (
++            "IDManifest declares more channel group manifests than the "
++            "remaining data could possibly contain");
++    }
++
++    //
++    // track each parsed entry by position, so that a channel-group
++    // manifest which repeats the exact schema of the entry immediately
++    // before it can be rejected without rescanning the whole manifest
++    //
++    vector<const ChannelGroupManifest*> parsedManifests (manifestTrackingHint);
++
+     for (int manifestEntry = 0; manifestEntry < manifestEntries;
+          ++manifestEntry)
+     {
+@@ -513,6 +536,23 @@ IDManifest::init (const char* data, const char* endOfData)
+         readPascalString (data, endOfData, m._hashScheme);
+         readPascalString (data, endOfData, m._encodingScheme);
+ 
++        if (manifestEntry > 0 &&
++            parsedManifests[manifestEntry - 1]->getLifetime () ==
++                m.getLifetime () &&
++            parsedManifests[manifestEntry - 1]->_hashScheme ==
++                m._hashScheme &&
++            parsedManifests[manifestEntry - 1]->_encodingScheme ==
++                m._encodingScheme &&
++            parsedManifests[manifestEntry - 1]->_channels == m._channels &&
++            parsedManifests[manifestEntry - 1]->_components == m._components)
++        {
++            throw IEX_NAMESPACE::InputExc (
++                "IDManifest contains consecutive duplicate channel group "
++                "manifests");
++        }
++
++        parsedManifests[manifestEntry] = &m;
++
+         if (endOfData < data + 5)
+         {
+             throw IEX_NAMESPACE::InputExc ("IDManifest too small");

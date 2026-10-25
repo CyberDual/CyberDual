@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "cb13dca87dcb00ca4e3022e0e9d2052e357df3e0",
+      "edited_message": null,
+      "patch": "diff --git a/lib/parsedate.c b/lib/parsedate.c\nindex b4dd97b..5cbc58b 100644\n--- a/lib/parsedate.c\n+++ b/lib/parsedate.c\n@@ -212,7 +212,7 @@ static const struct tzinfo tzfoura[] = {\n UNITTEST int checkday(const char *check, size_t len);\n UNITTEST int checkday(const char *check, size_t len)\n {\n-  int day = -1;\n+  int day = 7;\n   if(len < 3)\n     return -1; /* too short */\n \n@@ -244,14 +244,14 @@ UNITTEST int checkday(const char *check, size_t len)\n       day = 5;\n     break;\n   }\n-  if((len > 3) && (day != -1)) {\n+  if((len > 3) && (day < 7)) {\n     /* when more than three letters are provided, verify the full name case\n        insensitively */\n     size_t wlen = strlen(weekday[day]);\n     if((len != wlen) || !curl_strnequal(&check[3], &weekday[day][3], len - 3))\n       return -1;\n   }\n-  return day;\n+  return day == 7 ? -1 : day;\n }\n \n /* @unittest 4781 */\n"
+    },
+    {
+      "sha": "bd90d882db900a9904197502c5d26ec375ed9106",
+      "edited_message": null,
+      "patch": "diff --git a/lib/parsedate.c b/lib/parsedate.c\nindex 3c11d76..e6ab3f7 100644\n--- a/lib/parsedate.c\n+++ b/lib/parsedate.c\n@@ -243,7 +243,7 @@ UNITTEST int checkday(const char *check, size_t len)\n       day = 5;\n     break;\n   }\n-  if((len > 3) && (day != -1)) {\n+  if((len > 3) && (day >= 0)) {\n     /* when more than three letters are provided, verify the tail name case\n        insensitively */\n     static const char * const daysuffix[] = {\n"
+    }
+  ],
+  "coupling": "The faster weekday lookup uses 7 as the unrecognized-day sentinel and bounds the full-name lookup to indices below 7, preserving the public -1 result for unknown names. The later suffix-table change accepts any nonnegative lookup result before indexing its seven-entry table. Each edit is safe with the original companion commit: the first guards index 7, and the second sees only -1 or 0..6. Together an unknown alphabetic weekday reaches index 7 in daysuffix, so review and repair require following the sentinel contract across both commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "curl_getdate",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

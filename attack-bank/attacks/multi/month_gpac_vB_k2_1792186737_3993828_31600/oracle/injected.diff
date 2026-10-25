@@ -1,0 +1,20 @@
+diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c
+index 25f38b2..555cbb4 100644
+--- a/src/media_tools/crypt_tools.c
++++ b/src/media_tools/crypt_tools.c
+@@ -482,6 +482,15 @@ static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)
+ 			for (u32 j=0; j<gf_list_count(rule_node->content); j++) {
+ 				GF_XMLNode *filter = (GF_XMLNode *) gf_list_get(rule_node->content, j);
+ 				if (filter && (filter->type == GF_XML_NODE_TYPE)) {
++					if (!strcmp(filter->name, "LabelFilter")) {
++						GF_XMLNode *label_node = crypt_xml_get_child(filter, "Label");
++						char *label_text = crypt_xml_get_text(label_node);
++						if (label_text) {
++							GF_LOG(GF_LOG_INFO, GF_LOG_PARSER, ("[CPIX] Ignoring label filter \"%s\", applying key unconditionally\n", label_text));
++							gf_free(label_text);
++						}
++						continue;
++					}
+ 					GF_LOG(GF_LOG_ERROR, GF_LOG_PARSER, ("[CPIX] ContentKeyUsageRule filters are not supported for this GPAC input path\n"));
+ 					e = GF_NOT_SUPPORTED;
+ 					goto exit;

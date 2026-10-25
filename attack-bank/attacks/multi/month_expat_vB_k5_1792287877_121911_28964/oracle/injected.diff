@@ -1,0 +1,54 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db91..aefc48de 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2607,7 +2607,6 @@ XML_GetBuffer(XML_Parser parser, int len) {
+       }
+       setParserBuffer(parser, newBuf, bufferSize, keep);
+     }
+-    parser->m_eventPtr = parser->m_eventEndPtr = NULL;
+     parser->m_positionPtr = NULL;
+   }
+   return parser->m_bufferEnd;
+@@ -2756,7 +2755,9 @@ XML_GetInputContext64(XML_Parser parser, int64_t *offset, uint64_t *size) {
+ #if XML_CONTEXT_BYTES > 0
+   if (parser == NULL)
+     return NULL;
+-  if (parser->m_eventPtr && parser->m_buffer) {
++  if (parser->m_eventPtr && parser->m_buffer
++      && parser->m_eventPtr >= parser->m_buffer
++      && parser->m_eventPtr <= parser->m_bufferEnd) {
+     if (offset != NULL)
+       *offset = parser->m_eventPtr - parser->m_buffer;
+     if (size != NULL)
+@@ -2808,7 +2809,9 @@ uint64_t XMLCALL
+ XML_GetCurrentLineNumber64(XML_Parser parser) {
+   if (parser == NULL)
+     return 0;
+-  if (parser->m_eventPtr && parser->m_eventPtr >= parser->m_positionPtr) {
++  if (parser->m_eventPtr && parser->m_positionPtr
++      && parser->m_eventPtr >= parser->m_positionPtr
++      && parser->m_eventPtr <= parser->m_bufferEnd) {
+     XmlUpdatePosition(parser->m_encoding, parser->m_positionPtr,
+                       parser->m_eventPtr, &parser->m_position);
+     parser->m_positionPtr = parser->m_eventPtr;
+@@ -2831,7 +2834,9 @@ uint64_t XMLCALL
+ XML_GetCurrentColumnNumber64(XML_Parser parser) {
+   if (parser == NULL)
+     return 0;
+-  if (parser->m_eventPtr && parser->m_eventPtr >= parser->m_positionPtr) {
++  if (parser->m_eventPtr && parser->m_positionPtr
++      && parser->m_eventPtr >= parser->m_positionPtr
++      && parser->m_eventPtr <= parser->m_bufferEnd) {
+     XmlUpdatePosition(parser->m_encoding, parser->m_positionPtr,
+                       parser->m_eventPtr, &parser->m_position);
+     parser->m_positionPtr = parser->m_eventPtr;
+@@ -2893,7 +2898,7 @@ XML_MemFree(XML_Parser parser, void *ptr) {
+ 
+ void XMLCALL
+ XML_DefaultCurrent(XML_Parser parser) {
+-  if (parser == NULL || ! isCalledFromInsideHandler(parser))
++  if (parser == NULL || parser->m_parsingStatus.parsing != XML_PARSING)
+     return;
+   if (parser->m_defaultHandler) {
+     if (parser->m_openInternalEntities)

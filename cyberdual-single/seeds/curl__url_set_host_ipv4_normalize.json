@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "b8e711a5869a84fda1ad225c680cbab910947921",
+  "parent_sha": "b8e711a5869a84fda1ad225c680cbab910947921",
+  "project": "curl",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/curl/curl",
+  "repo_url": "https://github.com/curl/curl",
+  "source": "reuse",
+  "target": "curl",
+  "task": "curl_url_set(CURLUPART_HOST,...) with legacy numeric IPv4 (2130706433 / 0177.1 / 0x7f.1 / 0); must normalize to dotted-decimal like full-URL parsing (feature/behaviour).",
+  "task_iid": "curl__url_set_host_ipv4_normalize",
+  "vuln_desc": "curl_url_set(CURLUPART_HOST,...) with legacy numeric IPv4 (2130706433 / 0177.1 / 0x7f.1 / 0); must normalize to dotted-decimal like full-URL parsing (feature/behaviour)."
+}

@@ -1,0 +1,299 @@
+diff --git a/libheif/codecs/uncompressed/unc_enc.cc b/libheif/codecs/uncompressed/unc_enc.cc
+index 59230d78..e2db126c 100644
+--- a/libheif/codecs/uncompressed/unc_enc.cc
++++ b/libheif/codecs/uncompressed/unc_enc.cc
+@@ -41,7 +41,8 @@ Result<Encoder::CodedImageData> Encoder_uncompressed::encode(const std::shared_p
+     return uncEncoder.error();
+   }
+ 
+-  auto codingResult = (*uncEncoder)->encode(image, options);
++  auto codingResult = (*uncEncoder)->encode(
++      image, options, input_class == heif_image_input_class_alpha);
+   if (!codingResult) {
+     return codingResult.error();
+   }
+diff --git a/libheif/codecs/uncompressed/unc_enc.h b/libheif/codecs/uncompressed/unc_enc.h
+index 25bb3f46..7a97f194 100644
+--- a/libheif/codecs/uncompressed/unc_enc.h
++++ b/libheif/codecs/uncompressed/unc_enc.h
+@@ -42,6 +42,9 @@ public:
+ 
+   std::shared_ptr<class Box_VisualSampleEntry> get_sample_description_box(const CodedImageData&) const override;
+ 
++  // The uncompressed codec validates its component layout itself, including custom colorspaces.
++  Error check_input_image_layout(const HeifPixelImage&) const override { return Error::Ok; }
++
+   bool encode_sequence_started() const override { return m_sequence_started; }
+ 
+   Error encode_sequence_frame(const std::shared_ptr<HeifPixelImage>& image,
+diff --git a/libheif/codecs/uncompressed/unc_encoder.cc b/libheif/codecs/uncompressed/unc_encoder.cc
+index 524e2fe2..26ad7248 100644
+--- a/libheif/codecs/uncompressed/unc_encoder.cc
++++ b/libheif/codecs/uncompressed/unc_encoder.cc
+@@ -229,7 +229,8 @@ heif_uncompressed_component_format to_unc_component_format(const std::shared_ptr
+ }
+ 
+ 
+-Error unc_encoder::check_component_sizes(const std::shared_ptr<const HeifPixelImage>& src_image)
++Error unc_encoder::check_component_sizes(const std::shared_ptr<const HeifPixelImage>& src_image,
++                                         bool allow_smaller_auxiliary_plane)
+ {
+   uint32_t image_width = src_image->get_width();
+   uint32_t image_height = src_image->get_height();
+@@ -257,6 +258,13 @@ Error unc_encoder::check_component_sizes(const std::shared_ptr<const HeifPixelIm
+       }
+     }
+ 
++    if ((desc.channel == heif_channel_Alpha ||
++         (allow_smaller_auxiliary_plane && desc.channel == heif_channel_Y)) &&
++        desc.width <= expected_width &&
++        desc.height <= expected_height) {
++      continue;
++    }
++
+     if (desc.width != expected_width ||
+         desc.height != expected_height) {
+       return {heif_error_Invalid_input,
+@@ -277,7 +285,8 @@ static Error incompatible_image_error()
+ }
+ 
+ 
+-Error unc_encoder::check_image_compatibility(const std::shared_ptr<const HeifPixelImage>& image) const
++Error unc_encoder::check_image_compatibility(const std::shared_ptr<const HeifPixelImage>& image,
++                                             bool allow_smaller_auxiliary_plane) const
+ {
+   // The subsampling factors and the number of bytes per pixel are taken from the prototype image.
+ 
+@@ -320,10 +329,12 @@ Error unc_encoder::check_image_compatibility(const std::shared_ptr<const HeifPix
+   // The encoders size their output buffer from the primary image dimensions, but copy each
+   // component plane using that plane's actual size. If a component plane is larger than the primary
+   // image (e.g. an alpha plane that does not match the color planes), this writes out of bounds.
+-  // Reject any image whose component planes are inconsistent with the primary size. Chroma (Cb/Cr)
+-  // planes are legitimately subsampled, so they are checked against the subsampled size.
++  // Reject any image whose component planes are inconsistent with the primary size. A
++  // smaller auxiliary alpha plane is safe because the output buffer is sized from the
++  // primary image. Chroma (Cb/Cr) planes are legitimately subsampled, so they are checked
++  // against the subsampled size.
+ 
+-  return check_component_sizes(image);
++  return check_component_sizes(image, allow_smaller_auxiliary_plane);
+ }
+ 
+ 
+@@ -338,10 +349,11 @@ Result<std::vector<uint8_t>> unc_encoder::encode_tile(const std::shared_ptr<cons
+ 
+ 
+ Result<Encoder::CodedImageData> unc_encoder::encode(const std::shared_ptr<const HeifPixelImage>& src_image,
+-                                                           const heif_encoding_options& in_options) const
++                                                        const heif_encoding_options& in_options,
++                                                        bool allow_smaller_auxiliary_plane) const
+ {
+   // Fail before generating any boxes. encode_tile() checks this again.
+-  if (Error err = check_image_compatibility(src_image)) {
++  if (Error err = check_image_compatibility(src_image, allow_smaller_auxiliary_plane)) {
+     return err;
+   }
+ 
+diff --git a/libheif/codecs/uncompressed/unc_encoder.h b/libheif/codecs/uncompressed/unc_encoder.h
+index cbee181d..2e130bbe 100644
+--- a/libheif/codecs/uncompressed/unc_encoder.h
++++ b/libheif/codecs/uncompressed/unc_encoder.h
+@@ -69,7 +69,8 @@ public:
+   [[nodiscard]] Result<std::vector<uint8_t>> encode_tile(const std::shared_ptr<const HeifPixelImage>& image) const;
+ 
+   Result<Encoder::CodedImageData> encode(const std::shared_ptr<const HeifPixelImage>& src_image,
+-                                         const heif_encoding_options& options) const;
++                                         const heif_encoding_options& options,
++                                         bool allow_smaller_auxiliary_plane = false) const;
+ 
+   // Check that 'image' may be passed to encode_tile().
+   //
+@@ -79,12 +80,14 @@ public:
+   // so every one of them has to be checked against that frozen configuration. Otherwise
+   // encode_tile_impl() sizes its output buffer according to the configuration while copying from
+   // planes with a different layout, which reads and writes outside the buffers.
+-  Error check_image_compatibility(const std::shared_ptr<const HeifPixelImage>& image) const;
++  Error check_image_compatibility(const std::shared_ptr<const HeifPixelImage>& image,
++                                  bool allow_smaller_auxiliary_plane = false) const;
+ 
+   // Verify that every component plane has the size implied by the primary image dimensions
+   // (chroma planes may be subsampled). The encoders assume this when sizing their output buffer,
+   // so a mismatched plane would otherwise overflow the buffer during encoding.
+-  static Error check_component_sizes(const std::shared_ptr<const HeifPixelImage>& src_image);
++  static Error check_component_sizes(const std::shared_ptr<const HeifPixelImage>& src_image,
++                                      bool allow_smaller_auxiliary_plane = false);
+ 
+ protected:
+   // Encode one tile. Only called through encode_tile(), which has verified that 'image' matches
+diff --git a/libheif/color-conversion/alpha.cc b/libheif/color-conversion/alpha.cc
+index b585a7e3..388bae1f 100644
+--- a/libheif/color-conversion/alpha.cc
++++ b/libheif/color-conversion/alpha.cc
+@@ -139,14 +139,11 @@ Op_flatten_alpha_plane<Pixel>::state_after_conversion(const ColorState& input_st
+   // declare a different depth per plane ('unci'); reading a one-byte plane as two-byte
+   // samples would run past its end (GHSA-r7gr-2xm2-23wf), and a plane wider than two
+   // bytes cannot be read through either instance. Decline anything else.
+-  if (!input_state.all_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel)))) {
+-    return {};
+-  }
+-
+   // The colour planes are converted to RGB at one common depth and the alpha plane is
+-  // composited at that depth, so all of them have to agree (0 = the colour planes differ).
+-  int color_bpp = input_state.get_uniform_color_bits_per_pixel();
+-  if (color_bpp == 0 || (input_state.has_alpha() && input_state.bits_per_pixel_alpha != color_bpp)) {
++  // composited at that depth, so all of them have to agree (0 = the planes differ).
++  int color_bpp = input_state.get_uniform_bits_per_pixel();
++  if (color_bpp == 0 ||
++      bytes_per_sample_for_bit_depth(color_bpp) != static_cast<int>(sizeof(Pixel))) {
+     return {};
+   }
+ 
+@@ -262,11 +259,11 @@ Op_flatten_alpha_plane<Pixel>::convert_colorspace(const std::shared_ptr<const He
+ 
+   // The colour planes are converted at, and the alpha plane is composited at, one common depth
+   // through the 'Pixel' type of this instance.
+-  int color_bpp = input_state.get_uniform_color_bits_per_pixel();
++  int color_bpp = input_state.get_uniform_bits_per_pixel();
+   int bpp_alpha = input_raw->get_bits_per_pixel(heif_channel_Alpha);
+ 
+   if (color_bpp == 0 ||
+-      bpp_alpha != color_bpp ||
++      bpp_alpha > 16 ||
+       bytes_per_sample_for_bit_depth(color_bpp) != static_cast<int>(sizeof(Pixel))) {
+     return Error{heif_error_Unsupported_feature,
+                  heif_suberror_Unsupported_color_conversion,
+@@ -300,11 +297,6 @@ Op_flatten_alpha_plane<Pixel>::convert_colorspace(const std::shared_ptr<const He
+     uint32_t width = input_raw->get_width(heif_channel_Y);
+     uint32_t height = input_raw->get_height(heif_channel_Y);
+ 
+-    if (input_raw->get_width(heif_channel_Alpha) != width ||
+-        input_raw->get_height(heif_channel_Alpha) != height) {
+-      return Error::InternalError;
+-    }
+-
+     auto outimg = std::make_shared<HeifPixelImage>();
+     outimg->create(input_raw->get_width(), input_raw->get_height(),
+                    input_raw->get_colorspace(), input_raw->get_chroma_format());
+diff --git a/libheif/color-conversion/colorconversion.cc b/libheif/color-conversion/colorconversion.cc
+index abebc8be..e3155997 100644
+--- a/libheif/color-conversion/colorconversion.cc
++++ b/libheif/color-conversion/colorconversion.cc
+@@ -293,13 +293,7 @@ int ColorState::get_uniform_color_bits_per_pixel() const
+ 
+ int ColorState::get_uniform_bits_per_pixel() const
+ {
+-  int uniform = get_uniform_color_bits_per_pixel();
+-
+-  if (uniform != 0 && bits_per_pixel_alpha != 0 && bits_per_pixel_alpha != uniform) {
+-    return 0;
+-  }
+-
+-  return uniform;
++  return get_uniform_color_bits_per_pixel();
+ }
+ 
+ 
+@@ -766,7 +760,8 @@ Result<std::shared_ptr<HeifPixelImage>> convert_colorspace(const std::shared_ptr
+   // --- prepare conversion
+ 
+   // The operators read the planes that the colorspace and chroma format imply, with the sizes
+-  // they imply. Refuse anything else up front instead of letting an operator run into a missing,
++  // they imply, except for an auxiliary alpha plane, which may carry its own
++  // geometry. Refuse anything else up front instead of letting an operator run into a missing,
+   // duplicate or undersized plane: a plane set that does not match the format, or a colorspace
+   // without a defined layout (custom multi-component data has nothing to convert). Planes with
+   // channel heif_channel_unknown (the padding components of 'unci') are tolerated; they belong
+diff --git a/libheif/color-conversion/yuv2rgb.cc b/libheif/color-conversion/yuv2rgb.cc
+index 00735274..2be49761 100644
+--- a/libheif/color-conversion/yuv2rgb.cc
++++ b/libheif/color-conversion/yuv2rgb.cc
+@@ -588,12 +588,8 @@ Op_YCbCr420_to_RRGGBBaa::state_after_conversion(const ColorState& input_state,
+     return {};
+   }
+ 
+-  // All planes, alpha included, are read as uint16_t samples.
+-  if (!input_state.all_channels_have_bytes_per_sample(2)) {
+-    return {};
+-  }
+-
+-  if (input_state.has_alpha() && input_state.bits_per_pixel_alpha != input_state.bits_per_pixel_Y) {
++  // The colour planes are read as uint16_t samples.
++  if (!input_state.color_channels_have_bytes_per_sample(2)) {
+     return {};
+   }
+ 
+@@ -612,7 +608,7 @@ Op_YCbCr420_to_RRGGBBaa::state_after_conversion(const ColorState& input_state,
+   output_state.chroma = (input_state.has_alpha() ?
+                          heif_chroma_interleaved_RRGGBBAA_LE : heif_chroma_interleaved_RRGGBB_LE);
+   output_state.set_color_bits_per_pixel(input_state.bits_per_pixel_Y);
+-  output_state.bits_per_pixel_alpha = input_state.bits_per_pixel_alpha;
++  output_state.bits_per_pixel_alpha = input_state.bits_per_pixel_Y;
+ 
+   states.emplace_back(output_state, SpeedCosts_Unoptimized);
+ 
+@@ -621,7 +617,7 @@ Op_YCbCr420_to_RRGGBBaa::state_after_conversion(const ColorState& input_state,
+   output_state.chroma = (input_state.has_alpha() ?
+                          heif_chroma_interleaved_RRGGBBAA_BE : heif_chroma_interleaved_RRGGBB_BE);
+   output_state.set_color_bits_per_pixel(input_state.bits_per_pixel_Y);
+-  output_state.bits_per_pixel_alpha = input_state.bits_per_pixel_alpha;
++  output_state.bits_per_pixel_alpha = input_state.bits_per_pixel_Y;
+ 
+   states.emplace_back(output_state, SpeedCosts_Unoptimized);
+ 
+@@ -677,11 +673,11 @@ Op_YCbCr420_to_RRGGBBaa::convert_colorspace(const std::shared_ptr<const HeifPixe
+       };
+     }
+ 
+-    if (input->get_bits_per_pixel(heif_channel_Alpha) != bpp) {
++    if (input->get_bits_per_pixel(heif_channel_Alpha) > 16) {
+       return Error{
+         heif_error_Unsupported_feature,
+-        heif_suberror_Unspecified,
+-        "Color conversion cannot handle alpha images with bits-per-pixel differing from the main image."
++        heif_suberror_Unsupported_bit_depth,
++        "Color conversion cannot handle alpha images with more than 16 bits per sample."
+       };
+     }
+ 
+diff --git a/libheif/image/pixelimage.cc b/libheif/image/pixelimage.cc
+index 3a5f43f5..d6baaa67 100644
+--- a/libheif/image/pixelimage.cc
++++ b/libheif/image/pixelimage.cc
+@@ -1061,13 +1061,15 @@ Error HeifPixelImage::check_plane_layout() const
+       return layout_error(std::string("Image has more than one ") + channel_name(channel) + " plane");
+     }
+ 
+-    uint32_t expected_w = channel_width(m_width, m_chroma, channel);
+-    uint32_t expected_h = channel_height(m_height, m_chroma, channel);
+-    if (component.m_width != expected_w || component.m_height != expected_h) {
+-      std::stringstream sstr;
+-      sstr << "The " << channel_name(channel) << " plane has size " << component.m_width << "x" << component.m_height
+-           << ", expected " << expected_w << "x" << expected_h;
+-      return layout_error(sstr.str());
++    if (channel != heif_channel_Alpha) {
++      uint32_t expected_w = channel_width(m_width, m_chroma, channel);
++      uint32_t expected_h = channel_height(m_height, m_chroma, channel);
++      if (component.m_width != expected_w || component.m_height != expected_h) {
++        std::stringstream sstr;
++        sstr << "The " << channel_name(channel) << " plane has size " << component.m_width << "x" << component.m_height
++             << ", expected " << expected_w << "x" << expected_h;
++        return layout_error(sstr.str());
++      }
+     }
+   }
+ 
+diff --git a/libheif/image/pixelimage.h b/libheif/image/pixelimage.h
+index 583ff46f..fa8d08d0 100644
+--- a/libheif/image/pixelimage.h
++++ b/libheif/image/pixelimage.h
+@@ -151,8 +151,8 @@ public:
+   // Checks that the stored planes are exactly those of the image's colorspace and chroma
+   // format: the colour planes of that layout (R/G/B, Y/Cb/Cr, Y alone, the interleaved plane,
+   // or the filter array), optionally one separate alpha plane on the planar layouts, each
+-  // present exactly once and with the size its channel implies (chroma-subsampled for Cb/Cr,
+-  // the image size otherwise). Planes with channel heif_channel_unknown carry multi-component
++  // present exactly once. Colour planes use the size their channel implies; alpha is
++  // auxiliary and may carry its own geometry. Planes with channel heif_channel_unknown carry multi-component
+   // data without a colour meaning (e.g. the padding components of 'unci'); they are tolerated
+   // and ignored. A custom colorspace has no defined layout and is rejected; a caller that
+   // accepts such images (the uncompressed encoder) has to test for it first.

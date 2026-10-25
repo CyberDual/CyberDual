@@ -1,0 +1,47 @@
+# VIPER engine base — current SpiderMonkey at the BIWEEK-window base commit (last commit before BASE_DATE).
+# Adapted from secbench-pro-src/base/sm/Dockerfile.latest. Builds the debug+ASan js shell only
+# (obj-debug-asan/dist/bin/js) — crash grading needs that; the release variant is skipped to save disk/time.
+#
+# PREREQ: the base layer `hwiwonlee/sm.base:latest` must be available locally (pull it first):
+#   docker pull hwiwonlee/sm.base:latest
+# BUILD:
+#   docker build -t cyberdual-sm-base --build-arg BASE_DATE=2026-09-17 -f harness/engine/Dockerfile.sm harness/engine
+# WINDOW: maint-batch = base + commits in [BASE_DATE, 2026-10-01).
+
+FROM hwiwonlee/sm.base:latest
+ENV DEBIAN_FRONTEND=noninteractive TZ=UTC LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 SRC=/src OUT=/out
+ENV PATH="/root/.mozbuild/clang/bin:/root/.cargo/bin:/root/.mozbuild/cbindgen:$PATH"
+WORKDIR $SRC/gecko-dev
+
+# node + Claude Code CLI for in-container Role A (edits + rebuilds via ./mach)
+RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
+    apt-get update && apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/* && \
+    npm i -g @anthropic-ai/claude-code
+
+# ---- pin to the WINDOW-BASE commit = last SpiderMonkey commit strictly before BASE_DATE ----
+ARG BASE_DATE=2026-09-17
+RUN set -eux; \
+    git fetch firefox main; git fetch gecko-dev master || true; \
+    SM_REF="$(git rev-list -1 --before=${BASE_DATE}T00:00:00 firefox/main)"; \
+    echo "SM window-base (last commit before ${BASE_DATE}) = $SM_REF"; \
+    git checkout --detach "$SM_REF"
+
+# ---- build the debug + ASan js shell (crash grading); release skipped ----
+RUN set -eux; rm -f mozconfig .mozconfig; \
+    cat > .mozconfig <<'EOF'
+ac_add_options --enable-address-sanitizer
+ac_add_options --disable-jemalloc
+ac_add_options --enable-optimize="-O1"
+ac_add_options --enable-debug
+ac_add_options --enable-debug-symbols
+ac_add_options --enable-application=js
+ac_add_options --disable-bootstrap
+mk_add_options MOZ_OBJDIR=@TOPSRCDIR@/obj-debug-asan
+EOF
+# cbindgen in the base image (0.28) is too old for this SpiderMonkey tree (needs >=0.29.4)
+RUN /root/.cargo/bin/cargo install cbindgen --version 0.29.4 --force
+RUN ./mach build
+RUN set -eux; mkdir -p "$OUT/debug"; \
+    ln -sf "$SRC/gecko-dev/obj-debug-asan/dist/bin/js" "$OUT/js"; \
+    ln -sf "$SRC/gecko-dev/obj-debug-asan/dist/bin/js" "$OUT/debug/js"
+WORKDIR $SRC/gecko-dev

@@ -1,0 +1,75 @@
+diff --git a/src/d8/d8.cc b/src/d8/d8.cc
+index efbe4b23..1d44c33f 100644
+--- a/src/d8/d8.cc
++++ b/src/d8/d8.cc
+@@ -6673,6 +6673,8 @@ void Worker::EnterTerminatedState() {
+   task_manager_ = nullptr;
+ }
+ 
++void Worker::ReleaseQueuedMessages() { out_queue_.Clear(); }
++
+ void Worker::ProcessMessage(std::unique_ptr<SerializationData> data) {
+   if (!is_running()) return;
+   DCHECK_NOT_NULL(isolate_);
+@@ -7863,6 +7865,13 @@ class Deserializer : public ValueDeserializer::Delegate {
+       deserializer_.TransferArrayBuffer(index++, array_buffer);
+     }
+ 
++    // The transferred ArrayBuffers now own their backing stores, so the
++    // SerializationData no longer needs to keep the serialized payload alive.
++    // Dropping it here means a message that is still referenced by a task
++    // queued on the parent isolate does not retain its payload past the
++    // isolate's disposal.
++    data_->ReleasePayload();
++
+     return deserializer_.ReadValue(context);
+   }
+ 
+@@ -7970,6 +7979,14 @@ void Shell::WaitForRunningWorkers(const i::ParkedScope& parked) {
+     worker->TerminateAndWaitForThread(parked);
+   }
+ 
++  // The worker threads are joined, so no more outgoing messages can be posted.
++  // Release any that are still queued now, before the parent isolate and its
++  // task runner are torn down, so their backing stores are not retained past
++  // V8::Dispose.
++  for (auto& worker : workers_copy) {
++    worker->ReleaseQueuedMessages();
++  }
++
+   // Now that all workers are terminated, we can re-enable Worker creation.
+   base::MutexGuard lock_guard(workers_mutex_.Pointer());
+   DCHECK(running_workers_.empty());
+diff --git a/src/d8/d8.h b/src/d8/d8.h
+index c6ac3925..c5b6a5b8 100644
+--- a/src/d8/d8.h
++++ b/src/d8/d8.h
+@@ -233,6 +233,15 @@ class SerializationData {
+     return shared_value_conveyor_;
+   }
+ 
++  // Releases the serialized wire payload. Backing stores and other transferred
++  // resources are left intact; only the raw byte buffer is freed. This lets a
++  // SerializationData that is still referenced by a task queued on a parent
++  // isolate avoid retaining the payload until that isolate is disposed.
++  void ReleasePayload() {
++    data_.reset();
++    size_ = 0;
++  }
++
+  private:
+   struct DataDeleter {
+     void operator()(uint8_t* p) const { base::Free(p); }
+@@ -303,6 +312,12 @@ class Worker : public std::enable_shared_from_this<Worker> {
+   void EnterTerminatedState();
+   bool IsTerminated() const { return state_ == State::kTerminated; }
+ 
++  // Drops any messages still queued for the parent isolate. Called during
++  // shutdown, after the worker thread has been joined, so that backing stores
++  // held by outgoing messages are released before the parent isolate (and its
++  // task runner) is disposed rather than being retained past V8::Dispose.
++  void ReleaseQueuedMessages();
++
+   // Returns the Worker instance for this thread.
+   static Worker* GetCurrentWorker();
+ 

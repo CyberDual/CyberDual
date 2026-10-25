@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "9ba27faa83cbb9ccd59b35e522afdcd9bff0b91b",
+  "parent_sha": "9ba27faa83cbb9ccd59b35e522afdcd9bff0b91b",
+  "project": "libarchive",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/libarchive/libarchive",
+  "repo_url": "https://github.com/libarchive/libarchive",
+  "source": "reuse",
+  "target": "libarchive",
+  "task": "archive_read of a 7z archive that pairs the Delta filter with a non-LZMA codec (e.g. Deflate); feature-impl: 7z reader must validate the Delta property and keep delta history (fix_sha = PR #3583 merge whose first-parent == parent_commit).",
+  "task_iid": "libarchive__7zip_delta_filter",
+  "vuln_desc": "archive_read of a 7z archive that pairs the Delta filter with a non-LZMA codec (e.g. Deflate); feature-impl: 7z reader must validate the Delta property and keep delta history (fix_sha = PR #3583 merge whose first-parent == parent_commit)."
+}

@@ -1,0 +1,17 @@
+{
+  "task_iid": "v8__7ec754d5fd9d",
+  "regime": "A_vuln_patch",
+  "strategy": "new_defect",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "residual_vuln"
+    }
+  ],
+  "explanation": "The patch propagates destination buffers as std::span objects and bounds both direct-child copies with the destination span. However, the out-of-line CharBuffer allocation is one element short while the returned span advertises the requested length. Internalizing a 256-character cons string therefore writes one element past the allocation. The upstream fix allocates the exact requested length.",
+  "verification": {
+    "build": "gn gen out/x64.asan >/dev/null && ninja -j8 -C out/x64.asan d8",
+    "edited_tree": "out/x64.asan/d8 --allow-natives-syntax pocs/probe.js exits 1 with AddressSanitizer heap-buffer-overflow: WRITE of size 1 after a 255-byte region",
+    "real_fix": "After applying golden.diff and rebuilding, the same command exits 0 with no AddressSanitizer error or fatal signal"
+  }
+}

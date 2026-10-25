@@ -1,0 +1,21 @@
+diff --git a/src/lib/OpenEXRCore/internal_ht.cpp b/src/lib/OpenEXRCore/internal_ht.cpp
+index 896a57e6..05dce9a0 100644
+--- a/src/lib/OpenEXRCore/internal_ht.cpp
++++ b/src/lib/OpenEXRCore/internal_ht.cpp
+@@ -405,16 +405,11 @@ ht_undo_impl (
+     if (codestream_sz == 0)
+         return EXR_ERR_CORRUPT_CHUNK;
+ 
+-    if (static_cast<std::size_t>(decode->channel_count) != cs_to_file_ch.size ())
+-        return EXR_ERR_CORRUPT_CHUNK;
+-
+     if (resetOffsets)
+     {
+         for (int cs_i = 0; cs_i < decode->channel_count; cs_i++)
+         {
+             int file_i = cs_to_file_ch[cs_i].file_index;
+-            if (file_i >= decode->channel_count)
+-                return EXR_ERR_CORRUPT_CHUNK;
+ 
+             int64_t computedoffset = 0;
+             for (int i = 0; i < file_i; ++i)

@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "a43fd14c7cabd2492230bdddaec4f59d3560b322",
+      "edited_message": "Validate fixed-rank slab arguments up front\n\nAs reported by https://github.com/tbeu/matio/pull/316",
+      "patch": "--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -5045,6 +5045,9 @@\n     int z_copy = 0;\n #endif\n \n+    if ( matvar->rank < 1 || matvar->rank > 10 )\n+        return MATIO_E_BAD_ARGUMENT;\n+\n     (void)fseeko((FILE *)mat->fp, matvar->internal->datapos, SEEK_SET);\n     if ( matvar->compression == MAT_COMPRESSION_NONE ) {\n         err = Read(tag, 4, 2, (FILE *)mat->fp, NULL);\n--- a/src/read_data.c\n+++ b/src/read_data.c\n@@ -587,8 +587,6 @@\n     if ( (mat == NULL) || (data == NULL) || (mat->fp == NULL) || (start == NULL) ||\n          (stride == NULL) || (edge == NULL) ) {\n         return MATIO_E_BAD_ARGUMENT;\n-    } else if ( rank > 10 ) {\n-        return MATIO_E_BAD_ARGUMENT;\n     }\n \n     if ( CheckEdgeOverflow(rank, edge) ) {\n@@ -785,8 +783,6 @@\n     if ( (mat == NULL) || (data == NULL) || (mat->fp == NULL) || (start == NULL) ||\n          (stride == NULL) || (edge == NULL) ) {\n         return -1;\n-    } else if ( rank > 10 ) {\n-        return -1;\n     }\n \n     if ( CheckEdgeOverflow(rank, edge) ) {\n"
+    },
+    {
+      "sha": "a6afc35bd3c6e865e5cd00427697662a3b8f3eeb",
+      "edited_message": "Use size_t slab offsets and support rank 20\n\nAs reported by https://issues.oss-fuzz.com/533944150",
+      "patch": "--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -5061,7 +5061,7 @@\n     int z_copy = 0;\n #endif\n \n-    if ( matvar->rank < 1 || matvar->rank > 10 )\n+    if ( matvar->rank < 1 || matvar->rank > 20 )\n         return MATIO_E_BAD_ARGUMENT;\n \n     (void)fseeko((FILE *)mat->fp, matvar->internal->datapos, SEEK_SET);\n--- a/src/read_data.c\n+++ b/src/read_data.c\n@@ -596,11 +596,11 @@\n     int err;\n     int i, j;\n     size_t N, I = 0;\n-    size_t inc[10] =\n+    size_t inc[20] =\n         {\n             0,\n         },\n-           dimp[10] = {\n+           dimp[20] = {\n                0,\n            };\n     int cnt[10] = {\n@@ -790,11 +790,11 @@\n {\n     int nBytes = 0, i, j, err;\n     size_t N, I = 0;\n-    size_t inc[10] =\n+    size_t inc[20] =\n         {\n             0,\n         },\n-           dimp[10] = {\n+           dimp[20] = {\n                0,\n            };\n     int cnt[10] = {\n"
+    }
+  ],
+  "coupling": "The first edit moves fixed-rank validation from the slab readers to the public MAT5 read caller while preserving the original rank-10 limit. The second edit later raises that caller limit to 20 and expands the inc and dimp rank-index arrays, but the rank-loop counter array remains sized for 10. Each edited commit alone is benign: with only the first edit, the caller still rejects rank 14; with only the second edit, the original readers still reject rank 14. When both are combined, Mat_VarReadData5 accepts a rank-14 compressed MAT variable and ReadCompressedDataSlabN indexes cnt[10] past its 10-element stack allocation. A correct fix must coordinate the relocated caller bound with every rank-indexed reader state array rather than treating either diff as an isolated maintenance change.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Mat_Open/Mat_VarReadNextInfo/Mat_VarReadData",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

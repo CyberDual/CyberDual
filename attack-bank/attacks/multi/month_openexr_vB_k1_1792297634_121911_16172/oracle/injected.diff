@@ -1,0 +1,156 @@
+diff --git a/src/lib/OpenEXRCore/internal_ht.cpp b/src/lib/OpenEXRCore/internal_ht.cpp
+index 896a57e6..3b274377 100644
+--- a/src/lib/OpenEXRCore/internal_ht.cpp
++++ b/src/lib/OpenEXRCore/internal_ht.cpp
+@@ -35,13 +35,17 @@ const std::vector<uint32_t> float_nlt_lut_half_range =
+     build_nlt_lut_32 (float_nlt_lut_points, HALF_MAX);
+ 
+ /* Returns the range the float NLT table has to cover for a chunk: half's
+- * max unless the chunk's RGB samples exceed it. */
++ * max unless the chunk's RGB samples exceed it.
++ *
++ * @param coded_height  height of the chunk's coded extent, which padding
++ *                      may have grown beyond encode->chunk.height.
++ */
+ double
+ chunk_max_linear_float (
+     exr_encode_pipeline_t*                    encode,
+     const std::vector<CodestreamChannelInfo>& cs_channel_info,
+     bool                                       isPlanar,
+-    int                                        chunk_height)
++    int                                        coded_height)
+ {
+     const uint8_t* packed =
+         static_cast<const uint8_t*> (encode->packed_buffer);
+@@ -59,7 +63,7 @@ chunk_max_linear_float (
+             const uint8_t* line_pixels = packed;
+ 
+             for (int64_t y = encode->chunk.start_y;
+-                 y < chunk_height + encode->chunk.start_y;
++                 y < coded_height + encode->chunk.start_y;
+                  y++)
+             {
+                 for (int16_t line_c = 0; line_c < encode->channel_count;
+@@ -109,7 +113,9 @@ chunk_max_linear_float (
+                 continue;
+ 
+             const int32_t cw = encode->channels[file_c].width;
+-            for (int y = 0; y < chunk_height; y++)
++            /* padding repeats the chunk's last row, so the chunk's own rows
++             * bound the sample range */
++            for (int y = 0; y < encode->chunk.height; y++)
+             {
+                 const float* p = reinterpret_cast<const float*> (
+                     packed + (int64_t) y * bpl +
+@@ -710,21 +716,13 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+         }
+     }
+ 
+-    /* Compute the maximum sample value or HALF_MAX whichever is larger if RGB
+-    float samples are used. This is used in generating the decoding LUT.*/
+-    bool rgbIsFloat = lossy &&
+-        encode->channels[cs_channel_info[0].file_index].data_type ==
+-            EXR_PIXEL_FLOAT;
+-    double chunk_max_linear = HALF_MAX;
+-    if (rgbIsFloat)
+-        chunk_max_linear = chunk_max_linear_float (
+-            encode, cs_channel_info, isPlanar, chunk_height);
+-
+     /* Lossy coding: pad the coded array by replicating the last row and the
+      * last column so that every dimension is == 1 (mod 2^L); see
+-     * ht_padded_length().  The padding is only applied to interleaved
+-     * (unsubsampled) chunks; the decoder recognises it from the SIZ marker. */
+-    if (lossy && !isPlanar)
++     * ht_padded_length().  Subsampled (planar) chunks are padded as well:
++     * the planar push below repeats each channel's last row and column
++     * across the padding, and the decoder recognises it from the SIZ
++     * marker. */
++    if (lossy)
+     {
+         const int64_t pw = ht_padded_length (chunk_width, num_decomps);
+         const int64_t ph = ht_padded_length (chunk_height, num_decomps);
+@@ -738,6 +736,18 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+         }
+     }
+ 
++    /* Compute the maximum sample value or HALF_MAX whichever is larger if RGB
++    float samples are used. This is used in generating the decoding LUT. The
++    table has to cover the coded extent, which padding may have grown beyond
++    the chunk, so this runs once the extent is known. */
++    bool rgbIsFloat = lossy &&
++        encode->channels[cs_channel_info[0].file_index].data_type ==
++            EXR_PIXEL_FLOAT;
++    double chunk_max_linear = HALF_MAX;
++    if (rgbIsFloat)
++        chunk_max_linear = chunk_max_linear_float (
++            encode, cs_channel_info, isPlanar, image_height);
++
+     siz.set_image_offset (ojph::point (0, 0));
+     siz.set_image_extent (ojph::point (image_width, image_height));
+ 
+@@ -901,10 +911,22 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+                     static_cast<const uint8_t*> (encode->packed_buffer);
+                 int16_t file_c = cs_channel_info[c].file_index;
+ 
++                /* With padding, the codestream also covers rows past the end
++                 * of the chunk, for which the packed buffer has no data:
++                 * repeat the last row of this channel. */
++                const uint8_t* last_row = NULL;
++                const int32_t  cw       = encode->channels[file_c].width;
++                const int32_t  compwidth =
++                    (image_width +
++                     encode->channels[file_c].x_samples - 1) /
++                    encode->channels[file_c].x_samples;
++
+                 for (int64_t y = encode->chunk.start_y;
+                     y < image_height + encode->chunk.start_y;
+                     y++)
+                 {
++                    const bool pad_row =
++                        y - encode->chunk.start_y >= chunk_height;
+                     for (int16_t line_c = 0; line_c < encode->channel_count;
+                         line_c++)
+                     {
+@@ -913,10 +935,13 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+ 
+                         if (line_c == file_c)
+                         {
++                            if (!pad_row) last_row = line_pixels;
++                            const uint8_t* row =
++                                pad_row ? last_row : line_pixels;
+                             if (encode->channels[file_c].data_type ==
+                                 EXR_PIXEL_HALF)
+                             {
+-                                int16_t* channel_pixels = (int16_t*) (line_pixels);
++                                int16_t* channel_pixels = (int16_t*) (row);
+                                 for (int32_t p = 0;
+                                      p < encode->channels[file_c].width;
+                                     p++)
+@@ -926,7 +951,7 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+                             }
+                             else
+                             {
+-                                int32_t* channel_pixels = (int32_t*) (line_pixels);
++                                int32_t* channel_pixels = (int32_t*) (row);
+                                 for (int32_t p = 0;
+                                      p < encode->channels[file_c].width;
+                                     p++)
+@@ -934,13 +959,16 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+                                     cur_line->i32[p] = *channel_pixels++;
+                                 }
+                             }
++                            for (int32_t p = cw; p < compwidth; p++)
++                                cur_line->i32[p] = cur_line->i32[cw - 1];
+ 
+                             assert (next_comp == c);
+                             cur_line = cs.exchange (cur_line, next_comp);
+                         }
+ 
+-                        line_pixels += encode->channels[line_c].bytes_per_element *
+-                                    encode->channels[line_c].width;
++                        if (!pad_row)
++                            line_pixels += encode->channels[line_c].bytes_per_element *
++                                        encode->channels[line_c].width;
+                     }
+                 }
+             }

@@ -1,0 +1,37 @@
+diff --git a/src/pem.c b/src/pem.c
+index ac1cb6aa372dd383ac772e68772ea37b9b226742..d132f6fda8aef0425ae28b670e7333d0538e07a9 100644
+--- a/src/pem.c
++++ b/src/pem.c
+@@ -670,7 +670,9 @@ static int pem_parse_data_openssh(LIBSSH2_SESSION *session,
+             goto out;
+         }
+ 
+-        out_buf->data = SSH2_CALLOC(session, decrypted.len);
++        /* One extra byte so a key type that fills the private section is
++           NUL-terminated for the strcmp() calls in the crypto backends. */
++        out_buf->data = SSH2_CALLOC(session, decrypted.len + 1);
+         if(!out_buf->data) {
+             ret = ssh2_err(session, LIBSSH2_ERROR_ALLOC,
+                            "Unable to allocate memory for decrypted struct");
+@@ -678,10 +680,21 @@ static int pem_parse_data_openssh(LIBSSH2_SESSION *session,
+             goto out;
+         }
+         memcpy(out_buf->data, decrypted.data, decrypted.len);
++        out_buf->data[decrypted.len] = '\0';
+         out_buf->dataptr = out_buf->data +
+             (decrypted.dataptr - decrypted.data);
+         out_buf->len = decrypted.len;
+ 
++        /* Terminate the embedded key-type field itself. Backends compare that
++           counted string with strcmp(), and a type with no interior NUL would
++           otherwise read the following field. */
++        if((size_t)(out_buf->dataptr - out_buf->data) + 4 <= out_buf->len) {
++            size_t type_len = ssh2_ntohu32(out_buf->dataptr);
++
++            if(type_len < out_buf->len)
++                out_buf->dataptr[4 + type_len] = '\0';
++        }
++
+         *decrypted_buf = out_buf;
+     }
+ 

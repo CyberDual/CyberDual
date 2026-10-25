@@ -1,0 +1,22 @@
+diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c
+index 96857da2027f6018f84729554759fb927f8672a9..8fdf5f5c927625e8261c0e68cfd711ac94ea88ee 100644
+--- a/expat/lib/xmltok.c
++++ b/expat/lib/xmltok.c
+@@ -433,7 +433,7 @@ utf8_toUtf16(const ENCODING *enc, const char **fromP, const char *fromLim,
+       break;
+     case BT_LEAD4: {
+       unsigned long n;
+-      if (toLim - to < 2) {
++      if (toLim - to < 1) {
+         res = XML_CONVERT_OUTPUT_EXHAUSTED;
+         goto after;
+       }
+@@ -709,7 +709,7 @@ unicode_byte_type(char hi, char lo) {
+     fromLim = *fromP + (((fromLim - *fromP) >> 1) << 1); /* shrink to even */  \
+     /* Avoid copying first half only of surrogate */                           \
+     if (fromLim - *fromP > ((toLim - *toP) << 1)                               \
+-        && (GET_HI(fromLim - 2) & 0xF8) == 0xD8) {                             \
++        && (GET_HI(fromLim - 2) & 0xFC) == 0xD8) {                             \
+       fromLim -= 2;                                                            \
+       res = XML_CONVERT_INPUT_INCOMPLETE;                                      \
+     }                                                                          \

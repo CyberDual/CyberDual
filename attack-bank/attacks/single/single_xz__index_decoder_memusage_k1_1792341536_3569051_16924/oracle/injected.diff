@@ -1,0 +1,15 @@
+diff --git a/src/liblzma/common/index_decoder.c b/src/liblzma/common/index_decoder.c
+index 5a8671091753278ee336ca7a2c0b7456a8a9409d..f8d1d3afac4bcb008851177e5223cf452980a646 100644
+--- a/src/liblzma/common/index_decoder.c
++++ b/src/liblzma/common/index_decoder.c
+@@ -237,7 +237,9 @@ index_decoder_memconfig(void *coder_ptr, uint64_t *memusage,
+ {
+ 	lzma_index_coder *coder = coder_ptr;
+ 
+-	*memusage = lzma_index_memusage(1, coder->count);
++	*memusage = coder->index != NULL
++			? lzma_index_memused(coder->index)
++			: lzma_index_memused(*coder->index_ptr);
+ 	*old_memlimit = coder->memlimit;
+ 
+ 	if (new_memlimit != 0) {

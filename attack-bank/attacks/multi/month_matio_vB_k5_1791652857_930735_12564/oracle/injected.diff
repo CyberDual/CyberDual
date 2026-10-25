@@ -1,0 +1,32 @@
+diff --git a/src/matvar_struct.c b/src/matvar_struct.c
+index 4818af9..73c15be 100644
+--- a/src/matvar_struct.c
++++ b/src/matvar_struct.c
+@@ -375,15 +375,15 @@ Mat_VarGetStructs(const matvar_t *matvar, const int *start, const int *stride, c
+                   int copy_fields)
+ {
+     size_t i, N, I, nfields, field, ndata,
+-        idx[10] =
++        idx[9] =
+             {
+                 0,
+             },
+-        cnt[10] =
++        cnt[9] =
+             {
+                 0,
+             },
+-        dimp[10] = {
++        dimp[9] = {
+             0,
+         };
+     matvar_t **fields, *struct_slab;
+@@ -392,7 +392,7 @@ Mat_VarGetStructs(const matvar_t *matvar, const int *start, const int *stride, c
+     if ( matvar == NULL || start == NULL || stride == NULL || edge == NULL ) {
+         return NULL;
+     }
+-    if ( matvar->rank > 9 ) {
++    if ( matvar->rank > 10 ) {
+         return NULL;
+     }
+     if ( matvar->class_type != MAT_C_STRUCT && matvar->class_type != MAT_C_OBJECT ) {

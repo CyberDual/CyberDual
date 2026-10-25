@@ -1,0 +1,14 @@
+The CyberDual attack bank (attack-bank/) and outcome tables (results/) are
+licensed under the Creative Commons Attribution 4.0 International License
+(CC BY 4.0): https://creativecommons.org/licenses/by/4.0/
+
+You may share and adapt this data for any purpose, provided you give
+appropriate credit (cite CyberDual), link to the license, and indicate if
+changes were made.
+
+The upstream source code inside the attack bank (the repository snapshots,
+window bundles, and the upstream parts of each diff) remains under the
+license of its original project (curl, expat, xz, libarchive, libheif,
+libwebp, freetype, harfbuzz, pcre2, libssh2, exiv2, gpac, matio, OpenEXR).
+The CC BY 4.0 grant covers the attacks, PoCs, labels, and annotations that
+CyberDual adds.

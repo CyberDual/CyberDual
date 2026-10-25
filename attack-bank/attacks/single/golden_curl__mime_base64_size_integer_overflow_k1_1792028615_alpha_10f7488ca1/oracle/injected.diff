@@ -1,0 +1,47 @@
+diff --git a/lib/mime.c b/lib/mime.c
+index 11eb66207de747a24d7ca5e8d4b69882377938ba..db46338f970efa1eb954e515f4d15c25654623dc 100644
+--- a/lib/mime.c
++++ b/lib/mime.c
+@@ -419,18 +419,40 @@ static size_t encoder_base64_read(char *buffer, size_t size, bool ateof,
+   return cursize;
+ }
+ 
++/* Maximum input whose 4/3 base64 expansion fits in curl_off_t.
++   CRLF separators are applied after that expansion. */
++#define BASE64_MAX_INPUT_SIZE ((CURL_OFF_T_MAX / 4) * 3)
++
+ static curl_off_t encoder_base64_size(curl_mimepart *part)
+ {
+   curl_off_t size = part->datasize;
++  curl_off_t encoded;
++  curl_off_t lines;
+ 
+   if(size <= 0)
+     return size;    /* Unknown size or no data. */
+ 
++  /* Prevent integer overflow in the 4/3 expansion. */
++  if(size > BASE64_MAX_INPUT_SIZE)
++    return -1;
++
+   /* Compute base64 character count. */
+-  size = 4 * (1 + ((size - 1) / 3));
++  encoded = 4 * (1 + ((size - 1) / 3));
++  lines = (encoded - 1) / MAX_ENCODED_LINE_LENGTH;
++
++  /* Reject lengths whose CRLF padding would not fit. */
++  if(lines > (CURL_OFF_T_MAX - encoded) / 2) {
++    char last[MAX_ENCODED_LINE_LENGTH / 8];
++    size_t rem = (size_t)(encoded % MAX_ENCODED_LINE_LENGTH) + 2;
++
++    memset(last, '=', sizeof(last));
++    /* Keep the partial final line, including its CRLF, with the part. */
++    memcpy(part->encstate.buf, last, rem);
++    return -1;
++  }
+ 
+   /* Effective character count must include CRLFs. */
+-  return size + (2 * ((size - 1) / MAX_ENCODED_LINE_LENGTH));
++  return encoded + (2 * lines);
+ }
+ 
+ /* Quoted-printable lookahead.

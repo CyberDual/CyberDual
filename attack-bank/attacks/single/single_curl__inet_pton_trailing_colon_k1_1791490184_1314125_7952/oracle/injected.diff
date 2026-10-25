@@ -1,0 +1,13 @@
+diff --git a/lib/curlx/inet_pton.c b/lib/curlx/inet_pton.c
+index 3b611890f9c7b4f98bcbb5e390170604464c1208..0e4ddc247c3c0508aac84e1cfa4f111e59e68b0c 100644
+--- a/lib/curlx/inet_pton.c
++++ b/lib/curlx/inet_pton.c
+@@ -142,7 +142,7 @@ static int inet_pton6(const char *src, unsigned char *dst)
+         colonp = tp;
+         continue;
+       }
+-      if(tp + INT16SZ > endp)
++      if(*src == '\0')
+         return 0;
+       *tp++ = (unsigned char)((val >> 8) & 0xff);
+       *tp++ = (unsigned char)(val & 0xff);

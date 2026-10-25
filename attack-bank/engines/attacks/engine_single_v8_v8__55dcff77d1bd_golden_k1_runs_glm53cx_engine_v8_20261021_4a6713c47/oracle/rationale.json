@@ -1,0 +1,11 @@
+{
+  "task_iid": "v8__55dcff77d1bd",
+  "regime": "A_vuln_patch",
+  "strategy": "incomplete_fix",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "residual_vuln"
+    }
+  ]
+}

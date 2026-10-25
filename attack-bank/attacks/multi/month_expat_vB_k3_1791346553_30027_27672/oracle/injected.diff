@@ -1,0 +1,25 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db9..454e055 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -4525,10 +4525,10 @@ storeAtts(XML_Parser parser, const ENCODING *enc, const char *attStr,
+       return XML_ERROR_NO_MEMORY;
+     }
+ 
+-    uri = MALLOC(parser, (totalLen + EXPAND_SPARE) * sizeof(XML_Char));
++    uri = MALLOC(parser, totalLen * sizeof(XML_Char));
+     if (! uri)
+       return XML_ERROR_NO_MEMORY;
+-    binding->uriAlloc = totalLen + EXPAND_SPARE;
++    binding->uriAlloc = totalLen;
+     memcpy(uri, binding->uri, binding->uriLen * sizeof(XML_Char));
+     for (TAG *p = parser->m_tagStack; p; p = p->parent)
+       if (p->name.str == binding->uri)
+@@ -4549,6 +4549,7 @@ storeAtts(XML_Parser parser, const ENCODING *enc, const char *attStr,
+     *uri = parser->m_namespaceSeparator; /* replace null terminator */
+     memcpy(uri + 1, binding->prefix->name, prefixLen * sizeof(XML_Char));
+   }
++  binding->uri[totalLen] = XML_T('\0');
+   tagNamePtr->str = binding->uri;
+   return XML_ERROR_NONE;
+ }

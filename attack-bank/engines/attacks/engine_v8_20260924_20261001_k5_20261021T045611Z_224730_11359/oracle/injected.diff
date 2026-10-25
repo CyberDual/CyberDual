@@ -1,0 +1,30 @@
+diff --git a/src/objects/js-locale.cc b/src/objects/js-locale.cc
+index 35b1919f3fb..03f08ff7c2e 100644
+--- a/src/objects/js-locale.cc
++++ b/src/objects/js-locale.cc
+@@ -287,6 +287,8 @@ bool JSLocale::StartsWithUnicodeLanguageId(std::string_view value) {
+ }
+ 
+ namespace {
++constexpr size_t kMaxVariantsLength = 179;
++
+ // Return false if variants contain duplicate elements or invalid delimiters.
+ bool IsValidVariants(std::string_view variants) {
+   // The length of one unicode_variant_subtag is between 4-8. To have
+@@ -407,11 +409,15 @@ Maybe<bool> ApplyOptionsToTag(Isolate* isolate, DirectHandle<String> tag,
+     // a. If variants is the empty String, throw a RangeError exception.
+     // b. Let lowerVariants be the ASCII-lowercase of variants.
+     std::string variants_stdstr = variants_str->ToStdString();
++    char variants_buffer[kMaxVariantsLength + 1];
++    std::copy_n(variants_stdstr.begin(), variants_stdstr.size(),
++                variants_buffer);
++    builder->setVariant(
++        std::string_view(variants_buffer, variants_stdstr.size()));
+     // c. Let variantSubtags be StringSplitToList(lowerVariants, "-").
+     // d. For each element variant of variantSubtags, do
+     // i. If variant cannot be matched by the unicode_variant_subtag Unicode
+     // locale nonterminal, throw a RangeError exception.
+-    builder->setVariant(variants_stdstr);
+     builder->build(status);
+     if (U_FAILURE(status) || variants_stdstr.empty()) {
+       return Just(false);

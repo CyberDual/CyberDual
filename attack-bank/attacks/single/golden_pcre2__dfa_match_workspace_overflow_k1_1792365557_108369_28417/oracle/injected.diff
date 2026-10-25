@@ -1,0 +1,51 @@
+diff --git a/src/pcre2_dfa_match.c b/src/pcre2_dfa_match.c
+index 314e97754e25f9629091d4aaaf4bc7625b32e5e3..5d76310382e4b5706377caf51bd12ce8633ac3bd 100644
+--- a/src/pcre2_dfa_match.c
++++ b/src/pcre2_dfa_match.c
+@@ -422,6 +422,10 @@ more_workspace(RWS_anchor **rwsptr, unsigned int ovecsize, dfa_match_block *mb)
+ {
+ RWS_anchor *rws = *rwsptr;
+ RWS_anchor *new;
++uint32_t requested;
++
++PCRE2_ASSERT(ovecsize <= UINT32_MAX - RWS_RSIZE - RWS_ANCHOR_SIZE);
++requested = RWS_RSIZE + ovecsize + RWS_ANCHOR_SIZE;
+ 
+ if (rws->next != NULL)
+   {
+@@ -434,14 +438,30 @@ overflow. */
+ 
+ else
+   {
+-  uint32_t newsize = (rws->size >= UINT32_MAX/(sizeof(int)*2))? UINT32_MAX/sizeof(int) : rws->size * 2;
++  uint32_t newsize = (rws->size >= (UINT32_MAX/sizeof(int))/2)?
++    UINT32_MAX/sizeof(int) : rws->size * 2;
+   uint32_t newsizeK = newsize/(1024/sizeof(int));
+ 
+-  if (newsizeK + mb->heap_used > mb->heap_limit)
+-    newsizeK = (uint32_t)(mb->heap_limit - mb->heap_used);
+-  newsize = newsizeK*(1024/sizeof(int));
++  /* Clamp the allocation to the remaining heap allowance with care for overflows */
++
++  if (mb->heap_used >= mb->heap_limit)
++    {
++    newsize = 0;
++    newsizeK = 0;
++    }
++  else
++    {
++    PCRE2_SIZE availableK = mb->heap_limit - mb->heap_used;
++    /* newsize always capped at UINT32_MAX/sizeof(int), so newsizeK also capped;
++    and - if availableK is smaller - then multiplication to form newsize is safe */
++    if (newsizeK > availableK)
++      {
++      newsize = (uint32_t)(availableK*(1024/sizeof(int)));
++      newsizeK = availableK;
++      }
++    }
+ 
+-  if (newsize < RWS_RSIZE + ovecsize + RWS_ANCHOR_SIZE)
++  if (newsize < requested)
+     return PCRE2_ERROR_HEAPLIMIT;
+   new = mb->memctl.malloc(newsize*sizeof(int), mb->memctl.memory_data);
+   if (new == NULL) return PCRE2_ERROR_NOMEMORY;

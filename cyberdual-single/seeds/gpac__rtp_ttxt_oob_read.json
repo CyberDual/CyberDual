@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-125",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "6fed75dfd06b23ee646d110298668dfd9b8d2e2b",
+  "parent_sha": "6fed75dfd06b23ee646d110298668dfd9b8d2e2b",
+  "project": "gpac",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/gpac/gpac",
+  "repo_url": "https://github.com/gpac/gpac",
+  "source": "reselect",
+  "target": "gpac",
+  "task": "Depacketize a crafted 3GPP timed-text RTP payload (gpac RTP/RTSP input path): gf_rtp_parse_ttxt reads an advertised ttu_len count of bytes from the payload without checking it against the actual buffer size, reading past the buffer end (OOB read). Single file src/ietf/rtp_depacketizer.c; external reporter credit.",
+  "task_iid": "gpac__rtp_ttxt_oob_read",
+  "vuln_desc": "Depacketize a crafted 3GPP timed-text RTP payload (gpac RTP/RTSP input path): gf_rtp_parse_ttxt reads an advertised ttu_len count of bytes from the payload without checking it against the actual buffer size, reading past the buffer end (OOB read). Single file src/ietf/rtp_depacketizer.c; external reporter credit."
+}

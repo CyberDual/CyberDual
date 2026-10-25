@@ -1,0 +1,80 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0a..7705b39 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -339,6 +339,14 @@ writePascalString (char*& outPtr, const string& str)
+     Xdr::write<CharPtrIO> ((char*&) outPtr, (const char*) str.c_str (), length);
+ }
+ 
++//
++// Upper bound on the number of ChannelGroupManifests a single IDManifest
++// may declare. Without this, a maliciously large declared count forces
++// repeated push_back growth (and the per-entry parsing work that goes with
++// it) for a tiny input file.
++//
++const int MAX_MANIFEST_ENTRIES = 1000000;
++
+ } // namespace
+ 
+ IDManifest::IDManifest (const char* data, const char* endOfData)
+@@ -484,11 +492,21 @@ IDManifest::init (const char* data, const char* endOfData)
+ 
+     _manifest.clear ();
+ 
+-    if (manifestEntries <0)
++    if (manifestEntries < 0 || manifestEntries > MAX_MANIFEST_ENTRIES)
+     {
+         throw IEX_NAMESPACE::InputExc ("bad number of ChannelGroupsManifests in IDManifest");
+     }
+ 
++    //
++    // Track the declared id-table size of each manifest entry so the
++    // running total below can be double-checked once all entries have
++    // been read, the same belt-and-suspenders approach used for the
++    // uncompressed size bound above.
++    //
++    const int MAX_TRACKED_ENTRIES = 4096;
++    int       entryTableSize[MAX_TRACKED_ENTRIES];
++    int64_t   totalTableSize = 0;
++
+     for (int manifestEntry = 0; manifestEntry < manifestEntries;
+          ++manifestEntry)
+     {
+@@ -523,6 +541,13 @@ IDManifest::init (const char* data, const char* endOfData)
+         int tableSize;
+         Xdr::read<CharPtrIO> (data, tableSize);
+ 
++        if (tableSize < 0)
++        {
++            throw IEX_NAMESPACE::InputExc ("bad id table size in IDManifest");
++        }
++        entryTableSize[manifestEntry] = tableSize;
++        totalTableSize += tableSize;
++
+         uint64_t previousId = 0;
+ 
+         for (int entry = 0; entry < tableSize; ++entry)
+@@ -581,6 +606,23 @@ IDManifest::init (const char* data, const char* endOfData)
+             }
+         }
+     }
++
++    //
++    // Double check the running total against the per-entry sizes recorded
++    // above, to guard against the total having been miscomputed.
++    //
++    int64_t checkedTotalTableSize = 0;
++    for (int manifestEntry = 0;
++         manifestEntry < manifestEntries && manifestEntry < MAX_TRACKED_ENTRIES;
++         ++manifestEntry)
++    {
++        checkedTotalTableSize += entryTableSize[manifestEntry];
++    }
++    if (manifestEntries <= MAX_TRACKED_ENTRIES &&
++        checkedTotalTableSize != totalTableSize)
++    {
++        throw IEX_NAMESPACE::InputExc ("IDManifest id table size mismatch");
++    }
+ }
+ 
+ IDManifest::IDManifest (const CompressedIDManifest& compressed)

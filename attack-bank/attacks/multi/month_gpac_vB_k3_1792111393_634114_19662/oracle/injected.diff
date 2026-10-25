@@ -1,0 +1,125 @@
+diff --git a/include/gpac/internal/isomedia_dev.h b/include/gpac/internal/isomedia_dev.h
+index 58854c2..b99dd33 100644
+--- a/include/gpac/internal/isomedia_dev.h
++++ b/include/gpac/internal/isomedia_dev.h
+@@ -3895,6 +3895,7 @@ typedef struct __piff_tenc_box
+ 
+ 	u32 AlgorithmID;
+ 	u8 key_info[20];
++	u8 *constant_iv;
+ } GF_PIFFTrackEncryptionBox;
+ 
+ typedef struct
+diff --git a/include/gpac/tools.h b/include/gpac/tools.h
+index 12d8ac5..ef5c8fb 100644
+--- a/include/gpac/tools.h
++++ b/include/gpac/tools.h
+@@ -526,8 +526,9 @@ u8 gf_cenc_key_info_get_iv_size(const u8 *key_info, u32 key_info_size, u32 key_i
+ /*!
+ \brief validate a CENC key info chunk
+ 
+-Checks key record bounds and IV lengths. Nonzero per-sample and constant IV
+-sizes must be 8 or 16 bytes; zero is allowed for a clear default.
++Checks key record bounds and IV lengths. Nonzero per-sample IV sizes must
++be 8 or 16 bytes. A constant IV may be any length present in the record;
++zero is allowed for a clear default.
+ \param key_info CENC key info buffer
+ \param key_info_size CENC key info buffer size
+ \return GF_TRUE if this chunk looks like a CENC key info buffer, GF_FALSE otherwise
+diff --git a/src/filters/decrypt_cenc_isma.c b/src/filters/decrypt_cenc_isma.c
+index b1e66eb..0de1af9 100644
+--- a/src/filters/decrypt_cenc_isma.c
++++ b/src/filters/decrypt_cenc_isma.c
+@@ -1577,6 +1577,10 @@ static GF_Err cenc_dec_push_iv(GF_CENCDecStream *cstr, u32 key_idx, u8 *IV, u32
+ {
+ 	GF_Err e;
+ 
++	/* AES-128 consumes a 16-byte IV; keep a longer constant IV's prefix. */
++	if (iv_size > 16) iv_size = 16;
++	if (const_iv_size > 16) const_iv_size = 16;
++
+ 	if (!cstr->crypt_init) {
+ 		if (const_iv) {
+ 			memcpy(IV, const_iv, const_iv_size);
+@@ -1844,8 +1848,10 @@ static GF_Err cenc_dec_process_cenc(GF_CENCDecCtx *ctx, GF_CENCDecStream *cstr,
+ 			//const IV is applied at each subsample
+ 			if (const_iv_size) {
+ 				u8 IV[17];
+-				memcpy(IV, const_iv, const_iv_size);
+-				if (const_iv_size == 8)
++				u32 nb_iv = const_iv_size;
++				if (nb_iv > 16) nb_iv = 16;
++				memcpy(IV, const_iv, nb_iv);
++				if (nb_iv == 8)
+ 					memset(IV+8, 0, sizeof(char)*8);
+ 
+ 				if (cstr->force_hls_iv)
+diff --git a/src/isomedia/box_code_drm.c b/src/isomedia/box_code_drm.c
+index a7f33f7..87dcc56 100644
+--- a/src/isomedia/box_code_drm.c
++++ b/src/isomedia/box_code_drm.c
+@@ -961,6 +961,8 @@ GF_Box *piff_tenc_box_new()
+ 
+ void piff_tenc_box_del(GF_Box *s)
+ {
++	GF_PIFFTrackEncryptionBox *ptr = (GF_PIFFTrackEncryptionBox *)s;
++	if (ptr && ptr->constant_iv) gf_free(ptr->constant_iv);
+ 	gf_free(s);
+ }
+ 
+diff --git a/src/isomedia/drm_sample.c b/src/isomedia/drm_sample.c
+index a8066e1..439407b 100644
+--- a/src/isomedia/drm_sample.c
++++ b/src/isomedia/drm_sample.c
+@@ -780,6 +780,14 @@ GF_Err gf_isom_set_cenc_protection(GF_ISOFile *the_file, u32 trackNumber, u32 de
+ 		sinf->info->piff_tenc->key_info[2] = 0;
+ 		sinf->info->piff_tenc->key_info[3] = key_info[3];
+ 		memcpy(sinf->info->piff_tenc->key_info+4, key_info+4, 16*sizeof(char));
++		if (!key_info[3] && (key_info_size > 21)) {
++			u8 civ_size = key_info[20];
++			if (civ_size && (key_info_size >= (u32) (21 + civ_size))) {
++				sinf->info->piff_tenc->constant_iv = (u8 *) gf_malloc(16);
++				if (!sinf->info->piff_tenc->constant_iv) return GF_OUT_OF_MEM;
++				memcpy(sinf->info->piff_tenc->constant_iv, key_info + 21, civ_size);
++			}
++		}
+ 	}
+ 	else {
+ 		if (key_info_size<20) return GF_BAD_PARAM;
+diff --git a/src/utils/constants.c b/src/utils/constants.c
+index 64990d5..f1c9f77 100644
+--- a/src/utils/constants.c
++++ b/src/utils/constants.c
+@@ -3005,10 +3005,6 @@ Bool gf_cenc_validate_key_info(const u8 *key_info, u32 key_info_size)
+ 				goto exit;
+ 			}
+ 			iv_size = key_info[kpos];
+-			if (iv_size && (iv_size != 8) && (iv_size != 16)) {
+-				GF_LOG(GF_LOG_ERROR, GF_LOG_CORE, ("Invalid CENC constant IV size %u, must be 8 or 16\n", (u32) iv_size));
+-				return GF_FALSE;
+-			}
+ 			if (kpos + 1 + iv_size > key_info_size) {
+ 				nb_missing = kpos + 1 + iv_size - key_info_size;
+ 				goto exit;
+diff --git a/src/utils/unittests/ut_cenc_iv.c b/src/utils/unittests/ut_cenc_iv.c
+index 6f356c4..a3be4cb 100644
+--- a/src/utils/unittests/ut_cenc_iv.c
++++ b/src/utils/unittests/ut_cenc_iv.c
+@@ -38,14 +38,15 @@ unittest(cenc_key_info_iv_sizes)
+ 	key_info.iv_size = MAX_ENCODED_IV_SIZE;
+ 	assert_true(!gf_cenc_validate_key_info(encoded, single_key_size));
+ 
+-	/* Constant IVs have the same bound; a clear default has none. */
++	/* Constant IV length is the number of bytes present in the record. */
+ 	key_info.iv_size = 0;
+ 	key_info.constant_iv_size = IV_SIZE_64_BITS;
+ 	assert_true(gf_cenc_validate_key_info(encoded, constant_iv_header_size + IV_SIZE_64_BITS));
+ 	key_info.constant_iv_size = IV_SIZE_128_BITS;
+ 	assert_true(gf_cenc_validate_key_info(encoded, constant_iv_header_size + IV_SIZE_128_BITS));
+ 	key_info.constant_iv_size = OVERSIZED_IV_SIZE;
+-	assert_true(!gf_cenc_validate_key_info(encoded, constant_iv_header_size + OVERSIZED_IV_SIZE));
++	assert_true(gf_cenc_validate_key_info(encoded, constant_iv_header_size + OVERSIZED_IV_SIZE));
++	assert_true(!gf_cenc_validate_key_info(encoded, constant_iv_header_size + 1));
+ 	key_info.constant_iv_size = 0;
+ 	assert_true(gf_cenc_validate_key_info(encoded, constant_iv_header_size));
+ 

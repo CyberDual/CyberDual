@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "5191f40d1fc7913335fe7f403ad3485e98ff1ef1",
+      "edited_message": null,
+      "patch": "diff --git a/src/knownhost.c b/src/knownhost.c\nindex 2bd41de..5eab421 100644\n--- a/src/knownhost.c\n+++ b/src/knownhost.c\n@@ -122,6 +122,7 @@ static struct libssh2_knownhost *knownhost_to_external(struct known_host *node)\n }\n \n #define KNOWNHOST_MAX_LEN  (1024 * 1024)\n+#define KNOWNHOST_LEGACY_HOSTNAME_MAX 255\n \n static int knownhost_add(LIBSSH2_KNOWNHOSTS *hosts,\n                          const char *host, const char *salt,\n@@ -868,7 +869,7 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,\n             char hostbuf[256];\n \n             /* make sure we do not overflow the buffer */\n-            if(namelen >= sizeof(hostbuf) - 1)\n+            if(namelen > KNOWNHOST_LEGACY_HOSTNAME_MAX)\n                 return ssh2_err(hosts->session,\n                                 LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,\n                                 \"Failed to parse known_hosts line \"\n"
+    },
+    {
+      "sha": "60363ab7b7e8a6d60591986763f0f277923635f8",
+      "edited_message": null,
+      "patch": "diff --git a/src/knownhost.c b/src/knownhost.c\n--- a/src/knownhost.c\n+++ b/src/knownhost.c\n@@ -865,7 +865,7 @@\n            name to the collection */\n         if(name == host || *(name - 1) == ',') {\n \n-            char hostbuf[256];\n+            char hostbuf[255];\n \n             /* make sure we do not overflow the buffer */\n             if(namelen >= sizeof(hostbuf) - 1)\n"
+    }
+  ],
+  "coupling": "The earlier known-host change raises the accepted legacy host-field length to 255 bytes through KNOWNHOST_LEGACY_HOSTNAME_MAX; its 256-byte temporary buffer still has room for the terminator. The later cleanup reduces that buffer to 255 bytes; its original size-derived guard would have remained safe in isolation. In combination, a 255-byte field fills the smaller buffer and the terminating NUL is written one byte beyond it. Repair requires reconciling the length limit introduced in the earlier commit with the buffer capacity changed in the later commit.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "libssh2_knownhost_readline",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

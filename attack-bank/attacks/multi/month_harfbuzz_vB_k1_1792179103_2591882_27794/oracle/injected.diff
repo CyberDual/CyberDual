@@ -1,0 +1,49 @@
+diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc
+index 5134f7f..4cf6021 100644
+--- a/src/hb-raster-draw.cc
++++ b/src/hb-raster-draw.cc
+@@ -48,6 +48,8 @@
+ #define HB_RASTER_FULL_COVERAGE (2 * HB_RASTER_ONE_PIXEL * HB_RASTER_ONE_PIXEL)
+ /* Flatness threshold for Bézier flattening: max deviation in pixels */
+ #define HB_RASTER_FLAT_THRESH 0.25f
++/* Recursion-depth cap for the explicit-stack curve flatteners below. */
++#define HB_RASTER_MAX_FLATTEN_DEPTH 24
+ 
+ 
+ /* Normalized edge: yH > yL always */
+@@ -637,7 +639,7 @@ flatten_quadratic_recursive (hb_raster_draw_t *draw,
+ 
+   while (true)
+   {
+-    bool emit_chord = depth >= 16;
++    bool emit_chord = depth >= HB_RASTER_MAX_FLATTEN_DEPTH;
+ 
+     /* Entirely outside the clip box: the chord is exact for coverage.
+        Subdivided control points are convex combinations of their
+@@ -716,7 +718,7 @@ flatten_quadratic_recursive (hb_raster_draw_t *draw,
+     float x12 = (x1 + x2) * 0.5f, y12 = (y1 + y2) * 0.5f;
+     float xm  = (x01 + x12) * 0.5f, ym  = (y01 + y12) * 0.5f;
+ 
+-    /* Depth is capped at 16, so stack capacity 16 is sufficient. */
++    /* Depth is capped at HB_RASTER_MAX_FLATTEN_DEPTH, so stack capacity 16 is sufficient. */
+     stack[top++] = {xm, ym, x12, y12, x2, y2, depth + 1, check_clip};
+     x2 = xm; y2 = ym;
+     x1 = x01; y1 = y01;
+@@ -847,7 +849,7 @@ flatten_cubic_recursive (hb_raster_draw_t *draw,
+ 
+   while (true)
+   {
+-    bool emit_chord = depth >= 16;
++    bool emit_chord = depth >= HB_RASTER_MAX_FLATTEN_DEPTH;
+ 
+     /* Entirely outside the clip box: the chord is exact for coverage.
+        Subdivided control points are convex combinations of their
+@@ -935,7 +937,7 @@ flatten_cubic_recursive (hb_raster_draw_t *draw,
+     float x123 = (x12 + x23) * 0.5f, y123 = (y12 + y23) * 0.5f;
+     float xm   = (x012 + x123) * 0.5f, ym   = (y012 + y123) * 0.5f;
+ 
+-    /* Depth is capped at 16, so stack capacity 16 is sufficient. */
++    /* Depth is capped at HB_RASTER_MAX_FLATTEN_DEPTH, so stack capacity 16 is sufficient. */
+     stack[top++] = {xm, ym, x123, y123, x23, y23, x3, y3, depth + 1, check_clip};
+     x3 = xm; y3 = ym;
+     x2 = x012; y2 = y012;

@@ -1,0 +1,53 @@
+diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c
+index 151aeac..61a5405 100644
+--- a/src/type1/t1parse.c
++++ b/src/type1/t1parse.c
+@@ -83,7 +83,16 @@
+       if ( tag == 0x8001U || tag == 0x8002U )
+       {
+         if ( !FT_READ_ULONG_LE( size ) )
++        {
++          /* The merged reader consumes this length in one go, so do not */
++          /* report more bytes than the stream still holds.              */
++          if ( stream->pos >= stream->size )
++            size = 0;
++          else if ( size > stream->size - stream->pos )
++            size = stream->size - stream->pos;
++
+           *asize = size;
++        }
+       }
+ 
+       *atag = tag;
+@@ -273,6 +282,7 @@
+       FT_UShort  tag;
+       FT_Byte*   priv_dict = NULL;
+       FT_ULong   priv_len  = 0;
++      FT_ULong   recorded;
+ 
+ 
+       for (;;)
+@@ -281,14 +291,21 @@
+         if ( error )
+           break;
+ 
+-        if ( tag != 0x8002U || size > stream->size - stream->pos )
++        /* eexec is seeded over the length stored in the segment header. */
++        recorded = size;
++        if ( !stream->read && stream->base && stream->pos >= 4 )
++          recorded = FT_PEEK_ULONG_LE( stream->base + stream->pos - 4 );
++
++        if ( tag != 0x8002U                    ||
++             size > stream->size - stream->pos ||
++             recorded > stream->size )
+           break;
+ 
+         if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||
+              FT_STREAM_READ( priv_dict + priv_len, size )        )
+           break;
+ 
+-        priv_len += size;
++        priv_len += recorded;
+       }
+ 
+       /* Check that we have a private dictionary there */

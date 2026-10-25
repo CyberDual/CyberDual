@@ -1,0 +1,42 @@
+diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c
+index 151aeac3c..934e863e8 100644
+--- a/src/type1/t1parse.c
++++ b/src/type1/t1parse.c
+@@ -273,6 +273,7 @@
+       FT_UShort  tag;
+       FT_Byte*   priv_dict = NULL;
+       FT_ULong   priv_len  = 0;
++      FT_ULong   avail;
+ 
+ 
+       for (;;)
+@@ -281,13 +282,26 @@
+         if ( error )
+           break;
+ 
+-        if ( tag != 0x8002U || size > stream->size - stream->pos )
++        if ( tag != 0x8002U )
+           break;
+ 
+-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||
+-             FT_STREAM_READ( priv_dict + priv_len, size )        )
++        /* The declared segment size can exceed the data actually  */
++        /* present in the stream; never allocate more than what is */
++        /* available.                                              */
++        avail = stream->size - stream->pos;
++        if ( avail > size )
++          avail = size;
++
++        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + avail ) )
+           break;
+ 
++        /* A truncated final segment is tolerated: `FT_STREAM_READ' */
++        /* transfers the data available; the loop exits because the */
++        /* next tag read then hits the end of the stream.           */
++        error = FT_STREAM_READ( priv_dict + priv_len, size );
++        if ( error )
++          error = FT_Err_Ok;
++
+         priv_len += size;
+       }
+ 

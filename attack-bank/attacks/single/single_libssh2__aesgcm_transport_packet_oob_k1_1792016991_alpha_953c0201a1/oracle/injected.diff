@@ -1,0 +1,33 @@
+diff --git a/src/openssl.c b/src/openssl.c
+index 6a38b55b91440c1c188472dde05a9770ea3a3f73..b8d7949436451b28aee827054c809cc26eea607e 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -951,7 +951,10 @@ int ssh2_cipher_crypt(ssh2_cipher_ctx *ctx, SSH2_CIPHER_T(algo), int encrypt,
+     (void)algo;
+ 
+     assert(blocksize <= sizeof(buf));
+-    assert(cryptlen >= 0);
++    /* the block must be large enough to hold the AAD and the
++       authentication tag */
++    if(blocksize < (size_t)aadlen + (size_t)authenticationtag)
++        return 1;
+ 
+ #if LIBSSH2_AES_GCM
+     /* First block */
+@@ -999,8 +1002,15 @@ int ssh2_cipher_crypt(ssh2_cipher_ctx *ctx, SSH2_CIPHER_T(algo), int encrypt,
+ #else
+             ret = EVP_Cipher(*ctx, NULL, NULL, 0); /* final */
+ #endif
+-            if(ret < 0)
++            if(ret < 0) {
+                 ret = 0;
++#if LIBSSH2_AES_GCM
++                if(is_aesgcm && !encrypt)
++                    /* the context cannot be reused after a failed tag
++                       verification */
++                    EVP_CIPHER_CTX_free(*ctx);
++#endif /* LIBSSH2_AES_GCM */
++            }
+             else {
+                 ret = 1;
+ #if LIBSSH2_AES_GCM

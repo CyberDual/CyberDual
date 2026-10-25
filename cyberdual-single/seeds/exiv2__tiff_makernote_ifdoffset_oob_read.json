@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-125",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "6b7acfa477460f673e81d0e99aa2fd05416abec8",
+  "parent_sha": "6b7acfa477460f673e81d0e99aa2fd05416abec8",
+  "project": "exiv2",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/Exiv2/exiv2",
+  "repo_url": "https://github.com/Exiv2/exiv2",
+  "source": "reselect",
+  "target": "exiv2",
+  "task": "OOB read reading a crafted TIFF/Exif Makernote via public Image::readMetadata: ifdOffset() added to start() without bounds-check before ifd_.setStart; fix adds enforce() bounds. Single library file src/tiffvisitor_int.cpp.",
+  "task_iid": "exiv2__tiff_makernote_ifdoffset_oob_read",
+  "vuln_desc": "OOB read reading a crafted TIFF/Exif Makernote via public Image::readMetadata: ifdOffset() added to start() without bounds-check before ifd_.setStart; fix adds enforce() bounds. Single library file src/tiffvisitor_int.cpp."
+}

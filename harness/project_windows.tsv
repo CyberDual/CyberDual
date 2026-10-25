@@ -1,0 +1,18 @@
+# CyberDual canonical per-project maintenance windows (single source of truth).
+# Windows are sized so each project's WORKING-SET commit count lands in ~45-200 (see check_windows.sh).
+# UNTIL is 2026-10-01 for all. Edit HERE; every window-setting script must agree (enforced by check_windows.sh).
+# project	repo	since	until	span
+expat	https://github.com/libexpat/libexpat	2026-09-01	2026-10-01	month
+libarchive	https://github.com/libarchive/libarchive	2026-09-01	2026-10-01	month
+pcre2	https://github.com/PCRE2Project/pcre2	2026-09-01	2026-10-01	month
+harfbuzz	https://github.com/harfbuzz/harfbuzz	2026-09-01	2026-10-01	month
+libheif	https://github.com/strukturag/libheif	2026-09-01	2026-10-01	month
+libssh2	https://github.com/libssh2/libssh2	2026-09-01	2026-10-01	month
+curl	https://github.com/curl/curl	2026-09-17	2026-10-01	biweek
+exiv2	https://github.com/Exiv2/exiv2	2026-08-01	2026-10-01	bimonth
+openexr	https://github.com/AcademySoftwareFoundation/openexr	2026-08-01	2026-10-01	bimonth
+gpac	https://github.com/gpac/gpac	2026-08-01	2026-10-01	bimonth
+libwebp	https://github.com/webmproject/libwebp	2026-08-01	2026-10-01	bimonth
+matio	https://github.com/tbeu/matio	2026-07-01	2026-10-01	trimonth
+freetype	https://github.com/freetype/freetype	2026-07-01	2026-10-01	trimonth
+xz	https://github.com/tukaani-project/xz	2026-07-01	2026-10-01	trimonth

@@ -1,0 +1,30 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "25783ac6665e21537558fe9ac847c0789d80209c",
+      "edited_message": null,
+      "patch": "diff --git a/libheif/color-conversion/alpha.cc b/libheif/color-conversion/alpha.cc\n--- a/libheif/color-conversion/alpha.cc\n+++ b/libheif/color-conversion/alpha.cc\n@@ -134,12 +134,10 @@\n                                                       const heif_color_conversion_options& options,\n                                                       const heif_color_conversion_options_ext& options_ext) const\n {\n-  // The colour planes and the alpha plane are all read through the single 'Pixel' type\n-  // below, so every plane must be stored with sizeof(Pixel) bytes per sample. A file may\n-  // declare a different depth per plane ('unci'); reading a one-byte plane as two-byte\n-  // samples would run past its end (GHSA-r7gr-2xm2-23wf), and a plane wider than two\n-  // bytes cannot be read through either instance. Decline anything else.\n-  if (!input_state.all_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel)))) {\n+  // Match the colour plane storage to the Pixel type used by this operation.\n+  // A file may declare different depths per plane ('unci'), so the colour\n+  // samples must be checked before the operation is offered.\n+  if (!input_state.color_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel)))) {\n     return {};\n   }\n \n"
+    },
+    {
+      "sha": "0f3778e66100e8a24570e064bfcde04634881662",
+      "edited_message": null,
+      "patch": "diff --git a/libheif/color-conversion/alpha.cc b/libheif/color-conversion/alpha.cc\n--- a/libheif/color-conversion/alpha.cc\n+++ b/libheif/color-conversion/alpha.cc\n@@ -143,10 +143,10 @@\n     return {};\n   }\n \n-  // The colour planes are converted to RGB at one common depth and the alpha plane is\n-  // composited at that depth, so all of them have to agree (0 = the colour planes differ).\n+  // The colour planes are converted to RGB at one common depth. A zero depth\n+  // means the colour planes differ and there is no common conversion target.\n   int color_bpp = input_state.get_uniform_color_bits_per_pixel();\n-  if (color_bpp == 0 || (input_state.has_alpha() && input_state.bits_per_pixel_alpha != color_bpp)) {\n+  if (color_bpp == 0) {\n     return {};\n   }\n \n"
+    },
+    {
+      "sha": "1487f161b29f48644057a411927518b4b279cd72",
+      "edited_message": null,
+      "patch": "diff --git a/libheif/color-conversion/alpha.cc b/libheif/color-conversion/alpha.cc\n--- a/libheif/color-conversion/alpha.cc\n+++ b/libheif/color-conversion/alpha.cc\n@@ -260,17 +260,15 @@\n                  \"Op_flatten_alpha_plane: image has no alpha plane\"};\n   }\n \n-  // The colour planes are converted at, and the alpha plane is composited at, one common depth\n-  // through the 'Pixel' type of this instance.\n+  // Select the Pixel type from the common colour depth used by this instance.\n   int color_bpp = input_state.get_uniform_color_bits_per_pixel();\n   int bpp_alpha = input_raw->get_bits_per_pixel(heif_channel_Alpha);\n \n   if (color_bpp == 0 ||\n-      bpp_alpha != color_bpp ||\n       bytes_per_sample_for_bit_depth(color_bpp) != static_cast<int>(sizeof(Pixel))) {\n     return Error{heif_error_Unsupported_feature,\n                  heif_suberror_Unsupported_color_conversion,\n-                 \"Op_flatten_alpha_plane: colour and alpha planes must share one bit depth\"};\n+                 \"Op_flatten_alpha_plane: unsupported colour sample depth\"};\n   }\n \n   // See composite_plane(): the composite accumulates in 32 bits, which is exact for samples\n"
+    }
+  ],
+  "coupling": "The sample-width gate in 25783ac checks only colour planes, and the depth gate in 0f3778e accepts a different alpha depth. Either gate alone still excludes the 16-bit luma/8-bit alpha conversion. The later luma compositing path in 1487f16 drops the runtime alpha-depth comparison and reads that byte-sized alpha plane as uint16_t. All three edits are required for this public decode path; the fix must restore a shared colour/alpha storage invariant across planning and execution.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "heif_decode_image",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

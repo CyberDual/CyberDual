@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "b102d4d4a0de4f7595418234b8d2eb1981087d4f",
+      "edited_message": "Remove unnecessary buffer resizing",
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 6b5f65a..ae562c7 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -576,9 +576,8 @@ void QuickTimeVideo::decodeBlock(size_t recursion_depth, std::string const& ente\n   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);\n \n   const long bufMinSize = 4;\n-  DataBuf buf(bufMinSize + 1);\n+  DataBuf buf(bufMinSize);\n   uint64_t size = 0;\n-  buf.data()[4] = '\\0';\n \n   io_->read(buf.data(), 4);\n   if (io_->eof()) {\n@@ -627,13 +626,13 @@ static std::string readString(BasicIo& io, size_t size) {\n \n void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size, size_t recursion_depth) {\n   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);\n-  assert(buf.size() > 4);\n+  assert(buf.size() >= 4);\n \n   if (ignoreList(buf))\n     discard(size);\n \n   else if (dataIgnoreList(buf)) {\n-    decodeBlock(recursion_depth + 1, Exiv2::toString(buf.data()));\n+    decodeBlock(recursion_depth + 1, std::string{buf.c_str(), 4});\n   } else if (equalsQTimeTag(buf, \"ftyp\"))\n     fileTypeDecoder(size);\n \n"
+    },
+    {
+      "sha": "5705d7925f602c9556bff987c62c9eb9587a5d14",
+      "edited_message": null,
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 513f94b..d80f444 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -628,6 +628,7 @@ static std::string readString(BasicIo& io, size_t size) {\n void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size, size_t recursion_depth) {\n   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);\n   assert(buf.size() > 4);\n+  buf.data()[4] = 0;\n \n   if (ignoreList(buf))\n     discard(size);\n@@ -1629,7 +1630,7 @@ bool isQTimeType(BasicIo& iIo, bool advance) {\n       // we only match if we actually know the video type. This is done\n       // to avoid matching just on ftyp because bmffimage also has that\n       // header.\n-      if (Exiv2::find(qTimeFileType, Exiv2::toString(buf.data(8)))) {\n+      if (Exiv2::find(qTimeFileType, std::string{buf.c_str(8), 4})) {\n         matched = true;\n       }\n       break;\n"
+    }
+  ],
+  "coupling": "The first edited commit changes the QuickTime tag buffer from five bytes to exactly four bytes, removes the index-4 sentinel, and converts the only null-terminated-string consumer of that four-byte tag to an explicitly bounded std::string. In that commit alone the parser only reads four tag bytes and never relies on a fifth byte, so the cleanup is safe. The second edited commit adds the naturally corresponding tag-buffer terminator as a direct write to index 4 and restores bounded lookup of the four-byte major brand. Against the original five-byte tag buffer, both changes are in bounds and safe. Only when the two edited commits are composed does the later terminator write assume the capacity that the earlier cleanup removed, producing a one-byte heap out-of-bounds write in tagDecoder(). A fix that preserves the first commit\u2019s four-byte tag contract must also update the later terminator consumer; conversely, keeping the later direct terminator requires reconciling the earlier capacity change. The safe cross-commit result is either a four-byte buffer with no index-4 write and bounded string construction, or a five-byte buffer together with the terminator contract, so the allocation and consumer cannot be repaired by considering either edited diff in isolation.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Exiv2::ImageFactory::open(const Exiv2::byte*, std::size_t) followed by Exiv2::Image::readMetadata()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

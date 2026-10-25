@@ -1,0 +1,39 @@
+diff --git a/js/src/intgemm/IntegerGemmIntrinsic.cpp b/js/src/intgemm/IntegerGemmIntrinsic.cpp
+index 94f780009e..9a59940806 100644
+--- a/js/src/intgemm/IntegerGemmIntrinsic.cpp
++++ b/js/src/intgemm/IntegerGemmIntrinsic.cpp
+@@ -458,13 +458,19 @@ int32_t js::intgemm::IntrI8SelectColumnsOfB(wasm::Instance* instance,
+       reinterpret_cast<const uint32_t*>(&memBase[colIndexList]);
+   int8_t* outputPtr = reinterpret_cast<int8_t*>(&memBase[output]);
+ 
+-  // Every selected column index must reference a valid column of B. Otherwise
+-  // SelectColumnsB would read outside the bounds-checked input matrix, since it
+-  // uses each index to compute an offset into inputMatrixBPrepared.
++  // SelectColumnsB keeps reading the column index list while it writes the
++  // output matrix. If the caller lets the output region overlap colIndexList,
++  // those writes could mutate indices that were already validated below and the
++  // kernel would then compute offsets outside the bounds-checked input matrix.
++  // Validate the indices against colsB and copy them into a private buffer so an
++  // overlapping output cannot change which columns the kernel reads.
++  uint32_t selectedColumns[SELECTED_COLUMNS_B_MULTIPLIER];
+   for (uint32_t i = 0; i < sizeColIndexList; i++) {
+-    if (colIndexListPtr[i] >= colsB) {
++    uint32_t col = colIndexListPtr[i];
++    if (col >= colsB) {
+       return -1;
+     }
++    selectedColumns[i] = col;
+   }
+ 
+   AutoProfilerMarker marker(cx->runtime()->geckoProfiler(),
+@@ -472,8 +478,8 @@ int32_t js::intgemm::IntrI8SelectColumnsOfB(wasm::Instance* instance,
+                             "rowsB: {} colsB: {} sizecolList: {}, sizeB: {}",
+                             rowsB, colsB, sizeColIndexList, sizeB);
+   GEMMOLOGY_DISPATCH(SelectColumnsB)
+-  (inputMatrixBPreparedPtr, outputPtr, rowsB, colIndexListPtr,
+-   colIndexListPtr + sizeColIndexList);
++  (inputMatrixBPreparedPtr, outputPtr, rowsB, selectedColumns,
++   selectedColumns + sizeColIndexList);
+   return 0;
+ }
+ 

@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "bcd5a16998f5b07ee3b36ed2e837e3c8553a7216",
+      "edited_message": null,
+      "patch": "diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c\n--- a/src/liblzma/common/index.c\n+++ b/src/liblzma/common/index.c\n@@ -366,7 +366,6 @@\n \ts->node.compressed_base = compressed_base;\n \ts->node.parent = NULL;\n \ts->node.left = NULL;\n-\ts->node.right = NULL;\n \n \ts->number = stream_number;\n \ts->block_number_base = block_number_base;\n"
+    },
+    {
+      "sha": "9ca4e48f68a30e216822c351d940da8bf2c44b83",
+      "edited_message": null,
+      "patch": "diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c\n--- a/src/liblzma/common/index.c\n+++ b/src/liblzma/common/index.c\n@@ -251,7 +251,8 @@\n {\n \tnode->parent = prepend ? tree->leftmost : tree->rightmost;\n \tnode->left = NULL;\n-\tnode->right = NULL;\n+\tif (!prepend || tree->root != NULL)\n+\t\tnode->right = NULL;\n \n \t++tree->count;\n \n"
+    }
+  ],
+  "coupling": "The first index.c commit leaves the Stream node's right link for index_tree_append() to initialize. The next commit makes the new prepend path preserve that link when inserting the first node, relying on index_stream_init() to have initialized it. Either edit by itself is safe; together, lzma_index_init() leaves a caller-allocator-supplied pointer in the tree and lzma_index_end() dereferences it. The initialization contract spans both commits, so a reviewer must reconcile both sides of it.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "lzma_index_init() -> lzma_index_append() -> lzma_index_end()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

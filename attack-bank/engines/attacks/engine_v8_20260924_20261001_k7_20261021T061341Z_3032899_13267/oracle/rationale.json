@@ -1,0 +1,22 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "original": "3b2d904895eb7d6d3e1fd610e75934fa8e0af53e",
+      "patch": "diff --git a/src/strings/string-stream.cc b/src/strings/string-stream.cc\nindex 669e1e19118..2c83f49ba38 100644\n--- a/src/strings/string-stream.cc\n+++ b/src/strings/string-stream.cc\n@@ -18,6 +18,17 @@\n namespace v8 {\n namespace internal {\n \n+namespace {\n+\n+constexpr uint8_t kReceiverKindCount = 2;\n+constexpr uint8_t kUninitializedReceiverKind = kReceiverKindCount;\n+\n+[[maybe_unused]] bool IsUninitializedReceiver(Tagged<Object> receiver) {\n+  return IsTdzHole(receiver);\n+}\n+\n+}  // namespace\n+\n static const int kMentionedObjectCacheMaxSize = 256;\n \n char* HeapStringAllocator::allocate(unsigned bytes) {"
+    },
+    {
+      "original": "562da508ef221b5418458a71d03337e57b83fb25",
+      "patch": "diff --git a/src/strings/string-stream.cc b/src/strings/string-stream.cc\n--- a/src/strings/string-stream.cc\n+++ b/src/strings/string-stream.cc\n@@ -432,6 +432,17 @@ void StringStream::PrintPrototype(Isolate* isolate, Tagged<JSFunction> fun,\n   Tagged<Object> name = fun->shared()->Name();\n   bool print_name = false;\n+  std::unique_ptr<uint8_t[]> receiver_kinds(new uint8_t[kReceiverKindCount]);\n+  receiver_kinds[0] = 0;\n+  receiver_kinds[1] = 1;\n+  volatile uint8_t receiver_kind =\n+      receiver_kinds[IsUninitializedReceiver(receiver)\n+                        ? kUninitializedReceiverKind\n+                        : 0];\n #ifdef V8_ENABLE_TDZ_HOLE\n   DCHECK(!IsTheHole(receiver));\n #endif\n-  if (IsNullOrUndefined(receiver) || IsTdzHole(receiver) ||\n+  if (IsNullOrUndefined(receiver) || receiver_kind == 1 ||\n       IsJSProxy(receiver) || IsWasmObject(receiver)) {\n     print_name = true;"
+    }
+  ],
+  "coupling": "The first commit introduces a TDZ-aware receiver helper and a two-entry receiver-kind table contract. The second commit consumes that helper and allocates a two-byte table, but uses the table count as the uninitialized-receiver index. Either edit alone is benign or cannot form the coupled lookup; together, a derived constructor's TdzHole receiver selects index 2 and reads one byte past the two-byte heap allocation.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "shell": "d8",
+      "command": "out/x64.asan/d8 pocs/probe.js",
+      "expected": "AddressSanitizer heap-buffer-overflow in StringStream::PrintPrototype"
+    }
+  ]
+}

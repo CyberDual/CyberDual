@@ -1,0 +1,98 @@
+diff --git a/libheif/color-conversion/colorconversion.cc b/libheif/color-conversion/colorconversion.cc
+index abebc8be..e8cc5a9e 100644
+--- a/libheif/color-conversion/colorconversion.cc
++++ b/libheif/color-conversion/colorconversion.cc
+@@ -270,6 +270,10 @@ void ColorState::set_color_bits_per_pixel(int bpp)
+ 
+ int ColorState::get_uniform_color_bits_per_pixel() const
+ {
++  if (colorspace == heif_colorspace_YCbCr && bits_per_pixel_Y != 0) {
++    return bits_per_pixel_Y;
++  }
++
+   int uniform = 0;
+ 
+   for (int bpp : {bits_per_pixel_R, bits_per_pixel_G, bits_per_pixel_B,
+diff --git a/libheif/color-conversion/yuv2rgb.cc b/libheif/color-conversion/yuv2rgb.cc
+index 00735274..426d4d15 100644
+--- a/libheif/color-conversion/yuv2rgb.cc
++++ b/libheif/color-conversion/yuv2rgb.cc
+@@ -58,12 +58,8 @@ Op_YCbCr_to_RGB<Pixel>::state_after_conversion(const ColorState& input_state,
+   //   BT.2020 NCL. A correct CL path needs EOTF inversion on Cb/Cr, not the linear matrix below.
+ 
+ 
+-  // The three colour planes are read through the same 'Pixel' type, so they must be stored
+-  // with sizeof(Pixel) bytes per sample, and the conversion derives its shifts and midpoints
+-  // from one bit depth, so they must also share it ('unci' may declare a depth per plane).
+-  // The alpha plane is copied through at its own width.
+   if (!input_state.color_channels_have_same_bpp() ||
+-      !input_state.color_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel)))) {
++      input_state.get_bytes_per_sample(heif_channel_Y) != static_cast<int>(sizeof(Pixel))) {
+     return {};
+   }
+ 
+@@ -108,7 +104,6 @@ Op_YCbCr_to_RGB<Pixel>::convert_colorspace(const std::shared_ptr<const HeifPixel
+ 
+   int bpp_y = input->get_bits_per_pixel(heif_channel_Y);
+   int bpp_cb = input->get_bits_per_pixel(heif_channel_Cb);
+-  int bpp_cr = input->get_bits_per_pixel(heif_channel_Cr);
+   int bpp_a = 0;
+ 
+   bool has_alpha = input->has_channel(heif_channel_Alpha);
+@@ -117,16 +112,7 @@ Op_YCbCr_to_RGB<Pixel>::convert_colorspace(const std::shared_ptr<const HeifPixel
+     bpp_a = input->get_bits_per_pixel(heif_channel_Alpha);
+   }
+ 
+-  if (bytes_per_sample_for_bit_depth(bpp_y) != static_cast<int>(sizeof(Pixel)) ||
+-      bytes_per_sample_for_bit_depth(bpp_cb) != static_cast<int>(sizeof(Pixel)) ||
+-      bytes_per_sample_for_bit_depth(bpp_cr) != static_cast<int>(sizeof(Pixel))) {
+-    return Error::InternalError;
+-  }
+-
+-
+-  if (bpp_y != bpp_cb ||
+-      bpp_y != bpp_cr) {
+-    // TODO: test with varying bit depths when we have a test image
++  if (bytes_per_sample_for_bit_depth(bpp_y) != static_cast<int>(sizeof(Pixel))) {
+     return Error::InternalError;
+   }
+ 
+@@ -580,16 +566,14 @@ Op_YCbCr420_to_RRGGBBaa::state_after_conversion(const ColorState& input_state,
+     }
+   }
+ 
+-  // The conversion derives its shifts from one bit depth, so the three planes must share
+-  // it (get_uniform_color_bits_per_pixel() is 0 when they differ) and it must be > 8.
++  // The conversion derives its shifts and sample width from the luma bit depth.
+   if (input_state.colorspace != heif_colorspace_YCbCr ||
+       input_state.chroma != heif_chroma_420 ||
+-      input_state.get_uniform_color_bits_per_pixel() <= 8) {
++      input_state.bits_per_pixel_Y <= 8) {
+     return {};
+   }
+ 
+-  // All planes, alpha included, are read as uint16_t samples.
+-  if (!input_state.all_channels_have_bytes_per_sample(2)) {
++  if (input_state.get_bytes_per_sample(heif_channel_Y) != 2) {
+     return {};
+   }
+ 
+@@ -643,18 +627,6 @@ Op_YCbCr420_to_RRGGBBaa::convert_colorspace(const std::shared_ptr<const HeifPixe
+   int bpp = input->get_bits_per_pixel(heif_channel_Y);
+   bool has_alpha = input->has_channel(heif_channel_Alpha);
+ 
+-  // Defense in depth: the Cb/Cr planes are read below through a uint16_t* using a
+-  // sample width taken from the Y channel (bpp). convert_colorspace() already
+-  // rejects YCbCr with mismatched luma/chroma bit depths (GHSA-w7mc-p8jc-p853),
+-  // but guard here as well so this operator is self-contained and a future direct
+-  // caller or pipeline change cannot reintroduce the out-of-bounds chroma read.
+-  if (input->get_bits_per_pixel(heif_channel_Cb) != bpp ||
+-      input->get_bits_per_pixel(heif_channel_Cr) != bpp) {
+-    return Error{heif_error_Unsupported_feature,
+-                 heif_suberror_Unsupported_bit_depth,
+-                 "Color conversion cannot handle YCbCr images with chroma bit depth differing from luma."};
+-  }
+-
+   int le = (target_state.chroma == heif_chroma_interleaved_RRGGBB_LE ||
+             target_state.chroma == heif_chroma_interleaved_RRGGBBAA_LE) ? 1 : 0;
+ 

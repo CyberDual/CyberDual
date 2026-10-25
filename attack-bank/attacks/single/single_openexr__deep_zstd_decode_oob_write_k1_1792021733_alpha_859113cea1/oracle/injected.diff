@@ -1,0 +1,100 @@
+diff --git a/src/lib/OpenEXRCore/internal_zstd.c b/src/lib/OpenEXRCore/internal_zstd.c
+index 670b92a73c768ebf3b5cc4cec26d92c90fe23b79..26e0607993ed4c0b54d3798d64a0860598581ab4 100644
+--- a/src/lib/OpenEXRCore/internal_zstd.c
++++ b/src/lib/OpenEXRCore/internal_zstd.c
+@@ -774,6 +774,71 @@ get_row_sample_count_decode (
+     return false;
+ }
+ 
++static exr_result_t
++exr_zstd_validate_deep_sample_counts (
++    const exr_decode_pipeline_t*     decode,
++    const exr_coding_channel_info_t* channels,
++    int                              channel_count,
++    uint64_t                         uncompressed_size)
++{
++    uint64_t       total_bytes = 0;
++    const int32_t* row;
++
++    if (!decode->sample_count_table || decode->chunk.width <= 0 ||
++        decode->chunk.height <= 0 || channel_count <= 0)
++        return EXR_ERR_CORRUPT_CHUNK;
++
++    for (int h = 0; h < decode->chunk.height; ++h)
++    {
++        int32_t previous = 0;
++        uint64_t row_bytes = 0;
++
++        row = decode->sample_count_table +
++              (size_t) h * (size_t) decode->chunk.width;
++        for (int x = 0; x < decode->chunk.width; ++x)
++        {
++            if (row[x] < previous) return EXR_ERR_CORRUPT_CHUNK;
++            previous = row[x];
++        }
++
++        if (previous == 0 &&
++            (decode->decode_flags & EXR_DECODE_SAMPLE_COUNTS_AS_INDIVIDUAL) !=
++                0)
++        {
++            size_t total_offset =
++                (size_t) decode->chunk.width * (size_t) decode->chunk.height;
++            uint64_t trailing_total = 0;
++            for (int c = 0; c < channel_count; ++c)
++            {
++                int32_t value = decode->sample_count_table[total_offset + c];
++                trailing_total += (uint64_t) (uint32_t) value;
++            }
++            if (trailing_total != 0) return EXR_ERR_CORRUPT_CHUNK;
++        }
++
++        for (int c = 0; c < channel_count; ++c)
++        {
++            if (channels[c].bytes_per_element != 2 &&
++                channels[c].bytes_per_element != 4)
++                return EXR_ERR_CORRUPT_CHUNK;
++
++            uint64_t channel_bytes = (uint64_t) channels[c].bytes_per_element;
++            uint64_t available = UINT64_MAX - row_bytes;
++            uint64_t samples    = (uint64_t) previous;
++            if (samples > available / channel_bytes)
++                return EXR_ERR_CORRUPT_CHUNK;
++            row_bytes += samples * channel_bytes;
++        }
++
++        if (row_bytes > UINT64_MAX - total_bytes)
++            return EXR_ERR_CORRUPT_CHUNK;
++        total_bytes += row_bytes;
++    }
++
++    if (total_bytes != uncompressed_size) return EXR_ERR_CORRUPT_CHUNK;
++    return EXR_ERR_SUCCESS;
++}
++
+ bool
+ get_row_sample_count_encode (
+     const exr_encode_pipeline_t* encode, uint64_t* row_sample_counts)
+@@ -1261,6 +1326,16 @@ exr_undo_zstd_v1 (
+         &pack_channels,
+         &pack_channel_count);
+ 
++    if (grid_scenario == EXR_ZSTD_GRID_DEEP_PIXELS)
++    {
++        exr_result_t validate = exr_zstd_validate_deep_sample_counts (
++            decode,
++            pack_channels,
++            pack_channel_count,
++            uncompressed_size);
++        if (validate != EXR_ERR_SUCCESS) return validate;
++    }
++
+     int const chunk_line_count = decode->chunk.height;
+     int const channel_count    = pack_channel_count;
+ 
+@@ -1400,4 +1475,4 @@ internal_exr_undo_zstd (
+         comp_buf_size,
+         uncompressed_data,
+         uncompressed_size);
+-}
+\ No newline at end of file
++}

@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-415",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "8e7f95e00b8eb41d6c2c7659440cc179771d8f0a",
+  "parent_sha": "8e7f95e00b8eb41d6c2c7659440cc179771d8f0a",
+  "project": "libwebp",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/webmproject/libwebp",
+  "repo_url": "https://github.com/webmproject/libwebp",
+  "source": "reselect",
+  "target": "libwebp",
+  "task": "WebPAnimEncoderAdd/Assemble (libwebpmux) with a user progress_hook that aborts the 2nd candidate: SetFrame() Err path frees candidates[i].mem while that buffer is aliased into encoded_frame, then FrameRelease() frees it again. Single file src/mux/anim_encode.c.",
+  "task_iid": "libwebp__anim_encode_double_free_setframe",
+  "vuln_desc": "WebPAnimEncoderAdd/Assemble (libwebpmux) with a user progress_hook that aborts the 2nd candidate: SetFrame() Err path frees candidates[i].mem while that buffer is aliased into encoded_frame, then FrameRelease() frees it again. Single file src/mux/anim_encode.c."
+}

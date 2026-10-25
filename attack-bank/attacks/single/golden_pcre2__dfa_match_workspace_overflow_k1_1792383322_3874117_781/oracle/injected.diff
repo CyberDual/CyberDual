@@ -1,0 +1,94 @@
+diff --git a/src/pcre2_dfa_match.c b/src/pcre2_dfa_match.c
+index 314e97754e25f9629091d4aaaf4bc7625b32e5e3..ea617192cc901e94faaa3948d2bc0daa96cd969c 100644
+--- a/src/pcre2_dfa_match.c
++++ b/src/pcre2_dfa_match.c
+@@ -422,6 +422,10 @@ more_workspace(RWS_anchor **rwsptr, unsigned int ovecsize, dfa_match_block *mb)
+ {
+ RWS_anchor *rws = *rwsptr;
+ RWS_anchor *new;
++uint32_t requested;
++
++PCRE2_ASSERT(ovecsize <= UINT32_MAX - RWS_RSIZE - RWS_ANCHOR_SIZE);
++requested = RWS_RSIZE + ovecsize + RWS_ANCHOR_SIZE;
+ 
+ if (rws->next != NULL)
+   {
+@@ -434,14 +438,31 @@ overflow. */
+ 
+ else
+   {
+-  uint32_t newsize = (rws->size >= UINT32_MAX/(sizeof(int)*2))? UINT32_MAX/sizeof(int) : rws->size * 2;
++  uint32_t newsize = (rws->size >= (UINT32_MAX/sizeof(int))/2)?
++    UINT32_MAX/sizeof(int) : rws->size * 2;
+   uint32_t newsizeK = newsize/(1024/sizeof(int));
+ 
+-  if (newsizeK + mb->heap_used > mb->heap_limit)
+-    newsizeK = (uint32_t)(mb->heap_limit - mb->heap_used);
+-  newsize = newsizeK*(1024/sizeof(int));
++  /* Clamp the allocation to the remaining heap allowance with care for
++  overflows */
++
++  if (mb->heap_used >= mb->heap_limit)
++    {
++    newsize = 0;
++    newsizeK = 0;
++    }
++  else
++    {
++    PCRE2_SIZE availableK = mb->heap_limit - mb->heap_used;
++    /* newsize always capped at UINT32_MAX/sizeof(int), so newsizeK also capped;
++    and - if availableK is smaller - then multiplication to form newsize is safe */
++    if (newsizeK > availableK)
++      {
++      newsize = (uint32_t)(availableK*(1024/sizeof(int)));
++      newsizeK = availableK;
++      }
++    }
+ 
+-  if (newsize < RWS_RSIZE + ovecsize + RWS_ANCHOR_SIZE)
++  if (newsize < requested)
+     return PCRE2_ERROR_HEAPLIMIT;
+   new = mb->memctl.malloc(newsize*sizeof(int), mb->memctl.memory_data);
+   if (new == NULL) return PCRE2_ERROR_NOMEMORY;
+diff --git a/testdata/testinput6 b/testdata/testinput6
+index f6f5cbf4b79937354912270394d2e7d51175cbbd..b05e4fdd5eee164f4fe23fd6de132d7925502d60 100644
+--- a/testdata/testinput6
++++ b/testdata/testinput6
+@@ -5263,4 +5263,15 @@
+     abc\=replace=xyz
+     abc\=replace=xyz,substitute_matched
+ 
++
++# --------------
++
++# Test workspace resizing and workspace re-use
++
++/(*LIMIT_HEAP=4)(?=(?=(?=(?=(?=(?=(?=(?=(?=a)))))))))/
++    a\=dfa
++
++/(*LIMIT_HEAP=4)(?=(?=(?=(?=(?=(?=(?=(?=a))(?=(?=a))))))))/
++    a\=dfa
++
+ # End of testinput6
+diff --git a/testdata/testoutput6 b/testdata/testoutput6
+index 8ecf0040c4e8685955f50d425bd6383dc891ba87..f07fc34a537c37bf934c834efcdb0fd4f5cdb103 100644
+--- a/testdata/testoutput6
++++ b/testdata/testoutput6
+@@ -8237,4 +8237,17 @@ Failed: error -42: pattern contains an item that is not supported for DFA matchi
+     abc\=replace=xyz,substitute_matched
+ Failed: error -41: function is not supported for DFA matching
+ 
++
++# --------------
++
++# Test workspace resizing and workspace re-use
++
++/(*LIMIT_HEAP=4)(?=(?=(?=(?=(?=(?=(?=(?=(?=a)))))))))/
++    a\=dfa
++Failed: error -63: heap limit exceeded
++
++/(*LIMIT_HEAP=4)(?=(?=(?=(?=(?=(?=(?=(?=a))(?=(?=a))))))))/
++    a\=dfa
++ 0: 
++
+ # End of testinput6

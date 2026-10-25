@@ -1,0 +1,21 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index c4aadb9b008d1deb4cdaddb955f1e3abdbd1cc81..11193909d0a5d5f30ebb49b5de99f258f9231c26 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -940,7 +940,7 @@ index_dup_stream(const index_stream *src, const lzma_allocator *allocator)
+ 	destg->node.compressed_base = 0;
+ 	destg->number_base = 1;
+ 	destg->allocated = src->record_count;
+-	destg->last = src->record_count - 1;
++	destg->last = src->record_count + src->groups.count - 2;
+ 
+ 	// Go through all the groups in src and copy the Records into destg.
+ 	const index_group *srcg = (const index_group *)(src->groups.leftmost);
+@@ -974,6 +974,7 @@ lzma_index_dup(const lzma_index *src, const lzma_allocator *allocator)
+ 	dest->total_size = src->total_size;
+ 	dest->record_count = src->record_count;
+ 	dest->index_list_size = src->index_list_size;
++	dest->checks = src->checks;
+ 
+ 	// Copy the Streams and the groups in them.
+ 	const index_stream *srcstream

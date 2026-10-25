@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "255f4122b48bc2be1210ca18e3d4527c0eba4f7f",
+      "edited_message": null,
+      "patch": "diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c\nindex ceaa922..93ff615 100644\n--- a/src/liblzma/common/index.c\n+++ b/src/liblzma/common/index.c\n@@ -26,7 +26,7 @@\n ///\n /// This should be big enough to avoid making lots of tiny allocations\n /// but small enough to avoid too much unused memory at once.\n-#define INDEX_GROUP_SIZE 512\n+#define INDEX_GROUP_SIZE 1024\n \n \n /// \\brief      How many Records can be allocated at once at maximum\n"
+    },
+    {
+      "sha": "06f858d2729a25119230dbea3d35061da70689d2",
+      "edited_message": null,
+      "patch": "diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c\nindex 3fbb5b1..5efac18 100644\n--- a/src/liblzma/common/index.c\n+++ b/src/liblzma/common/index.c\n@@ -188,7 +188,7 @@ struct lzma_index_s {\n \t/// How many Records to allocate at once in lzma_index_append().\n \t/// This defaults to INDEX_GROUP_SIZE but can be overridden with\n \t/// lzma_index_prealloc().\n-\tsize_t prealloc;\n+\tunsigned int prealloc : 10;\n \n \t/// Bitmask indicating what integrity check types have been used\n \t/// as set by lzma_index_stream_flags(). The bit of the last Stream\n@@ -448,7 +448,7 @@ index_init_plain(const lzma_allocator *allocator)\n \t\ti->total_size = 0;\n \t\ti->record_count = 0;\n \t\ti->index_list_size = 0;\n-\t\ti->prealloc = INDEX_GROUP_SIZE;\n+\t\tlzma_index_prealloc(i, INDEX_GROUP_SIZE);\n \t\ti->checks = 0;\n \t}\n \n@@ -517,7 +517,7 @@ lzma_index_prealloc(lzma_index *i, lzma_vli records)\n \tif (records == 0)\n \t\trecords = INDEX_GROUP_SIZE;\n \n-\ti->prealloc = (size_t)(records);\n+\ti->prealloc = (unsigned int)(my_min(records, INDEX_GROUP_SIZE));\n \treturn false;\n }\n \n@@ -767,7 +767,6 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,\n \t\t++g->last;\n \t} else {\n \t\t// We need to allocate a new group.\n-\t\tassert(i->prealloc > 0);\n \t\tg = lzma_alloc(sizeof(index_group)\n \t\t\t\t+ i->prealloc * sizeof(index_record),\n \t\t\t\tallocator);\n@@ -779,7 +778,7 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,\n \n \t\t// Reset prealloc so that if the application happens to\n \t\t// add new Records, the allocation size will be sane.\n-\t\ti->prealloc = INDEX_GROUP_SIZE;\n+\t\tlzma_index_prealloc(i, INDEX_GROUP_SIZE);\n \n \t\t// Set the start offsets of this group.\n \t\tg->node.uncompressed_base = uncompressed_base;\n"
+    }
+  ],
+  "coupling": "The earlier Index maintenance commit raises the default Record-group allocation from 512 to 1024. The later commit stores that allocation count in a 10-bit field while routing initialization and resets through lzma_index_prealloc(). Either edit alone supports a nonzero allocation count: 1024 fits the original size_t field, and 512 fits the narrowed field. Together, 1024 wraps to zero; lzma_index_append() allocates only the group header and writes its first Record past the heap allocation. Repair requires reconciling the group-size bound with the preallocation field and its consumers across both commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "lzma_index_init() and lzma_index_append()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

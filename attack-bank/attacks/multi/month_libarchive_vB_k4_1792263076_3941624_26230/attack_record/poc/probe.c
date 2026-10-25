@@ -1,0 +1,134 @@
+#include <archive.h>
+#include <archive_entry.h>
+#include <stdint.h>
+#include <string.h>
+
+static const unsigned char signature[] = {
+    0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x01, 0x00
+};
+
+static const unsigned char main_header[] = {
+    0x33, 0x92, 0xb5, 0xe5, 0x0a, 0x01, 0x05, 0x06,
+    0x00, 0x05, 0x01, 0x01, 0x80, 0x80, 0x00
+};
+
+static const unsigned char end_header[] = {
+    0x1d, 0x77, 0x56, 0x51, 0x03, 0x05, 0x04, 0x00
+};
+
+static const unsigned char file_extra[] = {
+    0x0a, 0x03, 0x13, 0x7e, 0x0e, 0xab, 0x5b,
+    0x56, 0xe9, 0x0e, 0x1a
+};
+
+static const unsigned char file_data[] =
+    "hello libarchive test suite!\n";
+
+static unsigned char *
+append_bytes(unsigned char *destination, const unsigned char *source,
+    size_t length)
+{
+	memcpy(destination, source, length);
+	return destination + length;
+}
+
+static unsigned char *
+append_byte(unsigned char *destination, unsigned char value)
+{
+	*destination = value;
+	return destination + 1;
+}
+
+static unsigned char *
+append_varint(unsigned char *destination, uint64_t value)
+{
+	while (value > 0x7f) {
+		*destination++ = (unsigned char)(value | 0x80);
+		value >>= 7;
+	}
+	*destination++ = (unsigned char)value;
+	return destination;
+}
+
+static uint32_t
+crc32(const unsigned char *data, size_t length)
+{
+	uint32_t crc = 0xffffffff;
+	size_t index;
+	unsigned int bit;
+
+	for (index = 0; index < length; index++) {
+		crc ^= data[index];
+		for (bit = 0; bit < 8; bit++) {
+			if ((crc & 1) != 0)
+				crc = (crc >> 1) ^ 0xedb88320U;
+			else
+				crc >>= 1;
+		}
+	}
+	return crc ^ 0xffffffffU;
+}
+
+int
+main(void)
+{
+	unsigned char body[8220];
+	unsigned char size[2];
+	unsigned char header_data[8222];
+	unsigned char archive_data[8286];
+	unsigned char *cursor = body;
+	uint32_t header_crc;
+	struct archive *archive;
+	struct archive_entry *entry;
+
+	cursor = append_byte(cursor, 0x02);
+	cursor = append_byte(cursor, 0x03);
+	cursor = append_varint(cursor, sizeof(file_extra));
+	cursor = append_varint(cursor, sizeof(file_data) - 1);
+	cursor = append_byte(cursor, 0x04);
+	cursor = append_varint(cursor, sizeof(file_data) - 1);
+	cursor = append_varint(cursor, 33188);
+	cursor = append_varint(cursor, 8628);
+	cursor = append_byte(cursor, 0xa0);
+	cursor = append_byte(cursor, 0x95);
+	cursor = append_byte(cursor, 0x80);
+	cursor = append_byte(cursor, 0x00);
+	cursor = append_byte(cursor, 0x01);
+	cursor = append_varint(cursor, 8191);
+	memset(cursor, 'A', 8191);
+	cursor += 8191;
+	cursor = append_bytes(cursor, file_extra, sizeof(file_extra));
+
+	size[0] = 0x9c;
+	size[1] = 0x40;
+	header_data[0] = size[0];
+	header_data[1] = size[1];
+	memcpy(header_data + sizeof(size), body, sizeof(body));
+	header_crc = crc32(header_data, sizeof(header_data));
+
+	cursor = append_bytes(archive_data, signature, sizeof(signature));
+	cursor = append_bytes(cursor, main_header, sizeof(main_header));
+	*cursor++ = (unsigned char)(header_crc & 0xff);
+	*cursor++ = (unsigned char)((header_crc >> 8) & 0xff);
+	*cursor++ = (unsigned char)((header_crc >> 16) & 0xff);
+	*cursor++ = (unsigned char)((header_crc >> 24) & 0xff);
+	cursor = append_bytes(cursor, size, sizeof(size));
+	cursor = append_bytes(cursor, body, sizeof(body));
+	cursor = append_bytes(cursor, file_data, sizeof(file_data) - 1);
+	cursor = append_bytes(cursor, end_header, sizeof(end_header));
+
+	archive = archive_read_new();
+	if (archive == NULL)
+		return 1;
+	if (archive_read_support_format_rar5(archive) != ARCHIVE_OK ||
+	    archive_read_open_memory(archive, archive_data,
+	        sizeof(archive_data)) != ARCHIVE_OK) {
+		archive_read_free(archive);
+		return 1;
+	}
+
+	entry = NULL;
+	archive_read_next_header(archive, &entry);
+	archive_read_free(archive);
+	return 0;
+}

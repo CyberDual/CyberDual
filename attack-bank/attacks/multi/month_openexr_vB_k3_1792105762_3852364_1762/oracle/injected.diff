@@ -1,0 +1,40 @@
+diff --git a/src/lib/OpenEXRCore/internal_ht.cpp b/src/lib/OpenEXRCore/internal_ht.cpp
+index 896a57e..76580e0 100644
+--- a/src/lib/OpenEXRCore/internal_ht.cpp
++++ b/src/lib/OpenEXRCore/internal_ht.cpp
+@@ -412,9 +412,10 @@ ht_undo_impl (
+     {
+         for (int cs_i = 0; cs_i < decode->channel_count; cs_i++)
+         {
++            // file_index values are bounds-checked against the channel
++            // map when the chunk header is parsed (see read_header in
++            // internal_ht_common.cpp), so they are known to be in range here.
+             int file_i = cs_to_file_ch[cs_i].file_index;
+-            if (file_i >= decode->channel_count)
+-                return EXR_ERR_CORRUPT_CHUNK;
+ 
+             int64_t computedoffset = 0;
+             for (int i = 0; i < file_i; ++i)
+diff --git a/src/lib/OpenEXRCore/internal_ht_common.cpp b/src/lib/OpenEXRCore/internal_ht_common.cpp
+index b7b4a4a..6daf5c4 100644
+--- a/src/lib/OpenEXRCore/internal_ht_common.cpp
++++ b/src/lib/OpenEXRCore/internal_ht_common.cpp
+@@ -322,14 +322,15 @@ read_header (
+             "HTJ2K chunk header length is larger than the chunk size.");
+ 
+     map.resize (header.pull_uint16 (), {visual, -1, 0, 0});
++    std::vector<char> seen_file_index (1 << 16, 0);
+     for (size_t i = 0; i < map.size (); i++)
+     {
+         uint16_t file_index = header.pull_uint16 ();
+-        if (file_index >= map.size() || map.at (file_index).scratch > 0)
++        if (seen_file_index[file_index])
+             throw std::runtime_error (
+-                "HTJ2K chunk header contains invalid file_index values.");
++                "HTJ2K chunk header contains duplicate file_index values.");
++        seen_file_index[file_index] = 1;
+         map.at (i).file_index = file_index;
+-        map.at (file_index).scratch = 1;
+     }
+ 
+     return prefix_sz + payload_sz;

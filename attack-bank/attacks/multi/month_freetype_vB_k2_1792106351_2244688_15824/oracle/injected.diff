@@ -1,0 +1,123 @@
+diff --git a/src/truetype/ttvarc.c b/src/truetype/ttvarc.c
+index 50d08bc..5415324 100644
+--- a/src/truetype/ttvarc.c
++++ b/src/truetype/ttvarc.c
+@@ -774,9 +774,10 @@
+           FT_UInt  cnt;
+ 
+ 
+-          /* read control byte */
++          /* read control byte; a damaged record can end */
++          /* mid-array -- keep the values decoded so far */
+           if ( *p >= limit )
+-            goto Fail;
++            break;
+           control = *(*p)++;
+ 
+           /* extract run count (lower 6 bits), add 1 */
+@@ -789,7 +790,7 @@
+           {
+             /* Both bits set = 32-bit signed integers */
+             if ( *p + 4 * cnt > limit )
+-              goto Fail;
++              break;
+             for ( j = 0; j < cnt; j++ )
+             {
+               /* read as signed 32-bit integer,     */
+@@ -814,7 +815,7 @@
+           {
+             /* bit 6 set = 2-byte signed integers */
+             if ( *p + 2 * cnt > limit )
+-              goto Fail;
++              break;
+             for ( j = 0; j < cnt; j++ )
+             {
+               /* read as signed 16-bit integer,     */
+@@ -831,7 +832,7 @@
+           {
+             /* neither bit set = 1-byte signed integers */
+             if ( *p + cnt > limit )
+-              goto Fail;
++              break;
+             for ( j = 0; j < cnt; j++ )
+             {
+               /* read signed byte integer,          */
+@@ -843,6 +844,10 @@
+             }
+           }
+         }
++
++        /* the record can hold fewer values than the entry implies; */
++        /* clamp the count to what was actually decoded             */
++        component->num_axis_values = i;
+       }
+     }
+ 
+@@ -2009,7 +2014,8 @@
+    *     Index into the TupleList.
+    *
+    *   num_indices ::
+-   *     Number of indices to read.
++   *     Number of indices the caller expects; the entry must hold at
++   *     least this many.
+    *
+    * @Output:
+    *   indices ::
+@@ -2048,9 +2054,10 @@
+     tuple_limit = tuple_data + tuple_size;
+     p           = tuple_data;
+ 
+-    /* read indices using TupleValues encoding */
++    /* read indices using TupleValues encoding; the entry is */
++    /* authoritative for the count, so decode every run it holds */
+     i = 0;
+-    while ( i < num_indices && p < tuple_limit )
++    while ( p < tuple_limit )
+     {
+       FT_Byte  control;
+       FT_UInt  cnt;
+@@ -2059,16 +2066,13 @@
+       control = *p++;
+       cnt     = ( control & 0x3F ) + 1;
+ 
+-      if ( cnt > num_indices - i )
+-        cnt = num_indices - i;
+-
+       if ( ( control & 0xC0 ) == 0xC0 )
+       {
+         /* 32-bit values */
+         if ( p + 4 * cnt > tuple_limit )
+           return FT_THROW( Invalid_Table );
+ 
+-        for ( j = 0; j < cnt && i < num_indices; j++, i++ )
++        for ( j = 0; j < cnt; j++, i++ )
+         {
+           indices[i] = ( (FT_UInt)p[0] << 24 ) |
+                        ( (FT_UInt)p[1] << 16 ) |
+@@ -2080,7 +2084,7 @@
+       else if ( control & 0x80 )
+       {
+         /* zeros */
+-        for ( j = 0; j < cnt && i < num_indices; j++, i++ )
++        for ( j = 0; j < cnt; j++, i++ )
+           indices[i] = 0;
+       }
+       else if ( control & 0x40 )
+@@ -2089,7 +2093,7 @@
+         if ( p + 2 * cnt > tuple_limit )
+           return FT_THROW( Invalid_Table );
+ 
+-        for ( j = 0; j < cnt && i < num_indices; j++, i++ )
++        for ( j = 0; j < cnt; j++, i++ )
+         {
+           indices[i] = ( (FT_UInt)p[0] << 8 ) |
+                          (FT_UInt)p[1];
+@@ -2102,7 +2106,7 @@
+         if ( p + cnt > tuple_limit )
+           return FT_THROW( Invalid_Table );
+ 
+-        for ( j = 0; j < cnt && i < num_indices; j++, i++ )
++        for ( j = 0; j < cnt; j++, i++ )
+           indices[i] = *p++;
+       }
+     }

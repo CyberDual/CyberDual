@@ -1,0 +1,32 @@
+diff --git a/src/sfnt/ttmtx.c b/src/sfnt/ttmtx.c
+index 60dce87d841a14ffd408ca473e85dedb3b7fa496..5334cd0f5e1290cbc986684c03340310b2918a0a 100644
+--- a/src/sfnt/ttmtx.c
++++ b/src/sfnt/ttmtx.c
+@@ -306,7 +306,8 @@
+     }
+ 
+ #ifdef TT_CONFIG_OPTION_GX_VAR_SUPPORT
+-    if ( var && FT_IS_VARIATION( &face->root ) )
++    if ( var && ( FT_IS_VARIATION( &face->root )       ||
++                  FT_IS_NAMED_INSTANCE( &face->root )  ) )
+     {
+       FT_Face  f = FT_FACE( face );
+       FT_Int   a = (FT_Int)*aadvance;
+diff --git a/src/truetype/ttgxvar.c b/src/truetype/ttgxvar.c
+index c89ac53acada5772221fd9cccb07b9152e282653..318b84f65f67c5c69b137f614513de4738a328bf 100644
+--- a/src/truetype/ttgxvar.c
++++ b/src/truetype/ttgxvar.c
+@@ -1431,12 +1431,9 @@
+ 
+     if ( table->widthMap.innerIndex )
+     {
+-      FT_UInt  idx = gindex;
++      FT_UInt  idx = FT_MIN( gindex, table->widthMap.mapCount );
+ 
+ 
+-      if ( idx >= table->widthMap.mapCount )
+-        idx = table->widthMap.mapCount - 1;
+-
+       /* trust that HVAR parser has checked indices */
+       outerIndex = table->widthMap.outerIndex[idx];
+       innerIndex = table->widthMap.innerIndex[idx];

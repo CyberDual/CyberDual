@@ -1,0 +1,14 @@
+{
+ "project": "freetype",
+ "window_id": "8276c411cc7906a905cd62695f3bfc82d9f151a5c88dd0a07018c1e670686abd",
+ "base": "5336c0d4da22a13dab3389eb153b12672fdf841c",
+ "maint_batch_tip": "22a438daa53c8775248d5782c10b6c0632ecfaab",
+ "tree": "6bf7450ff217971cbce0bfec5b26094d32ca1106",
+ "n_commits": 50,
+ "n_editable": 50,
+ "list_sha1": "e6d45516df244330753c033e05b27bbf4f9cfc04",
+ "tar_sha256": "19d0a1f944993d07bd5bd0467e6f9d10396db36a8eaa7871b26efdcf7b18bde2",
+ "tar_bytes": 48035840,
+ "built_utc": "2026-10-17T20:13:30Z",
+ "cyberdual": "f685a97c"
+}

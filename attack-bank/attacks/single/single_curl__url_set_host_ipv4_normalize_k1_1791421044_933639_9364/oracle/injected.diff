@@ -1,0 +1,59 @@
+diff --git a/lib/urlapi.c b/lib/urlapi.c
+index 1c4db04e46388df390e037b5147724b62e40d809..57b0f623bd88b5372fdef1f26c5d7dc44657856b 100644
+--- a/lib/urlapi.c
++++ b/lib/urlapi.c
+@@ -2044,6 +2044,7 @@ static CURLUcode url_sethost(CURLU *u, struct dynbuf *encp,
+ {
+   size_t n = curlx_dyn_len(encp);
+   bool bad = FALSE;
++  int type = HOST_NAME;
+   char *newp = curlx_dyn_ptr(encp);
+   if(!n)
+     /* an empty hostname is okay if told so */
+@@ -2056,14 +2057,36 @@ static CURLUcode url_sethost(CURLU *u, struct dynbuf *encp,
+     CURLcode result = Curl_urldecode(newp, n, &decoded, &dlen, REJECT_CTRL);
+     if(result || hostname_check6(u, decoded, dlen))
+       bad = TRUE;
++    else if(decoded[0] != '[') {
++      if(memchr(newp, '%', n)) {
++        struct dynbuf host;
++        curlx_dyn_init(&host, CURL_MAX_INPUT_LENGTH);
++        result = curlx_dyn_addn(&host, decoded, dlen);
++        type = result ? HOST_ERROR : ipv4_normalize(&host);
++        if(type == HOST_IPV4) {
++          curlx_dyn_free(encp);
++          *encp = host;
++        }
++        else
++          curlx_dyn_free(&host);
++      }
++      else
++        type = ipv4_normalize(encp);
++    }
+     curlx_free(decoded);
+   }
+   else if(hostname_check6(u, newp, n))
+     bad = TRUE;
++  else if(newp[0] != '[')
++    type = ipv4_normalize(encp);
+   if(bad) {
+     curlx_dyn_free(encp);
+     return CURLUE_BAD_HOSTNAME;
+   }
++  if(type == HOST_ERROR) {
++    curlx_dyn_free(encp);
++    return CURLUE_OUT_OF_MEMORY;
++  }
+   return CURLUE_OK;
+ }
+ 
+@@ -2143,7 +2166,8 @@ CURLUcode curl_url_set(CURLU *u, CURLUPart what,
+     const char *newp = NULL;
+     struct dynbuf enc;
+     CURLUcode status;
+-    curlx_dyn_init(&enc, (nalloc * 3) + 1 + leadingslash);
++    curlx_dyn_init(&enc, what == CURLUPART_HOST ? CURL_MAX_INPUT_LENGTH :
++                   (nalloc * 3) + 1 + leadingslash);
+ 
+     if(leadingslash && (part[0] != '/')) {
+       CURLcode result = curlx_dyn_addn(&enc, "/", 1);

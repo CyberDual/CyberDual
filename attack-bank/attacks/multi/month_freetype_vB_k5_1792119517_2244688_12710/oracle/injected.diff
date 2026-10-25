@@ -1,0 +1,57 @@
+diff --git a/src/truetype/ttgxvar.c b/src/truetype/ttgxvar.c
+index 2b25680..498c496 100644
+--- a/src/truetype/ttgxvar.c
++++ b/src/truetype/ttgxvar.c
+@@ -2135,8 +2135,13 @@
+ 
+   Exit:
+     if ( error && blend_created )
++    {
+       tt_done_blend( FT_FACE( face ) );
+ 
++      /* the face may outlive its blend (e.g., after a failed setup) */
++      face->blend = NULL;
++    }
++
+     return error;
+ 
+   Fail2:
+@@ -5166,9 +5171,6 @@
+       FT_FREE( blend->tuplecoords );
+       FT_FREE( blend->glyphoffsets );
+       FT_FREE( blend );
+-
+-      /* the face may outlive its blend (e.g., after a failed setup) */
+-      ttface->blend = NULL;
+     }
+   }
+ 
+diff --git a/src/truetype/ttobjs.c b/src/truetype/ttobjs.c
+index 8c76e23..78c2c3b 100644
+--- a/src/truetype/ttobjs.c
++++ b/src/truetype/ttobjs.c
+@@ -853,6 +853,7 @@
+ 
+ #ifdef TT_CONFIG_OPTION_GX_VAR_SUPPORT
+     tt_done_blend( ttface );
++    face->blend = NULL;
+ #endif
+   }
+ 
+diff --git a/src/truetype/ttvarc.c b/src/truetype/ttvarc.c
+index 50d08bc..35afa9d 100644
+--- a/src/truetype/ttvarc.c
++++ b/src/truetype/ttvarc.c
+@@ -3623,6 +3623,12 @@
+         tt_varc_set_normalized_coords( face,
+                                        context->font_coords,
+                                        context->num_font_coords );
++
++      /* A private blend created for static component axes carries */
++      /* no user state; drop it together with the load context,    */
++      /* to be re-created lazily by the next load that needs it.   */
++      if ( static_axes )
++        tt_done_blend( (FT_Face)face );
+ #endif
+       if ( context->font_coords )
+         FT_FREE( context->font_coords );

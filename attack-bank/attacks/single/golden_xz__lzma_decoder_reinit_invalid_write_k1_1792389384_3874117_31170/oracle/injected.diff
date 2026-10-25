@@ -1,0 +1,25 @@
+diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c
+index 1cb120ab3b0922ed7353a0a25046850014fcb65f..9f4f0764dd98d3dd8d766424fda15538eea4c618 100644
+--- a/src/liblzma/lz/lz_decoder.c
++++ b/src/liblzma/lz/lz_decoder.c
+@@ -278,6 +278,11 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 
+ 	// Allocate and initialize the dictionary.
+ 	if (coder->dict.size != alloc_size) {
++		// Reset the size so that if the allocation of the new buffer
++		// fails, a later reinit of this coder won't skip the allocation
++		// after noticing that the size is already the correct one.
++		coder->dict.size = 0;
++
+ 		lzma_free(coder->dict.buf, allocator);
+ 
+ 		// The LZ_DICT_EXTRA bytes at the end of the buffer aren't
+@@ -303,7 +308,7 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 		// If the preset dictionary is bigger than the actual
+ 		// dictionary, copy only the tail.
+ 		const size_t copy_size = my_min(lz_options.preset_dict_size,
+-				lz_options.dict_size);
++				coder->dict.size);
+ 		const size_t offset = lz_options.preset_dict_size - copy_size;
+ 		memcpy(coder->dict.buf + coder->dict.pos,
+ 				lz_options.preset_dict + offset,

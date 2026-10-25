@@ -1,0 +1,13 @@
+diff --git a/src/enc/picture_rescale_enc.c b/src/enc/picture_rescale_enc.c
+index df01052e367614d078a8e59b0d3c2d51353e5d18..91d2631fbe102750b29051b6ec56bddd4096fbb3 100644
+--- a/src/enc/picture_rescale_enc.c
++++ b/src/enc/picture_rescale_enc.c
+@@ -53,7 +53,7 @@ static int AdjustAndCheckRectangle(const WebPPicture* const pic,
+   SnapTopLeftPosition(pic, left, top);
+   if ((*left) < 0 || (*top) < 0) return 0;
+   if (width <= 0 || height <= 0) return 0;
+-  if ((*left) + width > pic->width) return 0;
++  if (width > pic->width || width > pic->width - (*left)) return 0;
+   if ((*top) + height > pic->height) return 0;
+   return 1;
+ }

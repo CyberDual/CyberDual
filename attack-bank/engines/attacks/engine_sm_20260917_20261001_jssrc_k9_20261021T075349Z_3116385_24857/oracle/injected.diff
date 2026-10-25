@@ -1,0 +1,57 @@
+diff --git a/js/src/shell/ModuleLoader.cpp b/js/src/shell/ModuleLoader.cpp
+index f12235afeb0f3..6f5a6652e6942 100644
+--- a/js/src/shell/ModuleLoader.cpp
++++ b/js/src/shell/ModuleLoader.cpp
+@@ -269,10 +269,12 @@ bool ModuleLoader::DynamicImportLoadResolved(JSContext* cx, unsigned argc,
+                                          LoadReactionHostDefinedSlot)
+                .toObject());
+ 
+-  RootedValue referrer(cx, JS::GetReservedSlot(closure, ClosureReferrerSlot));
++  JS::Rooted<JS::Value> referrer(
++      cx, JS::GetReservedSlot(closure, ClosureReferrerSlot));
+   RootedObject moduleRequest(
+       cx, &JS::GetReservedSlot(closure, ClosureModuleRequestSlot).toObject());
+-  RootedValue payload(cx, JS::GetReservedSlot(closure, ClosurePayloadSlot));
++  JS::Rooted<JS::Value> payload(
++      cx, JS::GetReservedSlot(closure, ClosurePayloadSlot));
+   RootedObject module(
+       cx, &JS::GetReservedSlot(closure, ClosureModuleSlot).toObject());
+ 
+diff --git a/js/src/vm/Modules.cpp b/js/src/vm/Modules.cpp
+index bb3841349841e..2e883e4c87d21 100644
+--- a/js/src/vm/Modules.cpp
++++ b/js/src/vm/Modules.cpp
+@@ -133,16 +133,19 @@ static ModuleObject* GetEnclosingModule(JSScript* script) {
+ // Get the module record from a |referrer| value built by
+ // ReferrerValueForScript, or nullptr if the referrer is not a module.
+ static ModuleObject* ReferrerModuleOrNull(Handle<Value> referrer) {
+-  if (!referrer.isObject()) {
+-    return nullptr;
++  if (referrer.get().isDouble()) {
++    uintptr_t encoded = reinterpret_cast<uintptr_t>(referrer.get().toPrivate());
++    if ((encoded & 1) != 0) {
++      return reinterpret_cast<ModuleObject*>(encoded & ~uintptr_t(1));
++    }
+   }
+ 
+-  JSObject* object = &referrer.toObject();
+-  if (!object->is<ModuleObject>()) {
++  if (!referrer.isObject()) {
+     return nullptr;
+   }
+ 
+-  return &object->as<ModuleObject>();
++  JSObject* object = &referrer.toObject();
++  return object->is<ModuleObject>() ? &object->as<ModuleObject>() : nullptr;
+ }
+ 
+ // Build the referrer value from |script|, and the returned JS::Value is passed
+@@ -156,7 +159,7 @@ static Value ReferrerValueForScript(JSScript* script) {
+   MOZ_ASSERT(script, "a dynamic import call always has a running script");
+ 
+   if (ModuleObject* module = GetEnclosingModule(script)) {
+-    return ObjectValue(*module);
++    return PrivateValue(reinterpret_cast<uintptr_t>(module) | 1);
+   }
+ 
+   return script->sourceObject()->getPrivate();

@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "7a84bc8716462b17baabbd04fdb42b3eae5df13b",
+      "edited_message": null,
+      "patch": "diff --git a/src/preview.cpp b/src/preview.cpp\nindex e8d199b..2938bec 100644\n--- a/src/preview.cpp\n+++ b/src/preview.cpp\n@@ -839,8 +839,9 @@ bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize) {\n   if (pixels > std::numeric_limits<size_t>::max() / bytesPerPixel)\n     return false;\n \n-  rgbSize = pixels * bytesPerPixel;\n-  return rgbSize <= maxAi7ThumbnailSize;\n+  const size_t bytes = pixels * bytesPerPixel;\n+  rgbSize = static_cast<uint32_t>(bytes);\n+  return rgbSize != 0 && rgbSize <= maxAi7ThumbnailSize;\n }\n \n DataBuf decodeHex(const byte* src, size_t srcSize) {\n"
+    },
+    {
+      "sha": "a66031141c694951624b4c203f6d981fb4a563f8",
+      "edited_message": "Avoid unsigned comparison warning\n\nCast the repeat count and compare it with the thumbnail RGB length.\n\n(cherry picked from commit 1d52e3da03565c25f8e0638ac4947de71d9057c4)\n",
+      "patch": "--- a/src/preview.cpp\n+++ b/src/preview.cpp\n@@ -39,7 +39,7 @@\n bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize);\n \n /// @brief Decode an Illustrator thumbnail that follows after %AI7_Thumbnail.\n-DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize);\n+DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize, size_t width, size_t height);\n \n /// @brief Create a PNM image from raw RGB data.\n DataBuf makePnm(size_t width, size_t height, const DataBuf& rgb);\n@@ -417,7 +417,7 @@\n       return {};\n     }\n     const DataBuf ai7thumbnail = decodeHex(data + nativePreview_.position_, nativePreview_.size_);\n-    const DataBuf rgb = decodeAi7Thumbnail(ai7thumbnail, expectedSize);\n+    const DataBuf rgb = decodeAi7Thumbnail(ai7thumbnail, expectedSize, width_, height_);\n     return makePnm(width_, height_, rgb);\n   }\n   if (nativePreview_.filter_ == \"hex-irb\") {\n@@ -918,7 +918,7 @@\n   return dest;\n }\n \n-DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {\n+DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize, size_t width, size_t height) {\n   const byte* colorTable = src.c_data();\n   const size_t colorTableSize = 256 * 3;\n   if (src.size() < colorTableSize) {\n@@ -955,7 +955,8 @@\n         value = imageData[i++];\n       }\n     }\n-    Internal::enforce(expectedSize - destPos >= static_cast<size_t>(num) * 3, ErrorCode::kerCorruptedMetadata);\n+    const size_t limit = width * height * 3;\n+    Internal::enforce(limit - destPos >= static_cast<size_t>(num) * 3, ErrorCode::kerCorruptedMetadata);\n     const auto c0 = colorTable[value * 3];\n     const auto c1 = colorTable[value * 3 + 1];\n     const auto c2 = colorTable[value * 3 + 2];\n"
+    }
+  ],
+  "coupling": "The overflow exists only when both edits of src/preview.cpp are combined; each one is behavior-preserving against the code it was written for. 7a84bc8 still rejects zero dimensions and size_t overflow, then stores the RGB length in a uint32_t and applies the 256MiB cap to that narrowed value. Consumers at that commit, and the preallocated decoder before a660311, use the returned length as both the allocation size and the maximum number of bytes they write, so truncation stops the decode instead of writing past the buffer. Thumbnails the original cap accepted are smaller than 4GiB, so the cast does not change them. a660311 still casts the RLE repeat count to size_t, which removes the sign-compare warning, but it measures remaining room with width*height*3 instead of the length ai7ThumbnailSize returned. On the unedited helper those quantities are equal whenever decoding is reached, so the comparison does not admit a store past the expectedSize allocation. With both edits, ai7ThumbnailSize accepts a 65537x65536 thumbnail because the low 32 bits of 65537*65536*3 are 196608, under the cap, while decodeAi7Thumbnail allocates that 196608-byte buffer and still allows writes out to the full product. The first byte past the allocation is a heap-buffer-overflow, reached from PreviewManager::getPreviewProperties. Applying only the narrowing leaves the write limit equal to the allocation; applying only the geometric limit leaves the helper rejecting the file before decode. A repair that preserves both new behaviors, the 32-bit reported length and the geometric write limit, has to change both sites so they name the same buffer. Rewriting a single diff as a self-contained fix leaves the other commit's contract in place and the overflow reachable.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Exiv2::ImageFactory::open / Image::readMetadata / PreviewManager::getPreviewProperties",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

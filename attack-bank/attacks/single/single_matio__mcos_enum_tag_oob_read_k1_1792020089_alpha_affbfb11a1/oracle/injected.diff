@@ -1,0 +1,42 @@
+diff --git a/src/mcos.c b/src/mcos.c
+index 5b7582866920c4b9ada50d1488fe8312baaab62a..1aab9b29e228254399db93c99b5c6026bb62891a 100644
+--- a/src/mcos.c
++++ b/src/mcos.c
+@@ -1551,6 +1551,7 @@ IsMCOSEncoded(const matvar_t *matvar)
+  *
+  * Enumeration instance arrays are stored as structs carrying an
+  * "EnumerationInstanceTag" field equal to the MCOS reference value.
++ * The tag can hold several values, so every element is checked.
+  *
+  * @param matvar  The variable to check
+  * @return 1 if an enumeration struct, 0 otherwise
+@@ -1559,6 +1560,8 @@ static int
+ IsEnumStruct(const matvar_t *matvar)
+ {
+     const matvar_t *tag;
++    const mat_uint32_t *values;
++    size_t i, nvalues = 1;
+ 
+     if ( matvar == NULL || matvar->class_type != MAT_C_STRUCT )
+         return 0;
+@@ -1567,7 +1570,19 @@ IsEnumStruct(const matvar_t *matvar)
+     if ( tag == NULL || tag->class_type != MAT_C_UINT32 || tag->data == NULL )
+         return 0;
+ 
+-    return ((const mat_uint32_t *)tag->data)[0] == MCOS_REF_VALUE;
++    if ( tag->nbytes < sizeof(mat_uint32_t) )
++        return 0;
++
++    if ( Mat_MulDims(tag, &nvalues) )
++        return 0;
++
++    values = (const mat_uint32_t *)tag->data;
++    for ( i = 0; i <= nvalues; i++ ) {
++        if ( values[i] == MCOS_REF_VALUE )
++            return 1;
++    }
++
++    return 0;
+ }
+ 
+ /** @brief Recursively check for a nested enumeration instance struct

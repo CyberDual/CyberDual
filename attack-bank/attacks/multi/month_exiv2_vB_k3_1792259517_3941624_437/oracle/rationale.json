@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "1a4fd76120f3108c51974dff1b6334cd4ddf2253",
+      "edited_message": "Remove unnecessary QuickTime tag buffer growth\n\nThe decoder only needs the four-byte box type. Avoid resizing the tag buffer to the payload size and construct the recursive tag name with an explicit length.",
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 513f94bf..a88a6719 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -576,9 +576,8 @@ void QuickTimeVideo::decodeBlock(size_t recursion_depth, std::string const& ente\n   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);\n \n   const long bufMinSize = 4;\n-  DataBuf buf(bufMinSize + 1);\n+  DataBuf buf(bufMinSize);\n   uint64_t size = 0;\n-  buf.data()[4] = '\\0';\n \n   io_->read(buf.data(), 4);\n   if (io_->eof()) {\n@@ -627,13 +626,13 @@ static std::string readString(BasicIo& io, size_t size) {\n \n void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size, size_t recursion_depth) {\n   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);\n-  assert(buf.size() > 4);\n+  assert(buf.size() >= 4);\n \n   if (ignoreList(buf))\n     discard(size);\n \n   else if (dataIgnoreList(buf)) {\n-    decodeBlock(recursion_depth + 1, Exiv2::toString(buf.data()));\n+    decodeBlock(recursion_depth + 1, std::string{buf.c_str(), 4});\n   } else if (equalsQTimeTag(buf, \"ftyp\"))\n     fileTypeDecoder(size);\n \n"
+    },
+    {
+      "sha": "12f79745f288783e837afe29f457000cb8c7dca3",
+      "edited_message": null,
+      "patch": "--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -632,9 +632,9 @@\n   if (ignoreList(buf))\n     discard(size);\n \n   else if (dataIgnoreList(buf)) {\n-    decodeBlock(recursion_depth + 1, Exiv2::toString(buf.data()));\n+    decodeBlock(recursion_depth + 1, std::string(reinterpret_cast<const char*>(buf.c_data())));\n   } else if (equalsQTimeTag(buf, \"ftyp\"))\n     fileTypeDecoder(size);\n \n"
+    }
+  ],
+  "coupling": "The first edited commit removes the one-byte NUL sentinel from the four-byte QuickTime box-type buffer and keeps recursion safe by constructing the tag name with an explicit length of four. The later edited commit changes that bounded construction to a std::string from buf.c_data(), which relies on a NUL terminator. Read alone, the later change is safe against the real first commit because that buffer is five bytes and explicitly NUL-terminated; read alone, the first change is safe because it uses an explicit length. Only their composition leaves a four-byte DataBuf consumed by a strlen-based std::string constructor, causing a heap out-of-bounds read when a valid QuickTime file contains a meta container. A correct fix must reason across both commits and coordinate the buffer capacity/terminator invariant with the string conversion; changing only one commit's diff leaves the mismatch reachable.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Exiv2::ImageFactory::open(std::unique_ptr<Exiv2::BasicIo>) followed by Exiv2::Image::readMetadata()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

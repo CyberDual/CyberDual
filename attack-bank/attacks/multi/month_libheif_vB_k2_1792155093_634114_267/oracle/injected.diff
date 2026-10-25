@@ -1,0 +1,87 @@
+diff --git a/libheif/image/pixelimage.cc b/libheif/image/pixelimage.cc
+index 3a5f43f..2dfbc3c 100644
+--- a/libheif/image/pixelimage.cc
++++ b/libheif/image/pixelimage.cc
+@@ -679,6 +679,31 @@ Error HeifPixelImage::extend_padding_to_size(uint32_t width, uint32_t height, bo
+ }
+ 
+ 
++
++// True when the per-row fill in extend_to_size_with_zero() would shrink this plane.
++// Cb/Cr are measured on the subsampled grid: a logical target that is not smaller
++// than the image can still map to a chroma size below a plane added larger than
++// that grid (GHSA-j2rv-58fh-w8pw). Every other channel stores full-resolution
++// samples, so the logical-size guard is the shrink check for it. A non-chroma
++// plane whose size is not the logical image size never reaches the fill (the
++// non-uniform check rejects it), and is therefore not reported here.
++static bool extend_target_shrinks_plane(heif_channel channel,
++                                        uint32_t plane_width, uint32_t plane_height,
++                                        uint32_t width, uint32_t height,
++                                        heif_chroma chroma)
++{
++  if (channel != heif_channel_Cb &&
++      channel != heif_channel_Cr) {
++    return false;
++  }
++
++  uint32_t subsampled_width, subsampled_height;
++  get_subsampled_size(width, height, channel, chroma,
++                      &subsampled_width, &subsampled_height);
++  return subsampled_width < plane_width || subsampled_height < plane_height;
++}
++
++
+ Error HeifPixelImage::extend_to_size_with_zero(uint32_t width, uint32_t height, const heif_security_limits* limits)
+ {
+   // This function only ever grows the image. A target smaller than the current
+@@ -697,21 +722,17 @@ Error HeifPixelImage::extend_to_size_with_zero(uint32_t width, uint32_t height,
+     return Error::Ok;
+   }
+ 
+-  // Preflight: no plane may shrink. Even when the logical target is not smaller
+-  // than the image, get_subsampled_size() can map it to a per-component size that
+-  // is smaller than a plane's current size, e.g. a Cb/Cr plane that was added
+-  // larger than the target's subsampled chroma extent. The per-row right-edge fill
+-  // below would then compute its length as (subsampled_width - old_width), underflow
+-  // uint32_t, and write past the end of the plane. Validate every plane before
+-  // touching any so a rejected request cannot leave the image partially modified
+-  // (GHSA-j2rv-58fh-w8pw, a follow-up to GHSA-hqc2-cx5m-g6ff whose logical-size
+-  // guard above does not cover an individually oversized chroma plane).
++  // Preflight for the chroma grid. get_subsampled_size() can map a logical target
++  // that is not smaller than the image onto a Cb/Cr size below a plane that was
++  // added larger than that grid; the right-edge fill would then underflow
++  // (GHSA-j2rv-58fh-w8pw, a follow-up to GHSA-hqc2-cx5m-g6ff). Other channels are
++  // not subsampled, and a non-chroma plane that is not exactly the logical image
++  // size is refused by the non-uniform check below before the fill runs, so it
++  // does not have to be measured here. Reject before touching any plane so a
++  // rejected request cannot leave the image partially modified.
+   for (const auto& component : m_storage) {
+-    uint32_t subsampled_width, subsampled_height;
+-    get_subsampled_size(width, height, component.m_channel, m_chroma,
+-                        &subsampled_width, &subsampled_height);
+-
+-    if (subsampled_width < component.m_width || subsampled_height < component.m_height) {
++    if (extend_target_shrinks_plane(component.m_channel, component.m_width, component.m_height,
++                                    width, height, m_chroma)) {
+       return Error{heif_error_Usage_error,
+                    heif_suberror_Invalid_parameter_value,
+                    "Cannot extend an image to a size smaller than an existing plane."};
+@@ -722,10 +743,16 @@ Error HeifPixelImage::extend_to_size_with_zero(uint32_t width, uint32_t height,
+     // See extend_padding_to_size(): get_subsampled_size() assumes a non-Cb/Cr
+     // component has the full logical image size, so we cannot compute a correct
+     // target size for a component that does not follow that assumption.
++    // Alpha is auxiliary and is not tied to the chroma grid (add_channel() only
++    // fixes Cb/Cr). The preflight above rejects a target that would shrink a
++    // plane before this fill, and the logical-size guard already rejected a
++    // shrinking canvas, so the right-edge length cannot underflow for alpha.
++    const bool independent_size = (component.m_channel == heif_channel_Cb ||
++                                   component.m_channel == heif_channel_Cr ||
++                                   component.m_channel == heif_channel_Alpha);
+     if ((component.m_width != m_width ||
+          component.m_height != m_height) &&
+-        (component.m_channel != heif_channel_Cb &&
+-         component.m_channel != heif_channel_Cr)) {
++        !independent_size) {
+       return Error{heif_error_Unsupported_feature,
+                    heif_suberror_Unspecified,
+                    "Cannot extend an image with non-uniform component sizes."};

@@ -1,0 +1,39 @@
+diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c
+index 96857da2027f6018f84729554759fb927f8672a9..63e07a1b19dcdafe10c878ccf5668148b0c7efce 100644
+--- a/expat/lib/xmltok.c
++++ b/expat/lib/xmltok.c
+@@ -707,18 +707,23 @@ unicode_byte_type(char hi, char lo) {
+     enum XML_Convert_Result res = XML_CONVERT_COMPLETED;                       \
+     UNUSED_P(enc);                                                             \
+     fromLim = *fromP + (((fromLim - *fromP) >> 1) << 1); /* shrink to even */  \
+-    /* Avoid copying first half only of surrogate */                           \
+-    if (fromLim - *fromP > ((toLim - *toP) << 1)                               \
+-        && (GET_HI(fromLim - 2) & 0xF8) == 0xD8) {                             \
+-      fromLim -= 2;                                                            \
+-      res = XML_CONVERT_INPUT_INCOMPLETE;                                      \
++    while (*fromP < fromLim && *toP < toLim) {                                 \
++      const unsigned short c                                                   \
++          = (GET_HI(*fromP) << 8) | GET_LO(*fromP);                            \
++      if ((c & 0xFC00) == 0xD800) {                                            \
++        if (fromLim - *fromP < 4) {                                            \
++          res = XML_CONVERT_INPUT_INCOMPLETE;                                  \
++          break;                                                               \
++        }                                                                      \
++        *(*toP)++ = c;                                                         \
++        *fromP += 2;                                                           \
++      }                                                                        \
++      *(*toP)++ = (GET_HI(*fromP) << 8) | GET_LO(*fromP);                     \
++      *fromP += 2;                                                             \
+     }                                                                          \
+-    for (; *fromP < fromLim && *toP < toLim; *fromP += 2)                      \
+-      *(*toP)++ = (GET_HI(*fromP) << 8) | GET_LO(*fromP);                      \
+-    if ((*toP == toLim) && (*fromP < fromLim))                                 \
+-      return XML_CONVERT_OUTPUT_EXHAUSTED;                                     \
+-    else                                                                       \
+-      return res;                                                              \
++    if (res == XML_CONVERT_COMPLETED && *fromP < fromLim)                     \
++      res = XML_CONVERT_OUTPUT_EXHAUSTED;                                      \
++    return res;                                                                \
+   }
+ 
+ #define GET_LO(ptr) ((unsigned char)(ptr)[0])

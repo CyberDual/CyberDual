@@ -1,0 +1,64 @@
+# VIPER engine base — current V8 at the WEEK-window base commit (last commit before BASE_DATE).
+# Adapted from secbench-pro-src/base/v8/Dockerfile.latest. We build our OWN current image (not the
+# 2024 sec-bench snapshots) so Role A can inject across a recent real-commit window, then the windowed
+# tampers rebuild INCREMENTALLY from this base's cached out/.  Builds debug (DCHECK) + asan (memory
+# crashes); release is skipped to save disk/time (crash grading needs debug+asan only).
+#
+# BUILD:
+#   docker build -t cyberdual-v8-base \
+#     --build-arg BASE_DATE=2026-09-24 --build-arg NINJA_JOBS=8 \
+#     -f harness/engine/Dockerfile.v8 harness/engine
+# WINDOW: maint-batch = base + commits in [BASE_DATE, 2026-10-01); UNTIL is fixed at 2026-10-01.
+
+FROM ubuntu:24.04@sha256:9cbed754112939e914291337b5e554b07ad7c392491dba6daf25eef1332a22e8
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y libc6-dev binutils libgcc-13-dev tzdata sqlite3 ripgrep && \
+    apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+ENV OUT=/out SRC=/src WORK=/work PATH="$PATH:/out"
+RUN mkdir -p $OUT $SRC $WORK && chmod a+rwx $OUT $SRC $WORK
+RUN apt-get update && apt-get install -y \
+      ca-certificates curl file git gdb gettext-base gnupg jq make ripgrep vim \
+      libglib2.0-dev locales lsb-release pkg-config python3 python3-pip python3-venv \
+      sudo wget xvfb xz-utils && rm -rf /var/lib/apt/lists/*
+RUN locale-gen en_US.UTF-8
+ENV LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+RUN ln -sf /usr/bin/python3 /usr/bin/python
+
+# depot_tools (gclient, gn, ninja, fetch)
+RUN git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git /opt/depot_tools
+ENV PATH="/opt/depot_tools:$PATH" GIT_HTTP_VERSION=HTTP/1.1
+
+# fetch V8 source (creates .gclient in $SRC, clones into $SRC/v8)
+WORKDIR $SRC
+RUN fetch v8
+WORKDIR $SRC/v8
+RUN ln -sf /usr/bin/make /usr/bin/gmake
+
+# node + Claude Code CLI (Role A edits+rebuilds the engine in-container, like run_role_a_in_docker)
+RUN curl -fsSL https://deb.nodesource.com/setup_current.x | bash - && \
+    apt-get install -y --no-install-recommends nodejs && rm -rf /var/lib/apt/lists/* && \
+    npm i -g @anthropic-ai/claude-code
+
+# ---- pin to the WINDOW-BASE commit = last v8 commit strictly before BASE_DATE ----
+ARG BASE_DATE=2026-09-24
+ARG NINJA_JOBS
+RUN set -eux; \
+    git fetch origin main; \
+    V8_REF="$(git rev-list -1 --before=${BASE_DATE}T00:00:00 origin/main)"; \
+    echo "V8 window-base (last commit before ${BASE_DATE}) = $V8_REF"; \
+    git checkout --detach "$V8_REF"; \
+    rm -rf "$SRC/.cipd"; \
+    gclient sync -D
+
+# ---- build debug (DCHECK) + asan (memory-safety crashes); release intentionally skipped ----
+RUN set -eux; jobs="${NINJA_JOBS:-$(nproc)}"; \
+    gn gen out/x64.debug --args='is_debug=true is_asan=false dcheck_always_on=true v8_enable_slow_dchecks=false target_cpu="x64" v8_target_cpu="x64" use_sysroot=false v8_enable_sandbox=true v8_enable_pointer_compression=true v8_enable_memory_corruption_api=true is_component_build=false'; \
+    ninja -j"$jobs" -C out/x64.debug d8; \
+    gn gen out/x64.asan --args='is_debug=false is_asan=true dcheck_always_on=false v8_enable_slow_dchecks=false target_cpu="x64" v8_target_cpu="x64" use_sysroot=false v8_enable_sandbox=true v8_enable_pointer_compression=true v8_enable_memory_corruption_api=true is_component_build=false'; \
+    ninja -j"$jobs" -C out/x64.asan d8; \
+    mkdir -p /out/debug /out/asan; \
+    ln -sf /src/v8/out/x64.debug/d8 /out/debug/d8; \
+    ln -sf /src/v8/out/x64.asan/d8  /out/asan/d8; \
+    ln -sf /src/v8/out/x64.debug/d8 /out/d8
+WORKDIR $SRC/v8

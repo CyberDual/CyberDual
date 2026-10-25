@@ -1,0 +1,13 @@
+{
+  "task_iid": "sm__020950975934",
+  "regime": "A_vuln_patch",
+  "strategy": "incomplete_fix",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "residual_vuln"
+    }
+  ],
+  "explanation": "The patch registers debug stack maps for linear-memory traps, but the x64 i64 load path does not register its faulting range. Debug compilation of the witness therefore finds an out-of-bounds trap without a stack map.",
+  "verification": "The final ASan shell rebuild succeeded with zero compiler warnings. The witness exits 1 with MOZ_CRASH(wasm::CheckStackMapsForTraps: trapping instruction lacks a stackmap) and an ASan fatal signal. Restoring the omitted registration made the source patch match golden.diff and the same witness exited 0 after an ASan shell rebuild."
+}

@@ -1,0 +1,36 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 5d3bbb2..607db13 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -4788,6 +4788,7 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+ {
+     int err = MATIO_E_NO_ERROR, i;
+     int same_type = 0;
++    size_t data_size, nelems, column_nelems;
+     if ( (class_type == MAT_C_DOUBLE && data_type == MAT_T_DOUBLE) ||
+          (class_type == MAT_C_SINGLE && data_type == MAT_T_SINGLE) ||
+          (class_type == MAT_C_INT16 && data_type == MAT_T_INT16) ||
+@@ -4808,9 +4809,13 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+             return MATIO_E_BAD_ARGUMENT;
+     }
+ 
++    data_size = Mat_SizeOf(data_type);
++    nelems = data_size ? nbytes / data_size : 0;
++    column_nelems = dims[0] ? nelems / dims[0] : 0;
++
+     if ( rank == 2 ) {
+         if ( (stride[0] == 1 && (size_t)edge[0] == dims[0]) &&
+-             (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) )
++             (stride[1] == 1 && (size_t)edge[1] == column_nelems) && (same_type == 1) )
+             memcpy(data_out, data_in, nbytes);
+         else {
+             int i, j;
+@@ -4887,6 +4892,8 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+             if ( err )
+                 return err;
+         }
++        if ( rank > 2 )
++            dimp[rank - 2] = column_nelems;
+ 
+         switch ( class_type ) {
+             case MAT_C_DOUBLE: {

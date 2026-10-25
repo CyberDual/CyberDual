@@ -1,0 +1,57 @@
+diff --git a/lib/vdns/doh.c b/lib/vdns/doh.c
+index 3b52ed92f3621dd7c33aae26f66c2ab4b168641c..91bfd8e06d2e3530dabcf8260bb8c7dd8e4d11af 100644
+--- a/lib/vdns/doh.c
++++ b/lib/vdns/doh.c
+@@ -565,12 +565,27 @@ static void doh_store_aaaa(const unsigned char *doh, int index,
+ static DOHcode doh_store_https(const unsigned char *doh, int index,
+                                struct dohentry *d, uint16_t len)
+ {
++  if(len < 3)
++    return DOH_DNS_RDATA_LEN;
++
+   /* silently ignore RRs over the limit */
+   if(d->numhttps_rrs < DOH_MAX_HTTPS) {
+     struct dohhttps_rr *h = &d->https_rrs[d->numhttps_rrs];
++    size_t offset = 2;
+     h->val = curlx_memdup(&doh[index], len);
+     if(!h->val)
+       return DOH_OUT_OF_MEM;
++    while(offset < len && h->val[offset]) {
++      offset += (size_t)h->val[offset] + 1;
++      if(h->val[offset] > 63 || offset > len) {
++        curlx_safefree(h->val);
++        return DOH_DNS_RDATA_LEN;
++      }
++    }
++    if(offset == len) {
++      curlx_safefree(h->val);
++      return DOH_DNS_RDATA_LEN;
++    }
+     h->len = len;
+     d->numhttps_rrs++;
+   }
+diff --git a/tests/unit/unit1650.c b/tests/unit/unit1650.c
+index 890027b19353dfe9420f961119a2566666baf87d..bb1c9a407c4df744a22982e1ccca1df9fb108a90 100644
+--- a/tests/unit/unit1650.c
++++ b/tests/unit/unit1650.c
+@@ -83,6 +83,20 @@ static CURLcode test_unit1650(const char *arg)
+   static const char full49[] = DNS_FOO_EXAMPLE_COM;
+ 
+   static const struct dohresp resp[] = {
++#ifdef USE_HTTPSRR
++  {"\x00\x00\x81\x80\x00\x00\x00\x01\x00\x00\x00\x00"
++   "\x00\x00\x41\x00\x01\x00\x00\x00\x00\x00\x00", 23,
++   CURL_DNS_TYPE_HTTPS, DOH_DNS_RDATA_LEN, NULL },
++  {"\x00\x00\x81\x80\x00\x00\x00\x01\x00\x00\x00\x00"
++   "\x00\x00\x41\x00\x01\x00\x00\x00\x00\x00\x01\x00", 24,
++   CURL_DNS_TYPE_HTTPS, DOH_DNS_RDATA_LEN, NULL },
++  {"\x00\x00\x81\x80\x00\x00\x00\x01\x00\x00\x00\x00"
++   "\x00\x00\x41\x00\x01\x00\x00\x00\x00\x00\x02\x00\x00", 25,
++   CURL_DNS_TYPE_HTTPS, DOH_DNS_RDATA_LEN, NULL },
++  {"\x00\x00\x81\x80\x00\x00\x00\x01\x00\x00\x00\x00"
++   "\x00\x00\x41\x00\x01\x00\x00\x00\x00\x00\x03\x00\x00\x00", 26,
++   CURL_DNS_TYPE_HTTPS, DOH_OK, NULL },
++#endif
+   {"\x00\x00", 2, CURL_DNS_TYPE_A, DOH_TOO_SMALL_BUFFER, NULL },
+   {"\x00\x01\x00\x01\x00\x01\x00\x01\x00\x01\x00\x01", 12,
+    CURL_DNS_TYPE_A, DOH_DNS_BAD_ID, NULL },

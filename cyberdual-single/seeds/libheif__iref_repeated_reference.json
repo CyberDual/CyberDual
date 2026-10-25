@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "7dc0cb2668312c04220cc8bb8fbfaecbb8b84605",
+  "parent_sha": "7dc0cb2668312c04220cc8bb8fbfaecbb8b84605",
+  "project": "libheif",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/strukturag/libheif",
+  "repo_url": "https://github.com/strukturag/libheif",
+  "source": "reselect",
+  "target": "libheif",
+  "task": "File parse via public read API (heif_context_read_from_file) of an 'iref' entry that lists the same to_item_ID repeatedly (e.g. an 'iovl'/'dimg' placing one input image at two offsets, HEIF conformance file C021); feature removes Box_iref::check_for_double_references so repeated references parse. Core change libheif/box.cc (+4/-29) + box.h decl (rest tests). Injected-defect guess CWE-787/CWE-400 (dimg/iovl amplification or OOB).",
+  "task_iid": "libheif__iref_repeated_reference",
+  "vuln_desc": "File parse via public read API (heif_context_read_from_file) of an 'iref' entry that lists the same to_item_ID repeatedly (e.g. an 'iovl'/'dimg' placing one input image at two offsets, HEIF conformance file C021); feature removes Box_iref::check_for_double_references so repeated references parse. Core change libheif/box.cc (+4/-29) + box.h decl (rest tests). Injected-defect guess CWE-787/CWE-400 (dimg/iovl amplification or OOB)."
+}

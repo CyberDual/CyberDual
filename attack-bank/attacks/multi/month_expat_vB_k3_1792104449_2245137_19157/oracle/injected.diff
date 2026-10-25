@@ -1,0 +1,48 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index e3afe51..ee9bfc8 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -1206,6 +1206,16 @@ callUnknownEncodingConvert(void *data, const char *p) {
+   return result;
+ }
+ 
++// Number of bytes of the input buffer that can still be consumed or
++// filled before a reallocation becomes necessary: the span of data
++// waiting to be (re-)parsed plus the free space at the tail.
++static size_t
++bufferSpaceAvailable(XML_Parser parser) {
++  return (size_t)EXPAT_SAFE_PTR_DIFF(parser->m_bufferPtr, parser->m_buffer)
++         + (size_t)EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim,
++                                       parser->m_bufferEnd);
++}
++
+ static enum XML_Error
+ callProcessor(XML_Parser parser, const char *start, const char *end,
+               const char **endPtr) {
+@@ -1217,13 +1227,12 @@ callProcessor(XML_Parser parser, const char *start, const char *end,
+     // available data has increased significantly.
+     const size_t had_before = parser->m_partialTokenBytesBefore;
+     // ...but *do* try anyway if we're close to causing a reallocation.
+-    size_t available_buffer
+-        = EXPAT_SAFE_PTR_DIFF(parser->m_bufferPtr, parser->m_buffer);
++    size_t available_buffer = bufferSpaceAvailable(parser);
+ #if XML_CONTEXT_BYTES > 0
+-    available_buffer -= EXPAT_MIN(available_buffer, XML_CONTEXT_BYTES);
++    const size_t waiting
++        = (size_t)EXPAT_SAFE_PTR_DIFF(parser->m_bufferPtr, parser->m_buffer);
++    available_buffer -= EXPAT_MIN(waiting, XML_CONTEXT_BYTES);
+ #endif
+-    available_buffer
+-        += EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd);
+     // m_lastBufferRequestSize is never assigned a value < 0, so the cast is ok
+     const bool enough
+         = (have_now >= 2 * had_before)
+@@ -2445,7 +2454,7 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal) {
+     parser->m_parsingStatus.parsing = XML_PARSING;
+   }
+ 
+-  if (len > EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd)) {
++  if ((size_t)len > bufferSpaceAvailable(parser)) {
+     parser->m_errorCode = XML_ERROR_INVALID_ARGUMENT;
+     return XML_STATUS_ERROR;
+   }

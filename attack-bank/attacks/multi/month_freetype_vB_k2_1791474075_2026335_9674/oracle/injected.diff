@@ -1,0 +1,25 @@
+diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c
+index 151aeac..340de8e 100644
+--- a/src/type1/t1parse.c
++++ b/src/type1/t1parse.c
+@@ -271,6 +271,7 @@
+       /* in the case of the PFB format, the private dictionary can be */
+       /* made of several adjacent segments.                           */
+       FT_UShort  tag;
++      FT_UShort  seg;
+       FT_Byte*   priv_dict = NULL;
+       FT_ULong   priv_len  = 0;
+ 
+@@ -284,8 +285,10 @@
+         if ( tag != 0x8002U || size > stream->size - stream->pos )
+           break;
+ 
+-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||
+-             FT_STREAM_READ( priv_dict + priv_len, size )        )
++        seg = (FT_UShort)size;
++
++        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + seg ) ||
++             FT_STREAM_READ( priv_dict + priv_len, size )       )
+           break;
+ 
+         priv_len += size;

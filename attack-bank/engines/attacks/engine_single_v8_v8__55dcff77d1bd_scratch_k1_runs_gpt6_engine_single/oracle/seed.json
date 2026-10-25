@@ -1,0 +1,31 @@
+{
+  "task_iid": "v8__55dcff77d1bd",
+  "project": "v8",
+  "engine": "v8",
+  "repo": "https://github.com/v8/v8",
+  "repo_url": "https://github.com/v8/v8",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "family": "collect_seeds",
+  "source": "mined",
+  "parent_commit": "670a240ac42fef5776165f710872e016616e4f99",
+  "parent_sha": "670a240ac42fef5776165f710872e016616e4f99",
+  "fix_sha": "55dcff77d1bd944c6d026f7b02e33d49e9f069c6",
+  "date": "2026-09-30T15:31:34+00:00",
+  "cwe": "",
+  "vuln_type": "GC forwarding-pointer error (JSWeakRef token hashing)",
+  "vuln_desc": "Scavenger hash lookup can see an unresolved forwarding pointer for a JSWeakRef unregister token.",
+  "task": "Scavenger hash lookup can see an unresolved forwarding pointer for a JSWeakRef unregister token.",
+  "grading": "engine",
+  "selection_criteria": [
+    "upstream fix in [2026-07-01, 2026-10-01), before the shared maintenance cutoff",
+    "mined from the upstream engine repository via collect_seeds, not SEC-bench-Pro",
+    "not AI-authored; parent and fix SHA independently verified",
+    "distinct upstream repair commit with engine source changes"
+  ],
+  "selection_reason": "Prospectively added for the ten-task engine cohort: GC forwarding-pointer error (JSWeakRef token hashing); upstream fix 55dcff77d1bd dated 2026-09-30.",
+  "source_files": [
+    "src/objects/js-objects.cc",
+    "test/mjsunit/regress/regress-567538973.js"
+  ]
+}

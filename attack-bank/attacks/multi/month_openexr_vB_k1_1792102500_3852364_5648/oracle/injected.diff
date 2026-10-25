@@ -1,0 +1,33 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0a..22ebc17 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -411,7 +411,7 @@ IDManifest::init (const char* data, const char* endOfData)
+     // comments in serialize function describe the format
+     //
+ 
+-    vector<int> mapping (stringList.size ());
++    vector<int> mapping;
+ 
+     //
+     // overlapping sequences: A list [(4,5),(3,6)] expands to 4,5,3,6 - because 4 and 5 are including already
+@@ -429,7 +429,6 @@ IDManifest::init (const char* data, const char* endOfData)
+ 
+     Xdr::read<CharPtrIO> (data, rleLength);
+ 
+-    int currentIndex = 0;
+     for (int i = 0; i < rleLength; ++i)
+     {
+         int first;
+@@ -453,9 +452,8 @@ IDManifest::init (const char* data, const char* endOfData)
+             // don't remap already mapped values
+             if (seen[entry] == 0)
+             {
+-                mapping[currentIndex] = entry;
+-                seen[entry]           = 1;
+-                currentIndex++;
++                mapping.push_back (entry);
++                seen[entry] = 1;
+             }
+         }
+     }

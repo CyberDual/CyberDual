@@ -1,0 +1,16 @@
+diff --git a/lib/curlx/inet_pton.c b/lib/curlx/inet_pton.c
+index 3b611890f9c7b4f98bcbb5e390170604464c1208..f6fb7825cc33fdac3ce0a4a17ee37a9094c2b0bb 100644
+--- a/lib/curlx/inet_pton.c
++++ b/lib/curlx/inet_pton.c
+@@ -142,7 +142,10 @@ static int inet_pton6(const char *src, unsigned char *dst)
+         colonp = tp;
+         continue;
+       }
+-      if(tp + INT16SZ > endp)
++      if(!*src)
++        /* a trailing lone colon is not a valid address */
++        return 0;
++      if(tp - INT16SZ > endp)
+         return 0;
+       *tp++ = (unsigned char)((val >> 8) & 0xff);
+       *tp++ = (unsigned char)(val & 0xff);

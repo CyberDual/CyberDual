@@ -1,0 +1,20 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "cdfebc80b32c5befd0b2c23e5454b75cf8be8e3e",
+      "patch": "diff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h\n--- a/js/src/vm/RegExpShared.h\n+++ b/js/src/vm/RegExpShared.h\n@@ -74,6 +74,10 @@\n   enum class Kind : uint8_t { Unparsed, Atom, RegExp };\n   enum class CodeKind { Bytecode, Jitcode, Any };\n \n+  static bool hasQuickCheckChars(uint32_t remaining) {\n+    return remaining != 0;\n+  }\n+\n   using ByteCode = js::irregexp::ByteArrayData;\n   using JitCodeTable = js::irregexp::ByteArray;\n   using JitCodeTables = Vector<JitCodeTable, 0, SystemAllocPolicy>;\n"
+    },
+    {
+      "sha": "f261527e7a33168c727f4d48ae2490d3e0a5e891",
+      "patch": "diff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h\n--- a/js/src/vm/RegExpShared.h\n+++ b/js/src/vm/RegExpShared.h\n@@ -93,6 +93,10 @@\n             uint32_t{1} << (c % QuickCheckBitsetBitsPerWord)};\n   }\n \n+  static bool hasQuickCheckChars(uint64_t remaining) {\n+    return remaining >= sizeof(uint32_t);\n+  }\n+\n  private:\n   friend class RegExpStatics;\n   friend class RegExpZone;\ndiff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp\n--- a/js/src/vm/RegExpObject.cpp\n+++ b/js/src/vm/RegExpObject.cpp\n@@ -735,8 +735,9 @@\n     return true;\n   }\n \n-  // If there are at least 4 characters remaining in the string, test the mask.\n-  if (index + sizeof(uint32_t) <= length) {\n+  // Test the mask when enough characters remain in the string.\n+  uint32_t remaining = uint32_t(length - index);\n+  if (hasQuickCheckChars(remaining)) {\n     // We use memcpy here because this load may not be aligned. It will generate\n     // a regular load on every platform we care about.\n     uint32_t word;\n"
+    }
+  ],
+  "coupling": "The RegExpShared shrink commit adds a uint32_t hasQuickCheckChars overload that accepts any nonempty suffix. The quickcheck commit adds a uint64_t overload that requires a full four-byte mask and passes a uint32_t remaining length before a four-byte read. With both edits, overload resolution selects the one-character guard and the read crosses a string allocation boundary. The first edit alone has no caller; the second alone selects the four-byte guard.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "command": "ASAN_OPTIONS=abort_on_error=1 obj-debug-asan/dist/bin/js --no-ion pocs/probe.js"
+    }
+  ]
+}

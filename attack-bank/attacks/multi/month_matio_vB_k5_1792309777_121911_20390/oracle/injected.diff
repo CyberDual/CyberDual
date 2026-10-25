@@ -1,0 +1,57 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 5d3bbb2..19537e6 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -4786,7 +4786,7 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+             enum matio_types data_type, const size_t *dims, const int *start, const int *stride,
+             const int *edge, int rank, size_t nbytes)
+ {
+-    int err = MATIO_E_NO_ERROR, i;
++    int err = MATIO_E_NO_ERROR;
+     int same_type = 0;
+     if ( (class_type == MAT_C_DOUBLE && data_type == MAT_T_DOUBLE) ||
+          (class_type == MAT_C_SINGLE && data_type == MAT_T_SINGLE) ||
+@@ -4800,17 +4800,13 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+          (class_type == MAT_C_UINT8 && data_type == MAT_T_UINT8) )
+         same_type = 1;
+ 
+-    if ( rank < 1 || rank > 10 )
+-        return MATIO_E_BAD_ARGUMENT;
+-    for ( i = 0; i < rank; i++ ) {
+-        if ( start[i] < 0 || stride[i] < 1 || edge[i] < 1 || (size_t)start[i] >= dims[i] ||
+-             (size_t)(edge[i] - 1) > (dims[i] - 1 - (size_t)start[i]) / (size_t)stride[i] )
+-            return MATIO_E_BAD_ARGUMENT;
+-    }
+-
+     if ( rank == 2 ) {
+-        if ( (stride[0] == 1 && (size_t)edge[0] == dims[0]) &&
+-             (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) )
++        if ( (size_t)stride[0] * (edge[0] - 1) + start[0] + 1 > dims[0] )
++            err = MATIO_E_BAD_ARGUMENT;
++        else if ( (size_t)stride[1] * (edge[1] - 1) + start[1] + 1 > dims[0] * dims[1] )
++            err = MATIO_E_BAD_ARGUMENT;
++        else if ( (stride[0] == 1 && (size_t)edge[0] == dims[0]) &&
++                  (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) )
+             memcpy(data_out, data_in, nbytes);
+         else {
+             int i, j;
+@@ -4876,10 +4872,18 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+             }
+         }
+     } else {
+-        int j;
++        int i, j;
+         size_t N = (size_t)edge[0];
+         size_t dimp[10] = {dims[0], 0, 0, 0, 0, 0, 0, 0, 0, 0};
+ 
++        if ( rank < 1 || rank > 10 )
++            return MATIO_E_BAD_ARGUMENT;
++        for ( i = 0; i < rank; i++ ) {
++            if ( start[i] < 0 || stride[i] < 1 || edge[i] < 1 || (size_t)start[i] >= dims[i] ||
++                 (size_t)(edge[i] - 1) > (dims[i] - 1 - (size_t)start[i]) / (size_t)stride[i] )
++                return MATIO_E_BAD_ARGUMENT;
++        }
++
+         for ( j = 1; j < rank; j++ ) {
+             err = Mul(&dimp[j], dimp[j - 1], dims[j]);
+             if ( !err )

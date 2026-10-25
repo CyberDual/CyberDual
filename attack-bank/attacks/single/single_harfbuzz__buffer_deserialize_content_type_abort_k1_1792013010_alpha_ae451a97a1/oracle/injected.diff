@@ -1,0 +1,190 @@
+diff --git a/src/hb-buffer-serialize.cc b/src/hb-buffer-serialize.cc
+index 923524d708ae23146b27b637f87c179d988b2b44..dbde7f42309d6b00930b9887c4ad9f06926f0e5e 100644
+--- a/src/hb-buffer-serialize.cc
++++ b/src/hb-buffer-serialize.cc
+@@ -748,47 +748,37 @@ parse_hex (const char *pp, const char *end, uint32_t *pv)
+ #include "hb-buffer-deserialize-text-glyphs.hh"
+ #include "hb-buffer-deserialize-text-unicode.hh"
+ 
+-/**
+- * hb_buffer_deserialize_glyphs:
+- * @buffer: an #hb_buffer_t buffer.
+- * @buf: (array length=buf_len): string to deserialize
+- * @buf_len: the size of @buf, or -1 if it is `NULL`-terminated
+- * @end_ptr: (out) (optional): output pointer to the character after last
+- *                               consumed one.
+- * @font: (nullable): font for getting glyph IDs
+- * @format: the #hb_buffer_serialize_format_t of the input @buf
+- *
+- * Deserializes glyphs @buffer from textual representation in the format
+- * produced by hb_buffer_serialize_glyphs().
+- *
+- * Return value: `true` if the full string was parsed, `false` otherwise.
+- *
+- * Since: 0.9.7
+- **/
+-hb_bool_t
+-hb_buffer_deserialize_glyphs (hb_buffer_t *buffer,
+-                              const char *buf,
+-                              int buf_len, /* -1 means nul-terminated */
+-                              const char **end_ptr, /* May be NULL */
+-                              hb_font_t *font, /* May be NULL */
+-                              hb_buffer_serialize_format_t format)
++static hb_bool_t
++_hb_buffer_deserialize (hb_buffer_t *buffer,
++			const char *buf,
++			int buf_len, /* -1 means nul-terminated */
++			const char **end_ptr, /* May be NULL */
++			hb_font_t *font, /* May be NULL */
++			hb_buffer_serialize_format_t format,
++			hb_buffer_content_type_t content_type)
+ {
++  bool glyphs = content_type == HB_BUFFER_CONTENT_TYPE_GLYPHS;
++
+   const char *end;
+   if (!end_ptr)
+     end_ptr = &end;
+   *end_ptr = buf;
+ 
+-  buffer->assert_glyphs ();
++  if (glyphs)
++    buffer->assert_glyphs ();
++  else
++    buffer->assert_unicode ();
+ 
+   if (unlikely (hb_object_is_immutable (buffer)))
+   {
+-    if (end_ptr)
+-      *end_ptr = buf;
++    *end_ptr = buf;
+     return false;
+   }
+ 
+   if (buf_len == -1)
+     buf_len = strlen (buf);
++  else if (!buf[buf_len]) /* Length includes the nul-terminator. */
++    buf_len--;
+ 
+   if (!buf_len)
+   {
+@@ -796,19 +786,23 @@ hb_buffer_deserialize_glyphs (hb_buffer_t *buffer,
+     return false;
+   }
+ 
+-  hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_GLYPHS);
+-
+   if (!font)
+     font = hb_font_get_empty ();
+ 
+   switch (format)
+   {
+     case HB_BUFFER_SERIALIZE_FORMAT_TEXT:
+-      return _hb_buffer_deserialize_text_glyphs (buffer,
++      hb_buffer_set_content_type (buffer, content_type);
++      return glyphs ?
++	     _hb_buffer_deserialize_text_glyphs (buffer,
+ 						 buf, buf_len, end_ptr,
+-						 font);
++						 font) :
++	     _hb_buffer_deserialize_text_unicode (buffer,
++						  buf, buf_len, end_ptr,
++						  font);
+ 
+     case HB_BUFFER_SERIALIZE_FORMAT_JSON:
++      hb_buffer_set_content_type (buffer, content_type);
+       return _hb_buffer_deserialize_json (buffer,
+                                           buf, buf_len, end_ptr,
+                                           font);
+@@ -816,10 +810,38 @@ hb_buffer_deserialize_glyphs (hb_buffer_t *buffer,
+     default:
+     case HB_BUFFER_SERIALIZE_FORMAT_INVALID:
+       return false;
+-
+   }
+ }
+ 
++/**
++ * hb_buffer_deserialize_glyphs:
++ * @buffer: an #hb_buffer_t buffer.
++ * @buf: (array length=buf_len): string to deserialize
++ * @buf_len: the size of @buf, or -1 if it is `NULL`-terminated
++ * @end_ptr: (out) (optional): output pointer to the character after last
++ *                               consumed one.
++ * @font: (nullable): font for getting glyph IDs
++ * @format: the #hb_buffer_serialize_format_t of the input @buf
++ *
++ * Deserializes glyphs @buffer from textual representation in the format
++ * produced by hb_buffer_serialize_glyphs().
++ *
++ * Return value: `true` if the full string was parsed, `false` otherwise.
++ *
++ * Since: 0.9.7
++ **/
++hb_bool_t
++hb_buffer_deserialize_glyphs (hb_buffer_t *buffer,
++                              const char *buf,
++                              int buf_len, /* -1 means nul-terminated */
++                              const char **end_ptr, /* May be NULL */
++                              hb_font_t *font, /* May be NULL */
++                              hb_buffer_serialize_format_t format)
++{
++  return _hb_buffer_deserialize (buffer, buf, buf_len, end_ptr, font, format,
++				 HB_BUFFER_CONTENT_TYPE_GLYPHS);
++}
++
+ 
+ /**
+  * hb_buffer_deserialize_unicode:
+@@ -844,50 +866,8 @@ hb_buffer_deserialize_unicode (hb_buffer_t *buffer,
+                                const char **end_ptr, /* May be NULL */
+                                hb_buffer_serialize_format_t format)
+ {
+-  const char *end;
+-  if (!end_ptr)
+-    end_ptr = &end;
+-  *end_ptr = buf;
+-
+-  buffer->assert_unicode ();
+-
+-  if (unlikely (hb_object_is_immutable (buffer)))
+-  {
+-    if (end_ptr)
+-      *end_ptr = buf;
+-    return false;
+-  }
+-
+-  if (buf_len == -1)
+-    buf_len = strlen (buf);
+-
+-  if (!buf_len)
+-  {
+-    *end_ptr = buf;
+-    return false;
+-  }
+-
+-  hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_UNICODE);
+-
+-  hb_font_t* font = hb_font_get_empty ();
+-
+-  switch (format)
+-  {
+-    case HB_BUFFER_SERIALIZE_FORMAT_TEXT:
+-      return _hb_buffer_deserialize_text_unicode (buffer,
+-						  buf, buf_len, end_ptr,
+-						  font);
+-
+-    case HB_BUFFER_SERIALIZE_FORMAT_JSON:
+-      return _hb_buffer_deserialize_json (buffer,
+-                                          buf, buf_len, end_ptr,
+-                                          font);
+-
+-    default:
+-    case HB_BUFFER_SERIALIZE_FORMAT_INVALID:
+-      return false;
+-
+-  }
++  return _hb_buffer_deserialize (buffer, buf, buf_len, end_ptr, nullptr, format,
++				 HB_BUFFER_CONTENT_TYPE_UNICODE);
+ }
+ 
+ 

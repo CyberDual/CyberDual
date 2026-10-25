@@ -1,0 +1,30 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "13639a72d365066f414f234ef11c87c7e03637ca",
+      "edited_message": null,
+      "patch": "diff --git a/src/preview.cpp b/src/preview.cpp\nindex e8d199b..9c841a3 100644\n--- a/src/preview.cpp\n+++ b/src/preview.cpp\n@@ -839,8 +839,8 @@ bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize) {\n   if (pixels > std::numeric_limits<size_t>::max() / bytesPerPixel)\n     return false;\n \n-  rgbSize = pixels * bytesPerPixel;\n-  return rgbSize <= maxAi7ThumbnailSize;\n+  rgbSize = pixels;\n+  return rgbSize <= maxAi7ThumbnailSize / bytesPerPixel;\n }\n \n DataBuf decodeHex(const byte* src, size_t srcSize) {\n@@ -954,7 +954,7 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {\n       }\n     }\n     for (; num != 0; num--) {\n-      if (expectedSize - dest.size() < 3) {\n+      if (expectedSize - dest.size() / 3 < 1) {\n #ifndef SUPPRESS_WARNINGS\n         EXV_WARNING << \"Invalid size of AI7 thumbnail data. Expected \" << expectedSize << \" bytes.\\n\";\n #endif\n@@ -969,7 +969,7 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {\n DataBuf makePnm(size_t width, size_t height, const DataBuf& rgb) {\n   DataBuf dest;\n   size_t expectedSize = 0;\n-  if (!ai7ThumbnailSize(width, height, expectedSize) || rgb.size() != expectedSize) {\n+  if (!ai7ThumbnailSize(width, height, expectedSize) || rgb.size() != expectedSize * 3) {\n #ifndef SUPPRESS_WARNINGS\n     EXV_WARNING << \"Invalid size of preview data. Expected \" << expectedSize << \" bytes, got \" << rgb.size()\n                 << \" bytes.\\n\";\n"
+    },
+    {
+      "sha": "cdb11664eeac5d8f696c950cf8374ee2edbc54d0",
+      "edited_message": null,
+      "patch": "diff --git a/src/preview.cpp b/src/preview.cpp\n--- a/src/preview.cpp\n+++ b/src/preview.cpp\n@@ -955,7 +955,7 @@\n         value = imageData[i++];\n       }\n     }\n-    Internal::enforce(expectedSize - destPos >= num * 3, ErrorCode::kerCorruptedMetadata);\n+    Internal::enforce(expectedSize - destPos / 3 >= num, ErrorCode::kerCorruptedMetadata);\n     const auto c0 = colorTable[value * 3];\n     const auto c1 = colorTable[value * 3 + 1];\n     const auto c2 = colorTable[value * 3 + 2];\n@@ -965,7 +965,7 @@\n       destData[destPos++] = c2;\n     }\n   }\n-  Internal::enforce(destPos == expectedSize, ErrorCode::kerCorruptedMetadata);\n+  Internal::enforce(destPos == expectedSize * 3, ErrorCode::kerCorruptedMetadata);\n   return dest;\n }\n \n"
+    },
+    {
+      "sha": "36c1f56a6bd1dab2b7131765a209860401b9c5a2",
+      "edited_message": null,
+      "patch": "diff --git a/src/preview.cpp b/src/preview.cpp\n--- a/src/preview.cpp\n+++ b/src/preview.cpp\n@@ -955,7 +955,7 @@\n         value = imageData[i++];\n       }\n     }\n-    Internal::enforce(expectedSize - destPos >= static_cast<size_t>(num) * 3, ErrorCode::kerCorruptedMetadata);\n+    Internal::enforce(expectedSize - destPos / 3 >= static_cast<size_t>(num), ErrorCode::kerCorruptedMetadata);\n     const auto c0 = colorTable[value * 3];\n     const auto c1 = colorTable[value * 3 + 1];\n     const auto c2 = colorTable[value * 3 + 2];\n"
+    }
+  ],
+  "coupling": "The thumbnail-size helper introduced in the first commit now passes a bounded pixel count. Its dynamic decoder still checks that count before appending three bytes per pixel, so that commit remains safe. The later performance commit replaces dynamic appends with a fixed DataBuf and updates its guard and completion check to count pixels, while the allocation still interprets the same value as a byte count. The follow-up unsigned-comparison cleanup preserves that pixel guard. Valid thumbnails therefore write three bytes into each one-byte allocation unit only when these commits are composed; a repair must make the producer and the allocation and write bounds use one consistent unit.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Exiv2::ImageFactory::open and Exiv2::PreviewManager::getPreviewProperties",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

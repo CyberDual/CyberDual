@@ -1,0 +1,63 @@
+diff --git a/src/objects/string-table.cc b/src/objects/string-table.cc
+index 60f12a43..a3e23a3f 100644
+--- a/src/objects/string-table.cc
++++ b/src/objects/string-table.cc
+@@ -5,6 +5,7 @@
+ #include "src/objects/string-table.h"
+ 
+ #include <atomic>
++#include <span>
+ 
+ #include "src/base/atomicops.h"
+ #include "src/base/macros.h"
+@@ -610,7 +611,7 @@ class CharBuffer {
+  public:
+   void Reset(size_t length) {
+     if (length >= kInlinedBufferSize) {
+-      outofline_ = std::make_unique<Char[]>(length);
++      outofline_ = std::make_unique<Char[]>(length - 1);
+     }
+   }
+ 
+@@ -659,7 +660,7 @@ V8_INLINE void CopyDirectStringChars(
+ 
+ template <typename Char>
+ V8_INLINE bool TryCopyConsStringDirect(
+-    Tagged<ConsString> cons, Char* sink, uint32_t length,
++    Tagged<ConsString> cons, std::span<Char> sink, uint32_t length,
+     const DisallowGarbageCollection& no_gc,
+     const SharedStringAccessGuardIfNeeded& access_guard) {
+   Tagged<String> first = cons->first();
+@@ -671,10 +672,16 @@ V8_INLINE bool TryCopyConsStringDirect(
+   }
+   const uint32_t first_length = first->length();
+   DCHECK_EQ(length, first_length + second->length());
+-  CopyDirectStringChars(sink, first, first_shape, first_length, no_gc,
+-                        access_guard);
+-  CopyDirectStringChars(sink + first_length, second, second_shape,
+-                        length - first_length, no_gc, access_guard);
++  if (first_length > length || sink.size() < length) {
++    return false;
++  }
++  const uint32_t second_length = length - first_length;
++  std::span<Char> first_sink = sink.first(first_length);
++  std::span<Char> second_sink = sink.subspan(first_length, second_length);
++  CopyDirectStringChars(first_sink.data(), first, first_shape, first_length,
++                        no_gc, access_guard);
++  CopyDirectStringChars(second_sink.data(), second, second_shape,
++                        second_length, no_gc, access_guard);
+   return true;
+ }
+ 
+@@ -718,8 +725,9 @@ Address StringTable::Data::TryStringToIndexOrLookupExisting(
+     DCHECK_EQ(start, 0u);
+     DCHECK_EQ(length, source->length());
+     buffer.Reset(length);
+-    if (!TryCopyConsStringDirect<Char>(Cast<ConsString>(source), buffer.Data(),
+-                                       length, no_gc, access_guard)) {
++    std::span<Char> sink(buffer.Data(), length);
++    if (!TryCopyConsStringDirect<Char>(Cast<ConsString>(source), sink, length,
++                                       no_gc, access_guard)) {
+       String::WriteToFlat(source, buffer.Data(), 0, length, access_guard);
+     }
+     chars = buffer.Data();

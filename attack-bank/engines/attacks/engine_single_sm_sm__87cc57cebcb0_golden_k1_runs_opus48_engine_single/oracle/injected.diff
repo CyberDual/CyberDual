@@ -1,0 +1,247 @@
+diff --git a/js/src/irregexp/RegExpAPI.h b/js/src/irregexp/RegExpAPI.h
+index c677d1065a..6be89e11f6 100644
+--- a/js/src/irregexp/RegExpAPI.h
++++ b/js/src/irregexp/RegExpAPI.h
+@@ -30,6 +30,7 @@ class RegExpFlags;
+ 
+ namespace v8::internal::regexp {
+ class Stack;
++struct FrameData;
+ }
+ 
+ namespace js {
+@@ -84,6 +85,9 @@ uint32_t CaseInsensitiveCompareUnicode(const char16_t* substring1,
+                                        size_t byteLength);
+ bool IsCharacterInRangeArray(uint32_t c, ByteArrayData* ranges);
+ 
++bool HandleRegExpInterrupt(JSContext* cx,
++                           v8::internal::regexp::FrameData* frameData);
++
+ #ifdef DEBUG
+ bool IsolateShouldSimulateInterrupt(Isolate* isolate);
+ void IsolateSetShouldSimulateInterrupt(Isolate* isolate);
+diff --git a/js/src/irregexp/RegExpNativeMacroAssembler.cpp b/js/src/irregexp/RegExpNativeMacroAssembler.cpp
+index c5e2df004c..1265dad301 100644
+--- a/js/src/irregexp/RegExpNativeMacroAssembler.cpp
++++ b/js/src/irregexp/RegExpNativeMacroAssembler.cpp
+@@ -9,6 +9,7 @@
+ #include "irregexp/imported/regexp-macro-assembler-arch.h"
+ #include "irregexp/imported/regexp-stack.h"
+ #include "irregexp/imported/special-case.h"
++#include "jit/JitZone.h"
+ #include "jit/Linker.h"
+ #include "jit/PerfSpewer.h"
+ #include "vm/MatchPairs.h"
+@@ -25,12 +26,14 @@ namespace internal {
+ namespace regexp {
+ 
+ using js::MatchPairs;
++using js::jit::ABIType;
+ using js::jit::AbsoluteAddress;
+ using js::jit::Address;
+ using js::jit::AllocatableFloatRegisterSet;
+ using js::jit::AllocatableGeneralRegisterSet;
+ using js::jit::Assembler;
+ using js::jit::BaseIndex;
++using js::jit::CheckUnsafeCallWithABI;
+ using js::jit::CodeLocationLabel;
+ using js::jit::FloatRegister;
+ using js::jit::FloatRegisterSet;
+@@ -1182,8 +1185,11 @@ void SMRegExpMacroAssembler::createStackFrame() {
+   masm_.branchStackPtrRhs(Assembler::Below, limit_addr, &stack_ok);
+ 
+   // There is not enough space on the stack. Exit with an exception.
+-  masm_.movePtr(ImmWord(int32_t(js::RegExpRunStatus::Error)), temp0_);
+-  masm_.jump(&exit_label_);
++  // We haven't initialized our stack frame yet, so we must jump to
++  // a special label that won't try to update the RegExp::Stack.
++  masm_.movePtr(ImmWord(int32_t(js::RegExpRunStatus::Error)),
++                js::jit::ReturnReg);
++  masm_.jump(&exit_overrecursed_label_);
+ 
+   masm_.bind(&stack_ok);
+ }
+@@ -1377,6 +1383,8 @@ void SMRegExpMacroAssembler::exitHandler() {
+       backtrack_stack_pointer_,
+       AbsoluteAddress(ExternalReference::RegexpStackPointer(isolate())));
+ 
++  masm_.bind(&exit_overrecursed_label_);
++
+   masm_.freeStack(frameSize_);
+ 
+   // Restore registers which were saved on entry
+@@ -1419,33 +1427,72 @@ void SMRegExpMacroAssembler::backtrackHandler() {
+     return;
+   }
+   masm_.bind(&backtrack_label_);
++  js::jit::Label interrupt, backtrack;
+ #ifdef DEBUG
+-  js::jit::Label bailOut;
+   // Check for simulating interrupt
+   masm_.branch32(Assembler::NotEqual,
+                  AbsoluteAddress(&cx_->isolate->shouldSimulateInterrupt_),
+-                 Imm32(0), &bailOut);
++                 Imm32(0), &interrupt);
+ #endif
+-  // Check for an interrupt. We have to restart from the beginning if we
++  // Check for an interrupt. We may have to restart from the beginning if we
+   // are interrupted, so we only check for urgent interrupts.
+-  js::jit::Label noInterrupt;
+   masm_.branchTest32(
+-      Assembler::Zero, AbsoluteAddress(cx_->addressOfInterruptBits()),
+-      Imm32(uint32_t(js::InterruptReason::CallbackUrgent)), &noInterrupt);
+-#ifdef DEBUG
+-  // bailing out if we have simulating interrupt flag set
+-  masm_.bind(&bailOut);
+-#endif
+-  masm_.movePtr(ImmWord(int32_t(js::RegExpRunStatus::Error)), temp0_);
+-  masm_.jump(&exit_label_);
+-  masm_.bind(&noInterrupt);
++      Assembler::NonZero, AbsoluteAddress(cx_->addressOfInterruptBits()),
++      Imm32(uint32_t(js::InterruptReason::CallbackUrgent)), &interrupt);
+ 
+   // Pop code offset from backtrack stack, add to code base address, and jump to
+   // location.
++  masm_.bind(&backtrack);
+   Pop(temp0_);
+   PushBacktrackCodeOffsetPatch(masm_.movWithPatch(ImmPtr(nullptr), temp1_));
+   masm_.addPtr(temp1_, temp0_);
+   masm_.jump(temp0_);
++
++  // We are being interrupted. First, check if we support resumption,
++  // and return an error if we don't.
++  masm_.bind(&interrupt);
++  masm_.branch32(Assembler::Equal, canResume(), Imm32(0),
++                 &exit_with_exception_label_);
++
++  StoreBacktrackStackToMemory();
++
++  // Load FrameData* into temp1.
++  masm_.moveStackPtrTo(temp1_);
++
++  // Save registers before calling C function
++  LiveGeneralRegisterSet volatileRegs(GeneralRegisterSet::Volatile());
++  volatileRegs.takeUnchecked(temp0_);
++  volatileRegs.takeUnchecked(temp1_);
++  volatileRegs.takeUnchecked(backtrack_stack_pointer_);
++  masm_.PushRegsInMask(volatileRegs);
++
++  using Fn = bool (*)(JSContext*, FrameData*);
++  masm_.setupUnalignedABICall(temp0_);
++  masm_.loadJSContext(temp0_);
++  masm_.passABIArg(temp0_);
++  masm_.passABIArg(temp1_);
++  masm_.callWithABI<Fn, ::js::irregexp::HandleRegExpInterrupt>(
++      ABIType::General, CheckUnsafeCallWithABI::DontCheckOther);
++  masm_.storeCallBoolResult(temp0_);
++
++  masm_.PopRegsInMask(volatileRegs);
++
++  // If the call threw an exception, return it.  We update the
++  // backtrack stack first so that it's correct when we read it in the
++  // epilogue.
++  LoadBacktrackStackFromMemory(backtrackStackBase());
++  masm_.branchTest32(Assembler::Zero, temp0_, temp0_,
++                     &exit_with_exception_label_);
++
++  // Reload input_end_pointer_ in case the string moved.
++  masm_.loadPtr(inputString(), temp0_);
++  masm_.loadStringLength(temp0_, input_end_pointer_);
++  masm_.loadStringChars(temp0_, temp1_, encoding());
++  masm_.computeEffectiveAddress(BaseIndex(temp1_, input_end_pointer_, factor()),
++                                input_end_pointer_);
++
++  // Now jump back up to the actual backtrack code.
++  masm_.jump(&backtrack);
+ }
+ 
+ void SMRegExpMacroAssembler::stackOverflowHandler() {
+@@ -1601,3 +1648,64 @@ bool SMRegExpMacroAssembler::CanReadUnaligned() const {
+ }  // namespace regexp
+ }  // namespace internal
+ }  // namespace v8
++
++namespace js {
++namespace irregexp {
++
++bool HandleRegExpInterrupt(JSContext* cx,
++                           v8::internal::regexp::FrameData* frameData) {
++  // Poorly written RegExps may require exponential backtracking to match. If
++  // the time taken to execute a RegExp exceeds the time between watchdog
++  // interrupts in the browser (which are used to implement the slow script
++  // dialog), then the only way for the execution to terminate successfully is
++  // if we can resume jitcode after being interrupted. This code is carefully
++  // designed to make that possible.
++  //
++  // The main challenge is GC: our RegExp jitcode, and the RegExp stubs that
++  // call it, are all written with the assumption that we won't trigger a GC.
++  // To keep the RegExp stubs simple and efficient, we don't support interrupts
++  // when invoked from jitcode. (This is determined based on the `canResume`
++  // flag in the InputOutputData / FrameData.) Instead, if an interrupt is
++  // triggered while a regexp called from jitcode is executing, we exit with an
++  // error and resume in C++. The C++ handler will restart execution with the
++  // `canResume` flag enabled, preventing future restarts. It is simple to
++  // support GC in the C++ caller.
++  //
++  // The remaining GC-related problem is the input string. Compiled regexps
++  // read the string's characters directly, so a moving GC during the interrupt
++  // could invalidate the pointers held in registers. We read the string from
++  // the FrameData here, root it, and update the frame before returning. The
++  // interrupt handling code will reload fresh pointers to the string's
++  // characters before resuming.
++  //
++  // In addition to the above, we also have to ensure that our RegExps support
++  // reentrancy. In particular, the backtracking stack is shared across
++  // executions. See `[SMDOC] RegExp backtrack stack` for more details.
++  //
++  // Note that unlike other cases where we invoke jitcode, this approach
++  // does *not* create a JitActivation. JitFrameIter will not see the
++  // regexp frame.
++  MOZ_RELEASE_ASSERT(frameData->canResume);
++
++  // Root the string input for the regexp
++  RootedString inputString(cx, frameData->inputString);
++
++#ifdef DEBUG
++  // If this is a simulated interrupt, trigger a real one.
++  if (IsolateShouldSimulateInterrupt(cx->isolate)) {
++    IsolateClearShouldSimulateInterrupt(cx->isolate);
++    cx->requestInterrupt(InterruptReason::CallbackUrgent);
++  }
++#endif
++
++  // Handle the interrupt.
++  bool result = cx->handleInterrupt();
++
++  // Copy the string back to the frame data in case it was moved by GC.
++  frameData->inputString = inputString;
++
++  return result;
++}
++
++}  // namespace irregexp
++}  // namespace js
+diff --git a/js/src/irregexp/RegExpNativeMacroAssembler.h b/js/src/irregexp/RegExpNativeMacroAssembler.h
+index 3c1c3a842f..3ac3e423ed 100644
+--- a/js/src/irregexp/RegExpNativeMacroAssembler.h
++++ b/js/src/irregexp/RegExpNativeMacroAssembler.h
+@@ -336,6 +336,7 @@ class SMRegExpMacroAssembler final : public NativeRegExpMacroAssembler {
+   js::jit::NonAssertingLabel exit_label_;
+   js::jit::NonAssertingLabel stack_overflow_label_;
+   js::jit::NonAssertingLabel exit_with_exception_label_;
++  js::jit::NonAssertingLabel exit_overrecursed_label_;
+ 
+   // When we generate the code to push a backtrack label's address
+   // onto the backtrack stack, we don't know its final address. We
+diff --git a/js/src/jit/ABIFunctionList-inl.h b/js/src/jit/ABIFunctionList-inl.h
+index 0bcd7bb001..f63af9364c 100644
+--- a/js/src/jit/ABIFunctionList-inl.h
++++ b/js/src/jit/ABIFunctionList-inl.h
+@@ -116,6 +116,7 @@ namespace jit {
+   _(js::irregexp::CaseInsensitiveCompareNonUnicode)                            \
+   _(js::irregexp::CaseInsensitiveCompareUnicode)                               \
+   _(js::irregexp::GrowBacktrackStack)                                          \
++  _(js::irregexp::HandleRegExpInterrupt)                                       \
+   _(js::irregexp::IsCharacterInRangeArray)                                     \
+   _(js::jit::AllocateAndInitTypedArrayBuffer)                                  \
+   _(js::jit::AllocateBigIntNoGC)                                               \

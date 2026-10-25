@@ -1,0 +1,82 @@
+diff --git a/src/regexp/regexp-compiler-tonode.cc b/src/regexp/regexp-compiler-tonode.cc
+index 2ae70c3fe7e..ba662d5d894 100644
+--- a/src/regexp/regexp-compiler-tonode.cc
++++ b/src/regexp/regexp-compiler-tonode.cc
+@@ -2,6 +2,8 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include <vector>
++
+ #include "src/common/globals.h"
+ #include "src/execution/isolate.h"
+ #include "src/objects/string.h"
+@@ -1077,6 +1079,19 @@ void Disjunction::RationalizeConsecutiveAtoms(Compiler* compiler) {
+ }
+ 
+ // Optimizes b|c|z to [bcz].
++bool IsSingleCharacterAtom(const Atom* atom, Flags flags) {
++  if (atom->length() == 1) return true;
++  return IsEitherUnicode(flags) && atom->length() == 2 &&
++         unibrow::Utf16::IsLeadSurrogate(atom->data().at(0)) &&
++         unibrow::Utf16::IsTrailSurrogate(atom->data().at(1));
++}
++
++base::uc32 SingleCharacterAtomCodePoint(const Atom* atom) {
++  if (atom->length() == 1) return atom->data().at(0);
++  return unibrow::Utf16::CombineSurrogatePair(atom->data().at(0),
++                                              atom->data().at(1));
++}
++
+ void Disjunction::FixSingleCharacterDisjunctions(Compiler* compiler) {
+   Zone* zone = compiler->zone();
+   ZoneList<Tree*>* alternatives = this->alternatives();
+@@ -1092,16 +1107,21 @@ void Disjunction::FixSingleCharacterDisjunctions(Compiler* compiler) {
+       continue;
+     }
+     Atom* const atom = alternative->AsAtom();
+-    if (atom->length() != 1) {
++    const Flags flags = compiler->flags();
++    if (!IsSingleCharacterAtom(atom, flags)) {
+       alternatives->at(write_posn++) = alternatives->at(i);
+       i++;
+       continue;
+     }
+-    const Flags flags = compiler->flags();
+-    DCHECK_IMPLIES(IsEitherUnicode(flags),
++    DCHECK_IMPLIES(IsEitherUnicode(flags) && atom->length() == 1,
+                    !unibrow::Utf16::IsLeadSurrogate(atom->data().at(0)));
+     bool contains_trail_surrogate =
+         unibrow::Utf16::IsTrailSurrogate(atom->data().at(0));
++    if (compiler->read_backward() && atom->length() == 2) {
++      std::vector<base::uc16> units(atom->data().begin(), atom->data().end());
++      contains_trail_surrogate |=
++          unibrow::Utf16::IsTrailSurrogate(*(units.data() + atom->length()));
++    }
+     int first_in_run = i;
+     i++;
+     // Find a run of single-character atom alternatives that have identical
+@@ -1110,8 +1130,8 @@ void Disjunction::FixSingleCharacterDisjunctions(Compiler* compiler) {
+       alternative = alternatives->at(i);
+       if (!alternative->IsAtom()) break;
+       Atom* const alt_atom = alternative->AsAtom();
+-      if (alt_atom->length() != 1) break;
+-      DCHECK_IMPLIES(IsEitherUnicode(flags),
++      if (!IsSingleCharacterAtom(alt_atom, flags)) break;
++      DCHECK_IMPLIES(IsEitherUnicode(flags) && alt_atom->length() == 1,
+                      !unibrow::Utf16::IsLeadSurrogate(alt_atom->data().at(0)));
+       contains_trail_surrogate |=
+           unibrow::Utf16::IsTrailSurrogate(alt_atom->data().at(0));
+@@ -1124,8 +1144,10 @@ void Disjunction::FixSingleCharacterDisjunctions(Compiler* compiler) {
+           zone->New<ZoneList<CharacterRange>>(2, zone);
+       for (int j = 0; j < run_length; j++) {
+         Atom* old_atom = alternatives->at(j + first_in_run)->AsAtom();
+-        DCHECK_EQ(old_atom->length(), 1);
+-        ranges->Add(CharacterRange::Singleton(old_atom->data().at(0)), zone);
++        DCHECK(IsSingleCharacterAtom(old_atom, flags));
++        ranges->Add(CharacterRange::Singleton(
++                        SingleCharacterAtomCodePoint(old_atom)),
++                    zone);
+       }
+       ClassRanges::ClassRangesFlags class_ranges_flags;
+       if (IsEitherUnicode(flags) && contains_trail_surrogate) {

@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "cee4c3980e245270b153c3a9621d746ca4e1da49",
+      "edited_message": null,
+      "patch": "diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c\nindex cf22245..9b3b369 100644\n--- a/src/media_tools/crypt_tools.c\n+++ b/src/media_tools/crypt_tools.c\n@@ -343,7 +343,7 @@ static void crypt_cpix_drm_del(GF_CryptDRMInfo *drm)\n static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)\n {\n \tGF_DOMParser *parser = NULL;\n-\tGF_XMLNode *root, *key_list, *key_node, *data_node, *plain_node, *drm_list, *drm_node, *rule_list, *rule_node;\n+\tGF_XMLNode *root, *key_list, *key_node, *data_node, *plain_node = NULL, *drm_list, *drm_node, *rule_list, *rule_node;\n \tGF_CryptInfo *info = NULL;\n \tGF_TrackCryptInfo *tci = NULL;\n \tGF_TrackCryptInfo *loaded_tci = NULL;\n@@ -448,21 +448,6 @@ static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)\n \t\tgoto exit;\n \t}\n \n-\ttext = crypt_xml_get_text(plain_node);\n-\te = crypt_cpix_decode_b64(text, &decoded, &decoded_size);\n-\tif (text) {\n-\t\tgf_free(text);\n-\t\ttext = NULL;\n-\t}\n-\tif (e || (decoded_size != 16)) {\n-\t\tGF_LOG(GF_LOG_ERROR, GF_LOG_PARSER, (\"[CPIX] ContentKey PlainValue must decode to 16 bytes\\n\"));\n-\t\tif (!e) e = GF_BAD_PARAM;\n-\t\tgoto exit;\n-\t}\n-\tmemcpy(tci->keys[0].key, decoded, 16);\n-\tgf_free(decoded);\n-\tdecoded = NULL;\n-\n \te = crypt_cpix_decode_b64(iv_value, &decoded, &decoded_size);\n \tif (e || ((decoded_size != 8) && (decoded_size != 16))) {\n \t\tGF_LOG(GF_LOG_ERROR, GF_LOG_PARSER, (\"[CPIX] explicitIV must decode to 8 or 16 bytes\\n\"));\n@@ -599,6 +584,20 @@ static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)\n \t}\n \n exit:\n+\tif (!e && plain_node) {\n+\t\ttext = crypt_xml_get_text(plain_node);\n+\t\te = crypt_cpix_decode_b64(text, &decoded, &decoded_size);\n+\t\tif (text) {\n+\t\t\tgf_free(text);\n+\t\t\ttext = NULL;\n+\t\t}\n+\t\tif (e || (decoded_size != 16)) {\n+\t\t\tGF_LOG(GF_LOG_ERROR, GF_LOG_PARSER, (\"[CPIX] ContentKey PlainValue must decode to 16 bytes\\n\"));\n+\t\t\tif (!e) e = GF_BAD_PARAM;\n+\t\t} else {\n+\t\t\tmemcpy(loaded_tci->keys[0].key, decoded, 16);\n+\t\t}\n+\t}\n \tif (text) gf_free(text);\n \tif (hls) gf_free(hls);\n \tif (decoded) gf_free(decoded);\n"
+    },
+    {
+      "sha": "7b10b0587c9c9a9cfb5226481c32b64c5a0ca796",
+      "edited_message": null,
+      "patch": "diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c\n--- a/src/media_tools/crypt_tools.c\n+++ b/src/media_tools/crypt_tools.c\n@@ -569,6 +569,10 @@\n \t\t\t\t\tgf_free(hls);\n \t\t\t}\n \t\t}\n+\t}\n+\tif (!drm_list && parser) {\n+\t\tgf_xml_dom_del(parser);\n+\t\tparser = NULL;\n \t}\n \n exit:\n"
+    }
+  ],
+  "coupling": "The CPIX introduction defers PlainValue decoding until the shared exit path, while the later XML text allocation cleanup releases the DOM early for documents without DRMSystemList. With only the first change, the DOM still owns the node when decoding runs; with only the second, PlainValue is decoded before the early release. Together the deferred lookup dereferences a freed XML node. Repair requires coordinating the producer lifetime and the deferred consumer across the commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "gf_crypt_info_load via a registered GF_Blob URL",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

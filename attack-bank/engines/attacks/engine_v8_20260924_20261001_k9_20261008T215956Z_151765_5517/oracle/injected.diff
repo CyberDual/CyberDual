@@ -1,0 +1,57 @@
+diff --git a/src/regexp/regexp-compiler-tonode.cc b/src/regexp/regexp-compiler-tonode.cc
+index 2ae70c3fe7e..e0d87128989 100644
+--- a/src/regexp/regexp-compiler-tonode.cc
++++ b/src/regexp/regexp-compiler-tonode.cc
+@@ -1125,7 +1125,32 @@ void Disjunction::FixSingleCharacterDisjunctions(Compiler* compiler) {
+       for (int j = 0; j < run_length; j++) {
+         Atom* old_atom = alternatives->at(j + first_in_run)->AsAtom();
+         DCHECK_EQ(old_atom->length(), 1);
+-        ranges->Add(CharacterRange::Singleton(old_atom->data().at(0)), zone);
++        base::uc16 character = old_atom->data().at(0);
++#ifdef V8_INTL_SUPPORT
++        if (compiler->read_backward() && IsIgnoreCase(flags) &&
++            !IsEitherUnicode(flags) &&
++            CaseFolding::EquivalenceKey(
++                character, CaseFolding::Mode::kNonUnicode) !=
++                u_foldCase(character, U_FOLD_CASE_DEFAULT)) {
++          icu::UnicodeSet equivalent;
++          equivalent.add(character);
++          CaseFolding::CloseOver(equivalent,
++                                 CaseFolding::Mode::kNonUnicode);
++          std::unique_ptr<base::uc16[]> singleton(new base::uc16[1]);
++          int count = 0;
++          for (int r = 0; r < equivalent.getRangeCount(); r++) {
++            for (UChar32 c = equivalent.getRangeStart(r);
++                 c <= equivalent.getRangeEnd(r); c++) {
++              singleton[count++] = static_cast<base::uc16>(c);
++            }
++          }
++          for (int k = 0; k < count; k++) {
++            ranges->Add(CharacterRange::Singleton(singleton[k]), zone);
++          }
++          continue;
++        }
++#endif  // V8_INTL_SUPPORT
++        ranges->Add(CharacterRange::Singleton(character), zone);
+       }
+       ClassRanges::ClassRangesFlags class_ranges_flags;
+       if (IsEitherUnicode(flags) && contains_trail_surrogate) {
+diff --git a/src/regexp/special-case.h b/src/regexp/special-case.h
+index 3279be6df31..bb71f9d6bc8 100644
+--- a/src/regexp/special-case.h
++++ b/src/regexp/special-case.h
+@@ -80,7 +80,13 @@ class V8_EXPORT_PRIVATE CaseFolding final : public AllStatic {
+       set.removeAll(IgnoreSet());
+       return;
+     }
+-    if (IgnoreSet().containsAll(set)) return;
++    if (IgnoreSet().containsAll(set)) {
++      if (set.size() == 1 && set.charAt(0) > 0x7f &&
++          u_foldCase(set.charAt(0), U_FOLD_CASE_DEFAULT) < 0x80) {
++        set.closeOver(USET_SIMPLE_CASE_INSENSITIVE);
++      }
++      return;
++    }
+     // Ignored characters neither contribute nor acquire equivalents, but
+     // must remain in the result if they were explicitly present.
+     icu::UnicodeSet ignored(set);

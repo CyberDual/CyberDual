@@ -1,0 +1,20 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 08ef9f72d53db713126e3461acab78c1578eb8c3..19b480218f9fb054b17aae926288a02bc7fbf78f 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2434,6 +2434,15 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal) {
+     return XML_STATUS_ERROR;
+   }
+ 
++  // Reject a length that does not fit in the buffer most recently handed
++  // out by XML_GetBuffer; proceeding would read past the allocation.
++  if (len > EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd)) {
++    parser->m_errorCode = XML_ERROR_NO_MEMORY;
++    parser->m_eventPtr = parser->m_eventEndPtr = parser->m_bufferEnd + len;
++    parser->m_processor = errorProcessor;
++    return XML_STATUS_ERROR;
++  }
++
+   start = parser->m_bufferPtr;
+   parser->m_positionPtr = start;
+   parser->m_bufferEnd += len;

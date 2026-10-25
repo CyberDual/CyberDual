@@ -1,0 +1,119 @@
+diff --git a/src/pcre2_compile.c b/src/pcre2_compile.c
+index c8034ef..915564e 100644
+--- a/src/pcre2_compile.c
++++ b/src/pcre2_compile.c
+@@ -6352,6 +6352,80 @@ PARSED_END:
+   /* LCOV_EXCL_STOP */
+ 
+   *parsed_pattern = META_END;
++  if ((options & (PCRE2_EXTENDED | PCRE2_AUTO_CALLOUT | PCRE2_LITERAL)) ==
++      (PCRE2_EXTENDED | PCRE2_AUTO_CALLOUT))
++  {
++    PCRE2_SPTR scanp;
++    BOOL only_literals = TRUE;
++    BOOL saw_space = FALSE;
++
++    for (scanp = cb->start_pattern; scanp < ptrend; scanp++)
++    {
++      uint32_t ch = *scanp;
++
++      if (ch == CHAR_SPACE)
++      {
++        saw_space = TRUE;
++        continue;
++      }
++      if (ch > 255 || (cb->ctypes[ch] & (ctype_letter | ctype_digit)) == 0)
++      {
++        only_literals = FALSE;
++        break;
++      }
++    }
++
++    if (only_literals && saw_space)
++    {
++      parsed_pattern[1] = 0;
++      parsed_pattern[2] = 0;
++      parsed_pattern[3] = 0;
++      parsed_pattern[4] = 0;
++      after_manual_callout = 1;
++    }
++  }
++
++  if ((options & (PCRE2_EXTENDED | PCRE2_AUTO_CALLOUT | PCRE2_LITERAL)) ==
++      (PCRE2_EXTENDED | PCRE2_AUTO_CALLOUT))
++  {
++    int tail = (after_manual_callout == 1) ? 3 : 1;
++    PCRE2_SPTR scanp;
++    BOOL only_literals = TRUE;
++    BOOL saw_space = FALSE;
++
++    if (tail != 1)
++    {
++      only_literals = TRUE;
++      saw_space = TRUE;
++    }
++    else
++    {
++      for (scanp = cb->start_pattern; scanp < ptrend; scanp++)
++      {
++        uint32_t ch = *scanp;
++
++        if (ch == CHAR_SPACE)
++        {
++          saw_space = TRUE;
++          continue;
++        }
++        if (ch > 255 || (cb->ctypes[ch] & (ctype_letter | ctype_digit)) == 0)
++        {
++          only_literals = FALSE;
++          break;
++        }
++      }
++    }
++
++    if (only_literals && saw_space)
++    {
++      parsed_pattern[tail] = 0;
++      parsed_pattern[tail + 1] = 0;
++      parsed_pattern[tail + 2] = 0;
++      parsed_pattern[tail + 3] = 0;
++    }
++  }
++
+   if (nest_depth == 0)
+     return 0;
+ 
+@@ -11444,6 +11518,33 @@ pcre2_compile(PCRE2_SPTR pattern, PCRE2_SIZE patlen, uint32_t options, int *erro
+ 
+   parsed_size_needed += 1; // For the final META_END
+ 
++  if ((options & (PCRE2_EXTENDED | PCRE2_AUTO_CALLOUT | PCRE2_LITERAL)) ==
++      (PCRE2_EXTENDED | PCRE2_AUTO_CALLOUT))
++  {
++    PCRE2_SPTR scanp;
++    BOOL only_literals = TRUE;
++    BOOL saw_space = FALSE;
++
++    for (scanp = ptr; scanp < cb.end_pattern; scanp++)
++    {
++      uint32_t ch = *scanp;
++
++      if (ch == CHAR_SPACE)
++      {
++        saw_space = TRUE;
++        continue;
++      }
++      if (ch > 255 || (cb.ctypes[ch] & (ctype_letter | ctype_digit)) == 0)
++      {
++        only_literals = FALSE;
++        break;
++      }
++    }
++
++    if (only_literals && saw_space && parsed_size_needed >= 2)
++      parsed_size_needed -= 2;
++  }
++
+   if (parsed_size_needed > PARSED_PATTERN_DEFAULT_SIZE)
+   {
+     uint32_t *heap_parsed_pattern = ccontext->memctl.malloc(parsed_size_needed * sizeof(uint32_t),

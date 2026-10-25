@@ -1,0 +1,24 @@
+diff --git a/lib/urlapi.c b/lib/urlapi.c
+index 4f7aacd..4eeec0a 100644
+--- a/lib/urlapi.c
++++ b/lib/urlapi.c
+@@ -53,7 +53,9 @@
+ 
+ /* scheme is not URL encoded, the longest libcurl supported ones are... */
+ #define MAX_SCHEME_LEN 40
+-#define MAX_ZONEID_LEN 16
++/* longest accepted IPv6 zone id / scope name, including the NUL; sized to
++   hold long interface names seen on some platforms (bridges, VLANs, etc.) */
++#define MAX_ZONEID_LEN 48
+ 
+ /*
+  * If USE_IPV6 is disabled, we still want to parse IPv6 addresses, so make
+@@ -478,7 +480,7 @@ UNITTEST CURLUcode ipv6_parse(struct Curl_URL *u, char *hostname,
+     hlen = len;
+     if(hostname[len] == '%') {
+       /* this could now be '%[zone id]' */
+-      char zoneid[MAX_ZONEID_LEN];
++      char zoneid[16];
+       int i = 0;
+       char *h = &hostname[len + 1];
+       /* pass '25' if present and is a URL encoded percent sign */

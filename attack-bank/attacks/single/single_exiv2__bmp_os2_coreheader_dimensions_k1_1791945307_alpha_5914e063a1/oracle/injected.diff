@@ -1,0 +1,65 @@
+diff --git a/src/bmpimage.cpp b/src/bmpimage.cpp
+index e3377b62895585ac9c1f2ae4780ab52382feaaaf..77514a19cc3944e4589a332e7e9cc0211996d893 100644
+--- a/src/bmpimage.cpp
++++ b/src/bmpimage.cpp
+@@ -79,11 +79,26 @@ void BmpImage::readMetadata() {
+     4 = JPEG; 5 = PNG 34      4 bytes  image size             size of the raw bitmap data, in bytes 38      4
+     bytes  horizontal resolution  (in pixels per meter) 42      4 bytes  vertical resolution    (in pixels per
+     meter) 46      4 bytes  color count 50      4 bytes  important colors       number of "important" colors
++
++    OS/2 1.x and Windows 2.x bitmaps carry a 12-byte BITMAPCOREHEADER instead:
++    its width and height are 16-bit fields located at offsets 18 and 20.
+   */
+-  byte buf[26];
++  byte buf[18];
+   if (io_->read(buf, sizeof(buf)) == sizeof(buf)) {
+-    pixelWidth_ = getULong(buf + 18, littleEndian);
+-    pixelHeight_ = getULong(buf + 22, littleEndian);
++    const uint32_t headerSize = getULong(buf + 14, littleEndian);
++    if (headerSize == 12) {
++      byte core[4];
++      if (io_->read(core, headerSize - 4) == headerSize - 4) {
++        pixelWidth_ = getUShort(core, littleEndian);
++        pixelHeight_ = getUShort(core + 2, littleEndian);
++      }
++    } else {
++      byte info[8];
++      if (io_->read(info, sizeof(info)) == sizeof(info)) {
++        pixelWidth_ = getULong(info, littleEndian);
++        pixelHeight_ = getULong(info + 4, littleEndian);
++      }
++    }
+   }
+ }
+ 
+diff --git a/unitTests/test_bmpimage.cpp b/unitTests/test_bmpimage.cpp
+index 0c3eab0650482baf3d9dfbb5e0d7dbaa1d4095dc..a10035aeddf373d9704f2898589254f74c0d2c27 100644
+--- a/unitTests/test_bmpimage.cpp
++++ b/unitTests/test_bmpimage.cpp
+@@ -94,6 +94,26 @@ TEST(BmpImage, readMetadataReadsImageDimensionsWhenDataIsAvailable) {
+   ASSERT_EQ(800u, bmp.pixelHeight());
+ }
+ 
++TEST(BmpImage, readMetadataReadsDimensionsFromBitmapCoreHeader) {
++  const std::array<unsigned char, 26> header{
++      'B',  'M',               // Signature                                                         off:0   size:2
++      0x1A, 0x00, 0x00, 0x00,  // Size of the BMP file in bytes                                     off:2,  size:4
++      0x00, 0x00, 0x00, 0x00,  // Reserved                                                          off:6,  size:4
++      0x1A, 0x00, 0x00, 0x00,  // Offset of the byte where the bitmap image data can be found       off:10, size:4
++      0x0C, 0x00, 0x00, 0x00,  // Size of the BITMAPCOREHEADER                                      off:14, size:4
++      0x00, 0x05,              // The bitmap width in pixels (unsigned 16 bit)                      off:18, size:2
++      0x20, 0x03,              // The bitmap height in pixels (unsigned 16 bit)                     off:20, size:2
++      0x01, 0x00,              // The plane count                                                   off:22, size:2
++      0x18, 0x00,              // The bit count                                                     off:24, size:2
++  };
++
++  auto memIo = std::make_unique<MemIo>(header.data(), header.size());
++  BmpImage bmp(std::move(memIo), defaultImageCtorParams(false));
++  ASSERT_NO_THROW(bmp.readMetadata());
++  ASSERT_EQ(1280u, bmp.pixelWidth());
++  ASSERT_EQ(800u, bmp.pixelHeight());
++}
++
+ TEST(BmpImage, readMetadataThrowsWhenImageIsNotBMP) {
+   const std::array<unsigned char, 26> header{
+       'B',  'A',               // Signature                                                         off:0   size:2

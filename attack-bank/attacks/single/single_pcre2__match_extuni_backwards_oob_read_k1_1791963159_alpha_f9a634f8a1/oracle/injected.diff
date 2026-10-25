@@ -1,0 +1,820 @@
+diff --git a/build.zig b/build.zig
+deleted file mode 100644
+index 61a13f23cebd75052f28ef00e6bac4b2aacdc555..0000000000000000000000000000000000000000
+--- a/build.zig
++++ /dev/null
+@@ -1,268 +0,0 @@
+-const std = @import("std");
+-
+-pub const CodeUnitWidth = enum {
+-    @"8",
+-    @"16",
+-    @"32",
+-};
+-
+-pub fn build(b: *std.Build) !void {
+-    const optimize = b.standardOptimizeOption(.{});
+-    const target = b.standardTargetOptions(.{});
+-    const rt = target.result;
+-
+-    const linkage = b.option(std.builtin.LinkMode, "linkage", "whether to statically or dynamically link the library") orelse @as(std.builtin.LinkMode, if (rt.isGnuLibC()) .dynamic else .static);
+-    const sanitize_c = b.option(std.zig.SanitizeC, "sanitize_c", "whether to build with undefined behaviour sanitizer enabled") orelse .off;
+-    const codeUnitWidth = b.option(CodeUnitWidth, "code-unit-width", "Sets the code unit width") orelse .@"8";
+-    const support_jit = b.option(bool, "support_jit", "Enable/disable JIT compiler support") orelse false;
+-
+-    const sljit_is_checked_out = if (!support_jit)
+-        false
+-    else if (b.build_root.handle.access(
+-        b.graph.io,
+-        "deps/sljit/sljit_src/sljitLir.c",
+-        .{},
+-    )) |_| true else |err| switch (err) {
+-        error.FileNotFound => false,
+-        else => return err,
+-    };
+-
+-    // We don't know how the sljit dependency is being provided. Either it
+-    // comes via a git submodule, or it may be fetched by zig itself.
+-    const sljit_include_path = if (!support_jit)
+-        null
+-    else if (sljit_is_checked_out)
+-        null
+-    else blk: {
+-        const sljit = b.lazyDependency("sljit", .{}) orelse
+-            break :blk null;
+-
+-        const files = b.addWriteFiles();
+-
+-        // Recreate the layout used by pcre2_jit_compile.c's relative include.
+-        _ = files.addCopyDirectory(
+-            sljit.path("sljit_src"),
+-            "deps/sljit/sljit_src",
+-            .{},
+-        );
+-        _ = files.add("src/.empty", "");
+-
+-        break :blk files.getDirectory().path(b, "src");
+-    };
+-
+-    const pcre2_h_dir = b.addWriteFiles();
+-    const pcre2_h = pcre2_h_dir.addCopyFile(b.path("src/pcre2.h.generic"), "pcre2.h");
+-    b.addNamedLazyPath("pcre2.h", pcre2_h);
+-
+-    const is_unix = rt.os.tag != .windows;
+-    const is_mingw = rt.isMinGW();
+-    const is_musl = rt.isMuslLibC();
+-    const is_glibc = rt.isGnuLibC();
+-    const is_freebsd = rt.isFreeBSDLibC();
+-
+-    const cflags = &.{
+-        "-fvisibility=hidden",
+-    };
+-
+-    const config_h = b.addConfigHeader(
+-        .{
+-            .style = .{
+-                .cmake = b.path("src/config-cmake.h.in"),
+-            },
+-            .include_path = "config.h",
+-        },
+-        // These options should be kept in-sync with those in config-cmake.h.in, and
+-        // should be the same set of options (no more needed). It is permitted to
+-        // specify fewer options here than in config-cmake.h.in, if an option is
+-        // disabled in all zig build configurations.
+-        .{
+-            .HAVE_ASSERT_H = true,
+-            .HAVE_DIRENT_H = is_unix or is_mingw,
+-            .HAVE_SYS_STAT_H = true,
+-            .HAVE_SYS_TYPES_H = true,
+-            .HAVE_UNISTD_H = is_unix or is_mingw,
+-            .HAVE_WINDOWS_H = rt.os.tag == .windows,
+-
+-            .HAVE_MEMFD_CREATE = is_musl or is_glibc or is_freebsd,
+-            .HAVE_SECURE_GETENV = is_musl or is_glibc or is_freebsd,
+-            .HAVE_SETRLIMIT = is_unix and !is_mingw,
+-
+-            // all compilation is using the Zig bundled c compiler
+-            .HAVE_BUILTIN_ASSUME = null,
+-            .HAVE_BUILTIN_MUL_OVERFLOW = true,
+-            .HAVE_BUILTIN_UNREACHABLE = true,
+-            .HAVE_ATTRIBUTE_UNINITIALIZED = true,
+-
+-            .SUPPORT_PCRE2_8 = codeUnitWidth == .@"8",
+-            .SUPPORT_PCRE2_16 = codeUnitWidth == .@"16",
+-            .SUPPORT_PCRE2_32 = codeUnitWidth == .@"32",
+-            .SUPPORT_UNICODE = true,
+-            .SUPPORT_JIT = support_jit,
+-
+-            // As for CMake builds, use visibilty attributes for both shared and static
+-            // builds. Internal symbols should be hidden even in static builds, because
+-            // the user could be statically linking PCRE2 into their own shared library.
+-            .PCRE2_EXPORT = "__attribute__ ((visibility (\"default\")))",
+-
+-            .PCRE2_LINK_SIZE = 2,
+-            .PCRE2_PARENS_NEST_LIMIT = 250,
+-            .PCRE2_HEAP_LIMIT = 20000000,
+-            .PCRE2_MAX_VARLOOKBEHIND = 255,
+-            .PCRE2_MATCH_LIMIT = 10000000,
+-            .PCRE2_MATCH_LIMIT_DEPTH = "MATCH_LIMIT",
+-            .PCRE2GREP_BUFSIZE = 20480,
+-            .PCRE2GREP_MAX_BUFSIZE = 1048576,
+-            .NEWLINE_DEFAULT = 2,
+-        },
+-    );
+-
+-    // pcre2-8/16/32 library
+-    const lib_mod = b.createModule(.{
+-        .target = target,
+-        .optimize = optimize,
+-        .sanitize_c = sanitize_c,
+-        .link_libc = true,
+-    });
+-
+-    lib_mod.addCMacro("HAVE_CONFIG_H", "");
+-    lib_mod.addCMacro("PCRE2_CODE_UNIT_WIDTH", @tagName(codeUnitWidth));
+-    switch (linkage) {
+-        .static => lib_mod.addCMacro("PCRE2_STATIC", ""),
+-        .dynamic => {},
+-    }
+-    lib_mod.addConfigHeader(config_h);
+-    lib_mod.addIncludePath(pcre2_h_dir.getDirectory());
+-    lib_mod.addIncludePath(b.path("src"));
+-    if (sljit_include_path) |include_path| {
+-        lib_mod.addIncludePath(include_path);
+-    }
+-
+-    lib_mod.addCSourceFile(.{
+-        .file = b.addWriteFiles().addCopyFile(b.path("src/pcre2_chartables.c.dist"), "pcre2_chartables.c"),
+-        .flags = cflags,
+-    });
+-    lib_mod.addCSourceFiles(.{
+-        .files = &.{
+-            "src/pcre2_auto_possess.c",
+-            "src/pcre2_chkdint.c",
+-            "src/pcre2_compile.c",
+-            "src/pcre2_compile_cgroup.c",
+-            "src/pcre2_compile_class.c",
+-            "src/pcre2_config.c",
+-            "src/pcre2_context.c",
+-            "src/pcre2_convert.c",
+-            "src/pcre2_dfa_match.c",
+-            "src/pcre2_error.c",
+-            "src/pcre2_extuni.c",
+-            "src/pcre2_find_bracket.c",
+-            "src/pcre2_jit_compile.c",
+-            "src/pcre2_maketables.c",
+-            "src/pcre2_match.c",
+-            "src/pcre2_match_data.c",
+-            "src/pcre2_match_next.c",
+-            "src/pcre2_newline.c",
+-            "src/pcre2_ord2utf.c",
+-            "src/pcre2_pattern_info.c",
+-            "src/pcre2_script_run.c",
+-            "src/pcre2_serialize.c",
+-            "src/pcre2_string_utils.c",
+-            "src/pcre2_study.c",
+-            "src/pcre2_substitute.c",
+-            "src/pcre2_substring.c",
+-            "src/pcre2_tables.c",
+-            "src/pcre2_ucd.c",
+-            "src/pcre2_valid_utf.c",
+-            "src/pcre2_xclass.c",
+-        },
+-        .flags = cflags,
+-    });
+-
+-    const lib = b.addLibrary(.{
+-        .name = b.fmt("pcre2-{t}", .{codeUnitWidth}),
+-        .root_module = lib_mod,
+-        .linkage = linkage,
+-    });
+-
+-    lib.installHeader(pcre2_h, "pcre2.h");
+-    b.installArtifact(lib);
+-
+-    // pcre2test
+-    const pcre2test_mod = b.createModule(.{
+-        .target = target,
+-        .optimize = optimize,
+-        .sanitize_c = sanitize_c,
+-        .link_libc = true,
+-    });
+-
+-    pcre2test_mod.addCMacro("HAVE_CONFIG_H", "");
+-
+-    // Note: On Windows, consumers linking against the static library should
+-    // probably define PCRE2_STATIC themselves (e.g. via
+-    // addCMacro("PCRE2_STATIC", "")).
+-    // As far as I know, Zig's build system does not currently have a mechanism
+-    // to propagate compile definitions to downstream consumers (like CMake's
+-    // PUBLIC target_compile_definitions). On non-Windows targets this is a no-op.
+-    switch (linkage) {
+-        .static => pcre2test_mod.addCMacro("PCRE2_STATIC", ""),
+-        .dynamic => pcre2test_mod.addCMacro("PCRE2POSIX_SHARED", ""),
+-    }
+-
+-    const pcre2test = b.addExecutable(.{
+-        .name = "pcre2test",
+-        .root_module = pcre2test_mod,
+-    });
+-    pcre2test_mod.addConfigHeader(config_h);
+-    pcre2test_mod.addIncludePath(pcre2_h_dir.getDirectory());
+-    pcre2test_mod.addIncludePath(b.path("src"));
+-
+-    pcre2test_mod.addCSourceFile(.{
+-        .file = b.path("src/pcre2test.c"),
+-        .flags = cflags,
+-    });
+-
+-    pcre2test_mod.linkLibrary(lib);
+-    b.installArtifact(pcre2test);
+-
+-    // pcre2-posix library
+-    if (codeUnitWidth == CodeUnitWidth.@"8") {
+-        const posixLib_mod = b.createModule(.{
+-            .target = target,
+-            .optimize = optimize,
+-            .sanitize_c = sanitize_c,
+-            .link_libc = true,
+-        });
+-
+-        posixLib_mod.addCMacro("HAVE_CONFIG_H", "");
+-        posixLib_mod.addCMacro("PCRE2_CODE_UNIT_WIDTH", @tagName(codeUnitWidth));
+-
+-        switch (linkage) {
+-            .static => posixLib_mod.addCMacro("PCRE2_STATIC", ""),
+-            .dynamic => posixLib_mod.addCMacro("PCRE2POSIX_SHARED", ""),
+-        }
+-
+-        posixLib_mod.addConfigHeader(config_h);
+-        posixLib_mod.addIncludePath(pcre2_h_dir.getDirectory());
+-        posixLib_mod.addIncludePath(b.path("src"));
+-
+-        posixLib_mod.addCSourceFiles(.{
+-            .files = &.{
+-                "src/pcre2posix.c",
+-            },
+-            .flags = cflags,
+-        });
+-
+-        posixLib_mod.linkLibrary(lib);
+-
+-        const posixLib = b.addLibrary(.{
+-            .name = "pcre2-posix",
+-            .root_module = posixLib_mod,
+-            .linkage = linkage,
+-        });
+-
+-        pcre2test_mod.linkLibrary(posixLib);
+-
+-        b.addNamedLazyPath("pcre2posix.h", b.path("src/pcre2posix.h"));
+-        posixLib.installHeader(b.path("src/pcre2posix.h"), "pcre2posix.h");
+-        b.installArtifact(posixLib);
+-    }
+-}
+diff --git a/build.zig.zon b/build.zig.zon
+deleted file mode 100644
+index 2962b24e81d7f3fb9d926773c4c0214d053f0129..0000000000000000000000000000000000000000
+--- a/build.zig.zon
++++ /dev/null
+@@ -1,25 +0,0 @@
+-.{
+-    .name = .pcre2,
+-    .version = "10.48.0-DEV",
+-
+-    // Do NOT change this for new releases.
+-    // DO change this if making a fork of PCRE2 which is used by any Zig clients.
+-    .fingerprint = 0x914b3d63ebab9e21,
+-
+-    .minimum_zig_version = "0.16.0",
+-    .dependencies = .{
+-        .sljit = .{
+-            .url = "git+https://github.com/zherczeg/sljit.git#de0259c7aaf36aa40cba8014f3fad3edde9307f9",
+-            .hash = "N-V-__8AAN1hRgCbYkMHlPE4yQE6rN_yDbzE1yr8W1J6x-Gw",
+-            .lazy = true,
+-        },
+-    },
+-    .paths = .{
+-        "build.zig",   "build.zig.zon",
+-        "src/",        "doc/",
+-        "deps/",       "HACKING",
+-        "INSTALL",     "README.md",
+-        "LICENCE.md",  "AUTHORS.md",
+-        "SECURITY.md",
+-    },
+-}
+diff --git a/core.1637 b/core.1637
+new file mode 100644
+index 0000000000000000000000000000000000000000..a0265db4d2e25938b36d999e27d1fab4a12d9ca4
+GIT binary patch
+literal 307200
+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
+HBm@5sv+4(L
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/pcre2_extuni.c b/src/pcre2_extuni.c
+index 1b7f04b4b2f38e8896938fa09b18c7147833ae98..541ce48e3f57c447f04842527e2ff31270aff89a 100644
+--- a/src/pcre2_extuni.c
++++ b/src/pcre2_extuni.c
+@@ -80,7 +80,7 @@ same behaviour.
+ Arguments:
+   c              the first character
+   eptr           pointer to next character
+-  start_subject  pointer to start of subject
++  start_subject  earliest subject byte the backwards scan may read
+   end_subject    pointer to end of subject
+   utf            TRUE if in UTF mode
+   xcount         pointer to count of additional characters,
+@@ -117,22 +117,33 @@ while (eptr < end_subject)
+     {
+     int ricount = 0;
+     PCRE2_SPTR bptr = eptr - 1;
+-    if (utf) BACKCHAR(bptr);
+ 
+-    /* bptr is pointing to the left-hand character */
++    /* bptr is pointing at the previous code unit. Do not walk before
++    start_subject: with PCRE2_MATCH_INVALID_UTF that floor is the start of
++    the checked region, and bytes before it may be continuation units. */
++
++    if (utf)
++      {
++      while (bptr > start_subject && NOT_FIRSTCU(*bptr))
++        bptr--;
++      }
+ 
+     while (bptr > start_subject)
+       {
+-      bptr--;
++      PCRE2_SPTR prev = bptr - 1;
++
+       if (utf)
+         {
+-        BACKCHAR(bptr);
+-        GETCHAR(c, bptr);
++        while (prev > start_subject && NOT_FIRSTCU(*prev))
++          prev--;
++        if (NOT_FIRSTCU(*prev)) break;
++        GETCHAR(c, prev);
+         }
+       else
+-      c = *bptr;
++        c = *prev;
+       if (UCD_GRAPHBREAK(c) != ucp_gbRegional_Indicator) break;
+       ricount++;
++      bptr = prev;
+       }
+     if ((ricount & 1) != 0) break;  /* Grapheme break required */
+     }
+diff --git a/src/pcre2_match.c b/src/pcre2_match.c
+index a5a8421f7c219dc66b7fbb87afffe148664bda40..b307262fa623e3888329d1e5877fbb55b6c7bf55 100644
+--- a/src/pcre2_match.c
++++ b/src/pcre2_match.c
+@@ -2895,7 +2895,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+     else
+       {
+       GETCHARINCTEST(fc, Feptr);
+-      Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject, mb->end_subject, utf,
++      Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject, mb->end_subject, utf,
+         NULL);
+       }
+     CHECK_PARTIAL();
+@@ -3246,7 +3246,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+           else
+             {
+             GETCHARINCTEST(fc, Feptr);
+-            Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject,
++            Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject,
+               mb->end_subject, utf, NULL);
+             }
+           CHECK_PARTIAL();
+@@ -4071,7 +4071,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+           else
+             {
+             GETCHARINCTEST(fc, Feptr);
+-            Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject, mb->end_subject,
++            Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject, mb->end_subject,
+               utf, NULL);
+             }
+           CHECK_PARTIAL();
+@@ -4660,7 +4660,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+           else
+             {
+             GETCHARINCTEST(fc, Feptr);
+-            Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject, mb->end_subject,
++            Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject, mb->end_subject,
+               utf, NULL);
+             }
+           CHECK_PARTIAL();
+@@ -6243,9 +6243,36 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+       {
+       for (i = 0; i < Lmax; i++)
+         {
+-        if (Feptr == mb->start_subject)
++        if (Feptr <= mb->check_subject)
+           {
+           if (i < Lmin) RRETURN(MATCH_NOMATCH);
++
++          /* Invalid-UTF fragments are checked only from check_subject. A code
++          unit sequence may start in the unchecked prefix; UTF characters are
++          at most 4 code units, so inspect that window and begin on the lead. */
++
++          if ((mb->poptions & PCRE2_MATCH_INVALID_UTF) != 0 &&
++              mb->end_subject != mb->true_end_subject &&
++              mb->check_subject > mb->start_subject)
++            {
++            PCRE2_UCHAR window[4];
++            PCRE2_SPTR p = mb->check_subject - 4;
++            int k;
++
++            for (k = 0; k < 4; k++) window[k] = p[k];
++
++            if (NOT_FIRSTCU(window[3]))
++              {
++              int lead = 3;
++              while (lead > 0 && NOT_FIRSTCU(window[lead])) lead--;
++              if (!NOT_FIRSTCU(window[lead]))
++                {
++                PCRE2_SPTR lp = p + lead;
++                if (lp >= mb->start_subject && lp < Feptr) Feptr = lp;
++                }
++              }
++            }
++
+           Lmax = i;
+           break;
+           }

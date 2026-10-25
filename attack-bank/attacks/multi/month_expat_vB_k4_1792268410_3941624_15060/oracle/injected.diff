@@ -1,0 +1,37 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db91..25a358cb 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2586,6 +2586,9 @@ XML_GetBuffer(XML_Parser parser, int len) {
+       parser->m_bufferPtr = parser->m_buffer;
+ #endif /* XML_CONTEXT_BYTES > 0 */
+     } else {
++      int allocationSize = neededSize;
++      if (allocationSize > 0)
++        allocationSize--;
+       int bufferSize
+           = (int)EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_buffer);
+       if (bufferSize == 0)
+@@ -2593,19 +2596,19 @@ XML_GetBuffer(XML_Parser parser, int len) {
+       do {
+         /* Do not invoke signed arithmetic overflow: */
+         bufferSize = (int)(2U * (unsigned)bufferSize);
+-      } while (bufferSize < neededSize && bufferSize > 0);
++      } while (bufferSize <= allocationSize && bufferSize > 0);
+       if (bufferSize <= 0) {
+         parser->m_errorCode = XML_ERROR_NO_MEMORY;
+         return NULL;
+       }
+       // NOTE: We are avoiding MALLOC(..) here to leave limiting
+       //       the input size to the application using Expat.
+-      char *const newBuf = parser->m_mem.malloc_fcn(bufferSize);
++      char *const newBuf = parser->m_mem.malloc_fcn(bufferSize - 1);
+       if (newBuf == NULL) {
+         parser->m_errorCode = XML_ERROR_NO_MEMORY;
+         return NULL;
+       }
+-      setParserBuffer(parser, newBuf, bufferSize, keep);
++      setParserBuffer(parser, newBuf, bufferSize - 1, keep);
+     }
+     parser->m_eventPtr = parser->m_eventEndPtr = NULL;
+     parser->m_positionPtr = NULL;

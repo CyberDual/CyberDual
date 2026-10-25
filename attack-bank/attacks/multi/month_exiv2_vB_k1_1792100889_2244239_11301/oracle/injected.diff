@@ -1,0 +1,34 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 513f94b..be88787 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -850,7 +850,7 @@ void QuickTimeVideo::userDataDecoder(size_t outer_size, size_t recursion_depth)
+   const TagVocabulary* tv;
+   const TagVocabulary* tv_internal;
+ 
+-  const long bufMinSize = 100;
++  const long bufMinSize = 5;
+   DataBuf buf(bufMinSize);
+   size_t size_internal = outer_size;
+   std::memset(buf.data(), 0x0, buf.size());
+@@ -884,11 +884,19 @@ void QuickTimeVideo::userDataDecoder(size_t outer_size, size_t recursion_depth)
+       CameraTagsDecoder(size - 8);
+ 
+     else if (equalsQTimeTag(buf, "CNCV") || equalsQTimeTag(buf, "CNFV") || equalsQTimeTag(buf, "CNMN") ||
+-             equalsQTimeTag(buf, "NCHD") || equalsQTimeTag(buf, "FFMV")) {
++             equalsQTimeTag(buf, "FFMV")) {
+       enforce(tv, Exiv2::ErrorCode::kerCorruptedMetadata);
+       xmpData_[_(tv->label_)] = readString(*io_, size - 8);
+     }
+ 
++    else if (equalsQTimeTag(buf, "NCHD")) {
++      // The Nikon maker note type is a fixed-length 8-byte identifier.
++      enforce(tv, Exiv2::ErrorCode::kerCorruptedMetadata);
++      io_->readOrThrow(buf.data(), 8);
++      buf.write_uint8(8, 0);  // nul-terminate string
++      xmpData_[_(tv->label_)] = buf.data();
++    }
++
+     else if (equalsQTimeTag(buf, "CMbo") || equalsQTimeTag(buf, "Cmbo")) {
+       enforce(tv, Exiv2::ErrorCode::kerCorruptedMetadata);
+       io_->readOrThrow(buf.data(), 2);

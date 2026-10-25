@@ -1,0 +1,49 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index b0b30e7350846b379726a8e794ae40c2187cac8b..b2503b2f1f6ce162baa47a29a875ee17738c2ac4 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -7819,6 +7819,11 @@ dtdCopy(XML_Parser oldParser, DTD *newDtd, const DTD *oldDtd,
+     if (oldE->prefix)
+       newE->prefix = (PREFIX *)lookup(oldParser, &(newDtd->prefixes),
+                                       oldE->prefix->name, 0);
++    /* Collect the prefixed default attribute ids so that their prefix
++       links can be validated once the element type is fully copied. */
++    const ATTRIBUTE_ID *prefixedIds[8];
++    size_t nPrefixedIds = 0;
++
+     for (size_t i = 0; i < newE->nDefaultAtts; i++) {
+       const XML_Char *const attributeName = oldE->defaultAtts[i].id->name;
+       newE->defaultAtts[i].id = (ATTRIBUTE_ID *)lookup(
+@@ -7832,11 +7837,30 @@ dtdCopy(XML_Parser oldParser, DTD *newDtd, const DTD *oldDtd,
+       } else
+         newE->defaultAtts[i].value = NULL;
+ 
+-      NAMED *const nameAddedOrFound = lookup(parser, &(newE->defaultAttForName),
+-                                             attributeName, sizeof(NAMED));
++      NAME_AND_DEFAULT_ATTRIBUTE *const nameAddedOrFound
++          = (NAME_AND_DEFAULT_ATTRIBUTE *)lookup(
++              parser, &(newE->defaultAttForName), attributeName,
++              sizeof(NAME_AND_DEFAULT_ATTRIBUTE));
+       if (! nameAddedOrFound) {
+         return 0;
+       }
++      if (! nameAddedOrFound->initialized) {
++        nameAddedOrFound->attIndex = i;
++        nameAddedOrFound->initialized = true;
++      }
++
++      if (parser->m_ns && oldE->defaultAtts[i].id->prefix
++          && oldE->defaultAtts[i].id->prefix != &oldDtd->defaultPrefix)
++        prefixedIds[nPrefixedIds++] = newE->defaultAtts[i].id;
++    }
++
++    /* Validate the prefix links of the collected default attribute ids. */
++    for (size_t i = 0; i < nPrefixedIds; i++) {
++      const PREFIX *const prefix
++          = (const PREFIX *)lookup(oldParser, &(newDtd->prefixes),
++                                   prefixedIds[i]->prefix->name, 0);
++      if (! prefix)
++        return 0;
+     }
+   }
+ 

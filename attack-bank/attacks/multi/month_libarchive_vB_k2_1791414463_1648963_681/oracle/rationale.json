@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "8be19dad9251e2c1360e77b0deff28f238e3bf7e",
+      "edited_message": "warc: Check URI paths for embedded NUL\n\nReject NUL bytes after the start of a target URI path so a truncated path is not mistaken for another filename.",
+      "patch": "diff --git a/libarchive/archive_read_support_format_warc.c b/libarchive/archive_read_support_format_warc.c\nindex 82adb55..3b20894 100644\n--- a/libarchive/archive_read_support_format_warc.c\n+++ b/libarchive/archive_read_support_format_warc.c\n@@ -754,8 +754,8 @@ warc_read_uri(const char *buf, size_t bsz)\n \t\treturn res;\n \t}\n \n-\t/* Require valid C string representation. */\n-\tif (memchr(uri, '\\0', eol - uri) != NULL)\n+\tif (uri < eol &&\n+\t    memchr(uri + 1, '\\0', eol - uri - 1) != NULL)\n \t\treturn res;\n \n \tres.str = uri;\n"
+    },
+    {
+      "sha": "c76157d0bcc20e328210f04422e918ca789b0870",
+      "edited_message": null,
+      "patch": "--- a/libarchive/archive_read_support_format_warc.c\n+++ b/libarchive/archive_read_support_format_warc.c\n@@ -731,2 +731,3 @@\n \tarchive_strncpy(str, uri, eol - uri);\n+\tstr->length = eol - uri;\n }\n"
+    }
+  ],
+  "coupling": "The first edit leaves a leading NUL in a target path available to the parser; its original fixed-length pool safely stores the complete byte span. The later archive_string conversion copies only the C-string prefix but then records the original wire length. Its original validator rejects this input, so the later edit is safe alone. Together, the stored length can exceed the allocation and the trailing-slash check reads beyond the buffer. A correct repair must reconcile the validation rule with archive_string length semantics across the two commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "archive_read_next_header via archive_read_open_memory",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

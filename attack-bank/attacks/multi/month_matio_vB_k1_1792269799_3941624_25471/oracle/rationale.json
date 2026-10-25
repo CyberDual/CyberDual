@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "c3dcc6340e440286cc5ca6a4647da4fd49a34031",
+      "edited_message": "Bound structure slab readers and support rank 10\n\nKeep indexed source access inside the allocated structure data and allow the rank-10 slab path covered by its fixed-size index arrays.",
+      "patch": "diff --git a/src/matvar_struct.c b/src/matvar_struct.c\nindex 5b714d9..43b9af3 100644\n--- a/src/matvar_struct.c\n+++ b/src/matvar_struct.c\n@@ -353,8 +353,7 @@ Mat_VarGetStructField(const matvar_t *matvar, void *name_or_index, int opt, int\n  * freed, but if copy_fields is zero, the indexed structures are shallow\n  * duplicates of the original with conserved memory and should be freed.\n  *\n- * Note that this function is limited to structure arrays with a rank less than\n- * 10.\n+ * Note that this function supports structure arrays with a rank of 10 or less.\n  *\n  * @ingroup MAT\n  * @param matvar Structure matlab variable\n@@ -388,7 +387,7 @@ Mat_VarGetStructs(const matvar_t *matvar, const int *start, const int *stride, c\n     if ( matvar == NULL || start == NULL || stride == NULL || edge == NULL ) {\n         return NULL;\n     }\n-    if ( matvar->rank > 9 ) {\n+    if ( matvar->rank > 10 ) {\n         return NULL;\n     }\n     if ( matvar->class_type != MAT_C_STRUCT && matvar->class_type != MAT_C_OBJECT ) {\n"
+    },
+    {
+      "sha": "1e981494c7dd964b167184d7cfb2e5add963d2f9",
+      "edited_message": null,
+      "patch": "diff --git a/src/matvar_struct.c b/src/matvar_struct.c\nindex 4818af9..9a51809 100644\n--- a/src/matvar_struct.c\n+++ b/src/matvar_struct.c\n@@ -375,15 +375,15 @@ Mat_VarGetStructs(const matvar_t *matvar, const int *start, const int *stride, c\n                   int copy_fields)\n {\n     size_t i, N, I, nfields, field, ndata,\n-        idx[10] =\n+        idx[9] =\n             {\n                 0,\n             },\n-        cnt[10] =\n+        cnt[9] =\n             {\n                 0,\n             },\n-        dimp[10] = {\n+        dimp[9] = {\n             0,\n         };\n     matvar_t **fields, *struct_slab;\n"
+    }
+  ],
+  "coupling": "The first edited commit widens Mat_VarGetStructs from rank 9 to rank 10; with its original 10-entry idx/cnt/dimp arrays, that wider public contract is safe. The second edited commit later sizes those arrays for the historical rank-9 invariant. Read in isolation, rank is still capped at 9, so every index is in [0,8] and the nine-entry arrays are sufficient. Only the composition admits a valid rank-10 slab and then writes idx[9] (and can index cnt/dimp out of bounds) during dimension setup. A correct repair must reconcile the rank contract widened by the first commit with the array-capacity assumption introduced by the second; restoring the old guard alone rejects newly supported in-contract input, while restoring capacity alone leaves an implicit rank/capacity invariant that the two commits no longer share.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "matio public API: Mat_VarCreateStruct2, Mat_VarSetStructFieldByIndex, Mat_VarGetStructs",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+diff --git a/js/src/intgemm/IntegerGemmIntrinsic.cpp b/js/src/intgemm/IntegerGemmIntrinsic.cpp
+index 94f780009e..570f015c61 100644
+--- a/js/src/intgemm/IntegerGemmIntrinsic.cpp
++++ b/js/src/intgemm/IntegerGemmIntrinsic.cpp
+@@ -467,6 +467,15 @@ int32_t js::intgemm::IntrI8SelectColumnsOfB(wasm::Instance* instance,
+     }
+   }
+ 
++  // The index list must not start inside the output region. gemmology writes
++  // output incrementally while consuming the index list, so an index list that
++  // overlaps the output could be corrupted mid-computation and bypass the
++  // validation above, leading to out-of-bounds reads of the input matrix.
++  uint64_t outputEnd = (uint64_t)output + sizeOutput;
++  if (colIndexList >= output && colIndexList < outputEnd) {
++    return -1;
++  }
++
+   AutoProfilerMarker marker(cx->runtime()->geckoProfiler(),
+                             "integemm::SelectColumnsB",
+                             "rowsB: {} colsB: {} sizecolList: {}, sizeB: {}",

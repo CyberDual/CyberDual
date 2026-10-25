@@ -1,0 +1,120 @@
+diff --git a/js/src/wasm/WasmBCClass.h b/js/src/wasm/WasmBCClass.h
+index 2b5dc5c82a..ed1c775993 100644
+--- a/js/src/wasm/WasmBCClass.h
++++ b/js/src/wasm/WasmBCClass.h
+@@ -975,6 +975,9 @@ struct BaseCompiler final {
+   [[nodiscard]] bool createDebugOnlyStackMapForNonResumingTrap(
+       StackMap** result, Trap t1, Trap t2 = Trap::Limit);
+ 
++  [[nodiscard]] bool createDebugOnlyStackMapsForMemoryAccess(
++      uint32_t first, const MemoryAccessDesc& access);
++
+   ////////////////////////////////////////////////////////////
+   //
+   // Control stack
+diff --git a/js/src/wasm/WasmBCMemory.cpp b/js/src/wasm/WasmBCMemory.cpp
+index 5ac2246a35..a16df69dbe 100644
+--- a/js/src/wasm/WasmBCMemory.cpp
++++ b/js/src/wasm/WasmBCMemory.cpp
+@@ -19,6 +19,7 @@
+ #include "wasm/WasmBCRegDefs.h"
+ #include "wasm/WasmConstants.h"
+ #include "wasm/WasmMemory.h"
++#include "wasm/WasmSummarizeInsn.h"
+ 
+ #include "jit/MacroAssembler-inl.h"
+ #include "wasm/WasmBCClass-inl.h"
+@@ -32,6 +33,34 @@ namespace wasm {
+ 
+ using mozilla::Nothing;
+ 
++bool BaseCompiler::createDebugOnlyStackMapsForMemoryAccess(
++    uint32_t first, const MemoryAccessDesc& access) {
++  if (!compilerEnv_.debugEnabled()) {
++    return true;
++  }
++
++  const TrapSitesForKind& sites = masm.trapSites().get(Trap::OutOfBounds);
++  uint32_t end = sites.length() +
++                 (access.offset32() >> (uint32_t(PageSize::Standard) - 1));
++  for (uint32_t i = first; i < end; i++) {
++    uint32_t start = sites.getPCoffset(i);
++    SummarizeResult summary = SummarizeTrapInstruction(masm, start);
++    if (!summary.identified()) {
++      return false;
++    }
++#if defined(JS_CODEGEN_X86) || defined(JS_CODEGEN_X64)
++    FaultingCodeRange range(start, start + summary.length());
++#else
++    FaultingCodeRange range(start);
++#endif
++    if (!createStackMap(mozilla::Some(Trap::OutOfBounds), range,
++                        HasDebugFrameWithLiveRefs::Maybe)) {
++      return false;
++    }
++  }
++  return true;
++}
++
+ //////////////////////////////////////////////////////////////////////////////
+ //
+ // Heap access subroutines.
+@@ -659,14 +688,17 @@ void BaseCompiler::load(MemoryAccessDesc* access, AccessCheck* check,
+                         RegPtr instance, RegPtr memoryBase, RegI32 ptr,
+                         AnyReg dest, RegI32 temp) {
+   prepareMemoryAccess(access, check, instance, ptr);
++  uint32_t first = masm.trapSites().length(Trap::OutOfBounds);
+   executeLoad(access, instance, memoryBase, ptr, dest, temp,
+               ZeroExtendIndex::Yes);
++  masm.propagateOOM(createDebugOnlyStackMapsForMemoryAccess(first, *access));
+ }
+ 
+ void BaseCompiler::load(MemoryAccessDesc* access, AccessCheck* check,
+                         RegPtr instance, RegPtr memoryBase, RegI64 ptr,
+                         AnyReg dest, RegI64 temp) {
+   prepareMemoryAccess(access, check, instance, ptr);
++  uint32_t first = masm.trapSites().length(Trap::OutOfBounds);
+ 
+ #ifndef JS_64BIT
+   // On 32-bit systems we have a maximum 2GB heap and bounds checking has
+@@ -682,8 +714,9 @@ void BaseCompiler::load(MemoryAccessDesc* access, AccessCheck* check,
+   // Thus the code generated is the same for the 64-bit and the 32-bit case.
+   RegI32 ptr32 = RegI32(ptr.reg);
+ #endif
+-  return executeLoad(access, instance, memoryBase, ptr32, dest,
+-                     maybeFromI64(temp), ZeroExtendIndex::No);
++  executeLoad(access, instance, memoryBase, ptr32, dest, maybeFromI64(temp),
++              ZeroExtendIndex::No);
++  masm.propagateOOM(createDebugOnlyStackMapsForMemoryAccess(first, *access));
+ }
+ 
+ void BaseCompiler::executeStore(MemoryAccessDesc* access, RegPtr instance,
+@@ -799,22 +832,26 @@ void BaseCompiler::store(MemoryAccessDesc* access, AccessCheck* check,
+                          RegPtr instance, RegPtr memoryBase, RegI32 ptr,
+                          AnyReg src, RegI32 temp) {
+   prepareMemoryAccess(access, check, instance, ptr);
++  uint32_t first = masm.trapSites().length(Trap::OutOfBounds);
+   executeStore(access, instance, memoryBase, ptr, src, temp,
+                ZeroExtendIndex::Yes);
++  masm.propagateOOM(createDebugOnlyStackMapsForMemoryAccess(first, *access));
+ }
+ 
+ void BaseCompiler::store(MemoryAccessDesc* access, AccessCheck* check,
+                          RegPtr instance, RegPtr memoryBase, RegI64 ptr,
+                          AnyReg src, RegI64 temp) {
+   prepareMemoryAccess(access, check, instance, ptr);
++  uint32_t first = masm.trapSites().length(Trap::OutOfBounds);
+   // See comments in load()
+ #ifndef JS_64BIT
+   RegI32 ptr32 = RegI32(ptr.low);
+ #else
+   RegI32 ptr32 = RegI32(ptr.reg);
+ #endif
+-  return executeStore(access, instance, memoryBase, ptr32, src,
+-                      maybeFromI64(temp), ZeroExtendIndex::No);
++  executeStore(access, instance, memoryBase, ptr32, src, maybeFromI64(temp),
++               ZeroExtendIndex::No);
++  masm.propagateOOM(createDebugOnlyStackMapsForMemoryAccess(first, *access));
+ }
+ 
+ template <typename RegType>

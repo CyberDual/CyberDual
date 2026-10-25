@@ -1,0 +1,71 @@
+diff --git a/src/compiler/backend/simd-shuffle.h b/src/compiler/backend/simd-shuffle.h
+index 573d7e6a..565203e4 100644
+--- a/src/compiler/backend/simd-shuffle.h
++++ b/src/compiler/backend/simd-shuffle.h
+@@ -117,7 +117,10 @@ class V8_EXPORT_PRIVATE SimdShuffle {
+       if (lane0[i] != lane0[0] + i) return false;
+     }
+     // Now check that the other lanes are identical to lane0.
+-    for (int i = 1; i < kShuffleLanes; ++i) {
++    for (int i = 1;
++         i < kShuffleLanes + (LANES == kSimd128Size &&
++                              lane0[0] == simd_size - kBytesPerLane);
++         ++i) {
+       for (int j = 0; j < kBytesPerLane; ++j) {
+         if (lane0[j] != shuffle[i * kBytesPerLane + j]) return false;
+       }
+diff --git a/src/compiler/revectorizer.cc b/src/compiler/revectorizer.cc
+index 0537bd47..f3b74667 100644
+--- a/src/compiler/revectorizer.cc
++++ b/src/compiler/revectorizer.cc
+@@ -1053,7 +1053,7 @@ Node* Revectorizer::VectorizeTree(PackNode* pnode) {
+       // clang-format off
+       if (IsSplat(pnode->Nodes())) {
+         const uint8_t* shuffle = S128ImmediateParameterOf(node0->op()).data();
+-        int index, offset;
++        int index, offset, input_index;
+ 
+         // Match Splat and Revectorize to LoadSplat as AVX-256 does not support
+         // shuffling across 128-bit lane.
+@@ -1061,17 +1061,19 @@ Node* Revectorizer::VectorizeTree(PackNode* pnode) {
+           new_op = mcgraph_->machine()->LoadTransform(
+               MemoryAccessKind::kTrapping,
+               LoadTransformation::kS256Load32Splat);
+-          offset = index * 4;
++          offset = (index & 3) * 4;
++          input_index = index >> 2;
+         } else if (SimdShuffle::TryMatchSplat<2>(shuffle, &index)) {
+           new_op = mcgraph_->machine()->LoadTransform(
+               MemoryAccessKind::kTrapping,
+               LoadTransformation::kS256Load64Splat);
+-          offset = index * 8;
++          offset = (index & 1) * 8;
++          input_index = index >> 1;
+         } else {
+           UNREACHABLE();
+         }
+ 
+-        source = node0->InputAt(offset >> 4);
++        source = node0->InputAt(input_index);
+         DCHECK_EQ(source->opcode(), IrOpcode::kTrappingLoad);
+         inputs.resize(4);
+         // Update LoadSplat offset.
+diff --git a/src/compiler/turboshaft/wasm-revec-reducer.h b/src/compiler/turboshaft/wasm-revec-reducer.h
+index 951a31e3..06276231 100644
+--- a/src/compiler/turboshaft/wasm-revec-reducer.h
++++ b/src/compiler/turboshaft/wasm-revec-reducer.h
+@@ -1057,11 +1057,12 @@ class WasmRevecReducer : public UniformReducerAdapter<WasmRevecReducer, Next> {
+               __ input_graph().Get(load_index).template Cast<LoadOp>();
+ 
+           const int bytes_per_lane = is_32 ? 4 : 8;
+-          // splat_index*bytes_per_lane is at most 28; load.offset is the WASM
++          // splat_index*bytes_per_lane is at most 12; load.offset is the WASM
+           // memarg immediate (up to INT32_MAX). Compute in int64 to avoid
+           // signed-int32 overflow that would sign-extend to a negative base.
+           const int64_t splat_index =
+-              pnode->info().splat_index() * bytes_per_lane;
++              (pnode->info().splat_index() % (kSimd128Size / bytes_per_lane)) *
++              bytes_per_lane;
+           const int64_t offset = splat_index + load.offset;
+ 
+           V<WordPtr> base = __ WordPtrAdd(__ MapToNewGraph(load.base()),

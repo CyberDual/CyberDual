@@ -1,0 +1,22 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 5d3bbb2..e0ae525 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -4781,6 +4781,8 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+         }                                                       \
+     } while ( 0 )
+ 
++#define GET_DATA_SLAB_MAX_RANK 11
++
+ static int
+ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+             enum matio_types data_type, const size_t *dims, const int *start, const int *stride,
+@@ -4800,7 +4802,7 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+          (class_type == MAT_C_UINT8 && data_type == MAT_T_UINT8) )
+         same_type = 1;
+ 
+-    if ( rank < 1 || rank > 10 )
++    if ( rank < 1 || rank > GET_DATA_SLAB_MAX_RANK )
+         return MATIO_E_BAD_ARGUMENT;
+     for ( i = 0; i < rank; i++ ) {
+         if ( start[i] < 0 || stride[i] < 1 || edge[i] < 1 || (size_t)start[i] >= dims[i] ||

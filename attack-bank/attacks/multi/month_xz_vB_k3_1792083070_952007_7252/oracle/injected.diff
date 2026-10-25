@@ -1,0 +1,58 @@
+diff --git a/src/liblzma/common/alone_decoder.c b/src/liblzma/common/alone_decoder.c
+index 174b3b1..d331421 100644
+--- a/src/liblzma/common/alone_decoder.c
++++ b/src/liblzma/common/alone_decoder.c
+@@ -155,7 +155,15 @@ alone_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 		const lzma_ret ret = lzma_next_filter_init(&coder->next,
+ 				allocator, filters);
+ 		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->next, allocator);
++			// An allocation failure leaves the sub-coder in a
++			// reusable state and the application may retry the
++			// initialization after more memory is available, so
++			// the cleanup isn't needed in that case. Any other
++			// failure means that the sub-coder may be in an
++			// unknown state and thus it must be freed.
++			if (ret != LZMA_MEM_ERROR)
++				lzma_next_end(&coder->next, allocator);
++
+ 			return ret;
+ 		}
+ 
+diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c
+index 6dc4cef..0e337cc 100644
+--- a/src/liblzma/lz/lz_decoder.c
++++ b/src/liblzma/lz/lz_decoder.c
+@@ -278,17 +278,27 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 
+ 	// Allocate and initialize the dictionary.
+ 	if (coder->dict.size != alloc_size) {
+-		coder->dict.size = 0;
++		// Allocate the new dictionary before freeing the old one.
++		// This way a failed allocation leaves the old dictionary
++		// buffer intact and the coder isn't left with a NULL or
++		// dangling pointer in coder->dict.buf.
++		uint8_t *dict_buf = lzma_alloc(alloc_size + LZ_DICT_EXTRA,
++				allocator);
++		if (dict_buf == NULL) {
++			// Store the new size already now. This way a reinit
++			// attempt with this same dictionary size won't
++			// repeat an allocation that is known to fail.
++			coder->dict.size = alloc_size;
++			return LZMA_MEM_ERROR;
++		}
++
+ 		lzma_free(coder->dict.buf, allocator);
++		coder->dict.buf = dict_buf;
+ 
+ 		// The LZ_DICT_EXTRA bytes at the end of the buffer aren't
+ 		// included in alloc_size. These extra bytes allow
+ 		// dict_repeat() to read and write more data than requested.
+ 		// Otherwise this extra space is ignored.
+-		coder->dict.buf = lzma_alloc(alloc_size + LZ_DICT_EXTRA,
+-				allocator);
+-		if (coder->dict.buf == NULL)
+-			return LZMA_MEM_ERROR;
+ 
+ 		// NOTE: Yes, alloc_size, not lz_options.dict_size. The way
+ 		// coder->dict.full is updated will take care that we will

@@ -1,0 +1,172 @@
+diff --git a/lib/urlapi.c b/lib/urlapi.c
+index 1c4db04e46388df390e037b5147724b62e40d809..592354ae1eaa97b372024feb6b714243fdbf22d2 100644
+--- a/lib/urlapi.c
++++ b/lib/urlapi.c
+@@ -2038,32 +2038,107 @@ nomem:
+   return CURLUE_OK;
+ }
+ 
++/* If the host is a legacy numerical IPv4 address, rewrite it to dotted
++   decimal the same way full URL parsing does. Non-numerical names are left
++   untouched. *done is set when encp was replaced with the canonical form. */
++static CURLUcode host_canon_ipv4(struct dynbuf *encp, const char *host,
++                                size_t hostlen, bool *done)
++{
++  struct dynbuf norm;
++  char buf[256];
++  CURLcode result;
++  int type;
++
++  *done = FALSE;
++  if(!hostlen || !ISDIGIT(*host))
++    return CURLUE_OK;
++
++  /* ipv4_normalize consumes a C string. Ordinary hosts fit in a scratch
++     buffer; longer values (leading zeroes) are appended by length. */
++  curlx_dyn_init(&norm, CURL_MAX_INPUT_LENGTH);
++  if(hostlen <= sizeof(buf)) {
++    memcpy(buf, host, hostlen);
++    buf[hostlen] = 0;
++    result = curlx_dyn_add(&norm, buf);
++  }
++  else
++    result = curlx_dyn_addn(&norm, host, hostlen);
++  if(result) {
++    curlx_dyn_free(&norm);
++    curlx_dyn_free(encp);
++    return cc2cu(result);
++  }
++
++  type = ipv4_normalize(&norm);
++  if(type == HOST_IPV4) {
++    curlx_dyn_reset(encp);
++    result = curlx_dyn_add(encp, curlx_dyn_ptr(&norm));
++    curlx_dyn_free(&norm);
++    if(result) {
++      curlx_dyn_free(encp);
++      return cc2cu(result);
++    }
++    *done = TRUE;
++    return CURLUE_OK;
++  }
++  curlx_dyn_free(&norm);
++  if(type == HOST_ERROR) {
++    curlx_dyn_free(encp);
++    return CURLUE_OUT_OF_MEMORY;
++  }
++  return CURLUE_OK;
++}
++
+ static CURLUcode url_sethost(CURLU *u, struct dynbuf *encp,
+                              bool urlencode,
+                              unsigned int flags)
+ {
+   size_t n = curlx_dyn_len(encp);
+-  bool bad = FALSE;
+   char *newp = curlx_dyn_ptr(encp);
+-  if(!n)
++  char *decoded = NULL;
++  char *host;
++  size_t hostlen;
++  bool canon = FALSE;
++  CURLUcode uc;
++
++  if(!n) {
+     /* an empty hostname is okay if told so */
+-    bad = (flags & CURLU_NO_AUTHORITY) ? FALSE : TRUE;
+-  else if(!urlencode) {
++    if(!(flags & CURLU_NO_AUTHORITY)) {
++      curlx_dyn_free(encp);
++      return CURLUE_BAD_HOSTNAME;
++    }
++    return CURLUE_OK;
++  }
++
++  if(!urlencode) {
+     /* if the hostname part was not URL encoded here, it was set already URL
+        encoded so we need to decode it to check */
+     size_t dlen;
+-    char *decoded = NULL;
+     CURLcode result = Curl_urldecode(newp, n, &decoded, &dlen, REJECT_CTRL);
+-    if(result || hostname_check6(u, decoded, dlen))
+-      bad = TRUE;
++    if(result) {
++      curlx_dyn_free(encp);
++      return CURLUE_BAD_HOSTNAME;
++    }
++    host = decoded;
++    hostlen = dlen;
++  }
++  else {
++    host = newp;
++    hostlen = n;
++  }
++
++  uc = host_canon_ipv4(encp, host, hostlen, &canon);
++  if(uc || canon) {
+     curlx_free(decoded);
++    return uc;
+   }
+-  else if(hostname_check6(u, newp, n))
+-    bad = TRUE;
+-  if(bad) {
++
++  if(hostname_check6(u, host, hostlen)) {
++    curlx_free(decoded);
+     curlx_dyn_free(encp);
+     return CURLUE_BAD_HOSTNAME;
+   }
++  curlx_free(decoded);
+   return CURLUE_OK;
+ }
+ 
+@@ -2143,7 +2218,13 @@ CURLUcode curl_url_set(CURLU *u, CURLUPart what,
+     const char *newp = NULL;
+     struct dynbuf enc;
+     CURLUcode status;
+-    curlx_dyn_init(&enc, (nalloc * 3) + 1 + leadingslash);
++    size_t cap = (nalloc * 3) + 1 + leadingslash;
++
++    /* Canonical dotted IPv4 ("0" -> "0.0.0.0", up to "255.255.255.255") can
++       be longer than the raw host text. */
++    if((what == CURLUPART_HOST) && (cap < sizeof("255.255.255.255")))
++      cap = sizeof("255.255.255.255");
++    curlx_dyn_init(&enc, cap);
+ 
+     if(leadingslash && (part[0] != '/')) {
+       CURLcode result = curlx_dyn_addn(&enc, "/", 1);
+diff --git a/tests/libtest/lib1560.c b/tests/libtest/lib1560.c
+index 03d99ccbbf3b9444aa6e316eeeeea7fb5c50476d..93751ca2d328aa3262e667cb096915f5b09a2f28 100644
+--- a/tests/libtest/lib1560.c
++++ b/tests/libtest/lib1560.c
+@@ -1295,12 +1295,27 @@ static const struct setcase set_parts_list[] = {
+    0, /* set */
+    CURLUE_OK, CURLUE_BAD_HOSTNAME},
+   {"https://example.com/",
+-   "host=0xff,", /* '++' there is no automatic URL decode when setting this
+-                  part */
+-   "https://0xff/",
++   "host=0xff,", /* legacy numerical IPv4, normalized like URL parsing */
++   "https://0.0.0.255/",
+    0, /* get */
+    0, /* set */
+    CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=2130706433,",
++   "https://127.0.0.1/",
++   0, 0, CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=0177.1,",
++   "https://127.0.0.1/",
++   0, 0, CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=0x7f.1,",
++   "https://127.0.0.1/",
++   0, 0, CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=0,",
++   "https://0.0.0.0/",
++   0, 0, CURLUE_OK, CURLUE_OK},
+ 
+   {"https://example.com/",
+    "query=Al2cO3tDkcDZ3EWE5Lh+LX8TPHs,", /* contains '+' */

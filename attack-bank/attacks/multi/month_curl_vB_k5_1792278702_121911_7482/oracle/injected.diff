@@ -1,0 +1,49 @@
+diff --git a/lib/mprintf.c b/lib/mprintf.c
+index 571c417501..8163f3dbe0 100644
+--- a/lib/mprintf.c
++++ b/lib/mprintf.c
+@@ -741,7 +741,10 @@ static bool out_double(void *userp,
+                        double dnum,
+                        char *work, int *donep)
+ {
+-  char fmt[32] = "%";
++  /* the clamps below keep what is written to at most four flags, three
++     width digits, a period with three precision digits, the 'l' modifier,
++     the conversion character and the terminator */
++  char fmt[20] = "%";
+   char *fptr = &fmt[1];
+   size_t left = sizeof(fmt) - strlen(fmt);
+   int flags = p->flags;
+@@ -761,32 +764,13 @@ static bool out_double(void *userp,
+ 
+   if(width >= 0) {
+     size_t dlen;
+-    if(width >= BUFFSIZE)
+-      width = BUFFSIZE - 1;
+     /* RECURSIVE USAGE */
+     dlen = (size_t)curl_msnprintf(fptr, left, "%d", width);
+     fptr += dlen;
+     left -= dlen;
+   }
+   if(prec >= 0) {
+-    /* for each digit in the integer part, we can have one less
+-       precision */
+-    int maxprec = BUFFSIZE - 1;
+-    double val = dnum;
+     int len;
+-    if(prec > maxprec)
+-      prec = maxprec - 1;
+-    if(width > 0 && prec <= width)
+-      maxprec -= width;
+-    while(maxprec && (val >= 10.0)) {
+-      val /= 10;
+-      maxprec--;
+-    }
+-
+-    if(prec > maxprec)
+-      prec = maxprec - 1;
+-    if(prec < 0)
+-      prec = 0;
+     /* RECURSIVE USAGE */
+     len = curl_msnprintf(fptr, left, ".%d", prec);
+     fptr += len;

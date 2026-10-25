@@ -1,0 +1,64 @@
+diff --git a/js/src/jit/CodeGenerator.cpp b/js/src/jit/CodeGenerator.cpp
+index ceb19ca60bfd3..e6f000a8e7853 100644
+--- a/js/src/jit/CodeGenerator.cpp
++++ b/js/src/jit/CodeGenerator.cpp
+@@ -2503,6 +2503,11 @@ static bool PrepareAndExecuteRegExp(MacroAssembler& masm, Register regexp,
+   // Try fast rejection using quickcheck data.
+   // This should be kept in sync with RegExpShared::quickCheckRejects.
+   Label doneQuickCheck;
++  masm.load8ZeroExtend(Address(regexpReg, RegExpShared::offsetOfKind()),
++                       temp2);
++  masm.branchTest32(Assembler::Zero, temp2,
++                    Imm32(RegExpShared::QuickCheckKindMask),
++                    &doneQuickCheck);
+   masm.load8ZeroExtend(
+       Address(regexpReg, RegExpShared::offsetOfInternalFlags()), temp2);
+   masm.branchTest32(Assembler::Zero, temp2,
+diff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp
+index 98e89d68844d3..3a9c6941229a5 100644
+--- a/js/src/vm/RegExpObject.cpp
++++ b/js/src/vm/RegExpObject.cpp
+@@ -735,10 +735,7 @@ bool RegExpShared::quickCheckRejects(const JS::Latin1Char* chars, size_t length,
+     return true;
+   }
+ 
+-  // If there are at least 4 characters remaining in the string, test the mask.
+-  if (index + sizeof(uint32_t) <= length) {
+-    // We use memcpy here because this load may not be aligned. It will generate
+-    // a regular load on every platform we care about.
++  {
+     uint32_t word;
+     memcpy(&word, chars + index, sizeof(word));
+     if ((word & quickCheckMask_) != quickCheckValue_) {
+@@ -763,7 +760,8 @@ RegExpRunStatus RegExpShared::execute(JSContext* cx,
+     return RegExpRunStatus::Error;
+   }
+ 
+-  if (re->hasQuickCheck() && input->hasLatin1Chars()) {
++  if ((uint32_t(re->kind()) & RegExpShared::QuickCheckKindMask) != 0 &&
++      re->hasQuickCheck() && input->hasLatin1Chars()) {
+     AutoCheckCannotGC nogc;
+     if (re->quickCheckRejects(input->latin1Chars(nogc), input->length(),
+                               start)) {
+diff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h
+index a574e7482d24f..c8ee09e2fff8f 100644
+--- a/js/src/vm/RegExpShared.h
++++ b/js/src/vm/RegExpShared.h
+@@ -71,11 +71,16 @@ class RegExpShared
+   friend class js::gc::CellAllocator;
+ 
+  public:
+-  enum class Kind : uint8_t { Unparsed, Atom, RegExp };
++  enum class Kind : uint8_t {
++    Unparsed = 0,
++    Atom = 1,
++    RegExp = 0x82,
++  };
+   enum class CodeKind { Bytecode, Jitcode, Any };
+   enum class InternalFlag {
+     HasQuickCheck = 1 << 0,
+   };
++  static constexpr uint32_t QuickCheckKindMask = 0x80;
+ 
+   using ByteCode = js::irregexp::ByteArrayData;
+   using JitCodeTable = js::irregexp::ByteArray;

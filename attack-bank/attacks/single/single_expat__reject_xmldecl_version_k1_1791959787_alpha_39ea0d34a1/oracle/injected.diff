@@ -1,0 +1,60 @@
+diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c
+index c4ee9dd9df91db436b95e2d870e189d92689a994..d24c330c8730b80ccca8c32581e79d92c99fea55 100644
+--- a/expat/lib/xmltok.c
++++ b/expat/lib/xmltok.c
+@@ -1154,6 +1154,39 @@ static const char KW_yes[] = {ASCII_y, ASCII_e, ASCII_s, '\0'};
+ 
+ static const char KW_no[] = {ASCII_n, ASCII_o, '\0'};
+ 
++/* Check the version number of an XML declaration or text declaration
++   against the VersionNum production:
++
++       VersionNum ::= '1.' [0-9]+
++
++   Returns 1 if the value matches, 0 otherwise.
++*/
++static int
++checkXmlDeclVersionNum(const ENCODING *enc, const char *version,
++                       const char *versionEnd) {
++  /* NUL-terminated copy of the version value, for plain C comparisons */
++  char buf[16];
++  size_t len = 0;
++  size_t i;
++
++  while (version < versionEnd) {
++    int c = toAscii(enc, version, versionEnd);
++    if (c < 0)
++      return 0;
++    buf[len++] = (char)c;
++    version += enc->minBytesPerChar;
++  }
++  buf[len] = '\0';
++
++  if (len < 3 || buf[0] != ASCII_1 || buf[1] != ASCII_PERIOD)
++    return 0;
++  for (i = 2; i < len; i++) {
++    if (buf[i] < ASCII_0 || buf[i] > ASCII_9)
++      return 0;
++  }
++  return 1;
++}
++
+ static int
+ doParseXmlDecl(const ENCODING *(*encodingFinder)(const ENCODING *, const char *,
+                                                  const char *),
+@@ -1181,10 +1214,11 @@ doParseXmlDecl(const ENCODING *(*encodingFinder)(const ENCODING *, const char *,
+       *versionPtr = val;
+     if (versionEndPtr)
+       *versionEndPtr = ptr;
+-    /* The version number must not be empty; VersionNum requires at least
+-       one character.  The encoding and standalone pseudo-attributes below
+-       already reject an empty value, so keep version consistent. */
+-    if (val == ptr - enc->minBytesPerChar) {
++    /* The version number must match VersionNum, i.e. '1.' followed by one
++       or more digits; in particular it must not be empty.  The encoding and
++       standalone pseudo-attributes below already reject an empty value, so
++       keep version consistent. */
++    if (! checkXmlDeclVersionNum(enc, val, ptr - enc->minBytesPerChar)) {
+       *badPtr = val;
+       return 0;
+     }

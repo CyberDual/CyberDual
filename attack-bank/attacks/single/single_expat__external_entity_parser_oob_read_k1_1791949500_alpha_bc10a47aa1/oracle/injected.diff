@@ -1,0 +1,33 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index b0b30e7350846b379726a8e794ae40c2187cac8b..2811652a00aeefac1cf9ef63c2c5d776ac926742 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -3995,8 +3995,7 @@ storeAtts(XML_Parser parser, const ENCODING *enc, const char *attStr,
+         NAME_AND_DEFAULT_ATTRIBUTE *const nameAndDefaultAttribute
+             = (NAME_AND_DEFAULT_ATTRIBUTE *)lookup(
+                 parser, &(elementType->defaultAttForName), attId->name, 0);
+-        if (nameAndDefaultAttribute != NULL) {
+-          assert(nameAndDefaultAttribute->attIndex < elementType->nDefaultAtts);
++        if (nameAndDefaultAttribute->attIndex < elementType->nDefaultAtts) {
+           const DEFAULT_ATTRIBUTE *const att
+               = elementType->defaultAtts + nameAndDefaultAttribute->attIndex;
+           isCdata = att->isCdata;
+@@ -7832,11 +7831,15 @@ dtdCopy(XML_Parser oldParser, DTD *newDtd, const DTD *oldDtd,
+       } else
+         newE->defaultAtts[i].value = NULL;
+ 
+-      NAMED *const nameAddedOrFound = lookup(parser, &(newE->defaultAttForName),
+-                                             attributeName, sizeof(NAMED));
+-      if (! nameAddedOrFound) {
++      NAME_AND_DEFAULT_ATTRIBUTE *const nameAndDefaultAttribute
++          = (NAME_AND_DEFAULT_ATTRIBUTE *)lookup(
++              parser, &(newE->defaultAttForName), attributeName,
++              sizeof(NAME_AND_DEFAULT_ATTRIBUTE));
++      if (! nameAndDefaultAttribute) {
+         return 0;
+       }
++      nameAndDefaultAttribute->attIndex = i;
++      nameAndDefaultAttribute->initialized = true;
+     }
+   }
+ 

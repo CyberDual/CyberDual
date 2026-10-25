@@ -1,0 +1,477 @@
+diff --git a/js/src/jit/CodeGenerator.cpp b/js/src/jit/CodeGenerator.cpp
+index 2204586dac..c413ebc672 100644
+--- a/js/src/jit/CodeGenerator.cpp
++++ b/js/src/jit/CodeGenerator.cpp
+@@ -10609,7 +10609,7 @@ void CodeGenerator::visitWasmCall(LWasmCall* lir) {
+       if (isReturnCall) {
+         ReturnCallAdjustmentInfo retCallInfo(
+             callBase->stackArgAreaSizeUnaligned(), inboundStackArgBytes_);
+-        masm.wasmReturnCallRef(desc, callee, retCallInfo);
++        masm.wasmReturnCallRef(desc, callee, retCallInfo, nullptr, nullptr);
+         // The rest of the method is unnecessary for a return call.
+         return;
+       }
+@@ -10617,7 +10617,8 @@ void CodeGenerator::visitWasmCall(LWasmCall* lir) {
+       // Register reloading and realm switching are handled dynamically inside
+       // wasmCallRef.  There are two return offsets, one for each call
+       // instruction (fast path and slow path).
+-      masm.wasmCallRef(desc, callee, &retOffset, &secondRetOffset);
++      masm.wasmCallRef(desc, callee, &retOffset, &secondRetOffset, nullptr,
++                       nullptr);
+       reloadInstance = false;
+       reloadPinnedRegs = false;
+       switchRealm = false;
+diff --git a/js/src/jit/MacroAssembler.cpp b/js/src/jit/MacroAssembler.cpp
+index 2919aa9e39..109cd6d1bb 100644
+--- a/js/src/jit/MacroAssembler.cpp
++++ b/js/src/jit/MacroAssembler.cpp
+@@ -7142,7 +7142,10 @@ void MacroAssembler::wasmReturnCallIndirect(
+ void MacroAssembler::wasmCallRef(const wasm::CallSiteDesc& desc,
+                                  const wasm::CalleeDesc& callee,
+                                  CodeOffset* fastCallOffset,
+-                                 CodeOffset* slowCallOffset) {
++                                 CodeOffset* slowCallOffset,
++                                 wasm::StackMap* stackMapForTraps,
++                                 wasm::StackMapRegistry* stackMapRegistry) {
++  MOZ_ASSERT_IF(stackMapForTraps, stackMapRegistry);
+   MOZ_ASSERT(callee.which() == wasm::CalleeDesc::FuncRef);
+   const Register calleeScratch = WasmCallRefCallScratchReg0;
+   const Register calleeFnObj = WasmCallRefReg;
+@@ -7162,6 +7165,10 @@ void MacroAssembler::wasmCallRef(const wasm::CallSiteDesc& desc,
+   appendAndVerify(wasm::Trap::NullPointerDereference,
+                   wasm::TrapMachineInsnForLoadWord(), fcr,
+                   desc.toTrapSiteDesc());
++  if (stackMapForTraps) {
++    propagateOOM(stackMapRegistry->addMap(stackMapForTraps, fcr));
++  }
++
+   branchPtr(Assembler::Equal, InstanceReg, newInstanceTemp, &fastCall);
+ 
+   storePtr(InstanceReg,
+@@ -7208,7 +7215,10 @@ void MacroAssembler::wasmCallRef(const wasm::CallSiteDesc& desc,
+ 
+ void MacroAssembler::wasmReturnCallRef(
+     const wasm::CallSiteDesc& desc, const wasm::CalleeDesc& callee,
+-    const ReturnCallAdjustmentInfo& retCallInfo) {
++    const ReturnCallAdjustmentInfo& retCallInfo,
++    wasm::StackMap* stackMapForTraps,
++    wasm::StackMapRegistry* stackMapRegistry) {
++  MOZ_ASSERT_IF(stackMapForTraps, stackMapRegistry);
+   MOZ_ASSERT(callee.which() == wasm::CalleeDesc::FuncRef);
+   const Register calleeScratch = WasmCallRefCallScratchReg0;
+   const Register calleeFnObj = WasmCallRefReg;
+@@ -7228,6 +7238,10 @@ void MacroAssembler::wasmReturnCallRef(
+   appendAndVerify(wasm::Trap::NullPointerDereference,
+                   wasm::TrapMachineInsnForLoadWord(), fcr,
+                   desc.toTrapSiteDesc());
++  if (stackMapForTraps) {
++    propagateOOM(stackMapRegistry->addMap(stackMapForTraps, fcr));
++  }
++
+   branchPtr(Assembler::Equal, InstanceReg, newInstanceTemp, &fastCall);
+ 
+   storePtr(InstanceReg,
+diff --git a/js/src/jit/MacroAssembler.h b/js/src/jit/MacroAssembler.h
+index ac9c7162cd..cdb9fcadf5 100644
+--- a/js/src/jit/MacroAssembler.h
++++ b/js/src/jit/MacroAssembler.h
+@@ -4055,11 +4055,14 @@ class MacroAssembler : public MacroAssemblerSpecific {
+   // pinned reg.
+   void wasmCallRef(const wasm::CallSiteDesc& desc,
+                    const wasm::CalleeDesc& callee, CodeOffset* fastCallOffset,
+-                   CodeOffset* slowCallOffset);
++                   CodeOffset* slowCallOffset, wasm::StackMap* stackMapForTraps,
++                   wasm::StackMapRegistry* stackMapRegistry);
+ 
+   void wasmReturnCallRef(const wasm::CallSiteDesc& desc,
+                          const wasm::CalleeDesc& callee,
+-                         const ReturnCallAdjustmentInfo& retCallInfo);
++                         const ReturnCallAdjustmentInfo& retCallInfo,
++                         wasm::StackMap* stackMapForTraps,
++                         wasm::StackMapRegistry* stackMapRegistry);
+ 
+   // This function takes care of loading the pointer to the current instance
+   // as the implicit first argument. It preserves instance and pinned registers.
+diff --git a/js/src/wasm/WasmBCClass.h b/js/src/wasm/WasmBCClass.h
+index 6eee58bf3a..2b5dc5c82a 100644
+--- a/js/src/wasm/WasmBCClass.h
++++ b/js/src/wasm/WasmBCClass.h
+@@ -1064,7 +1064,7 @@ struct BaseCompiler final {
+   bool callRef(const Stk& calleeRef, const FunctionCall& call,
+                mozilla::Maybe<size_t> callRefIndex, CodeOffset* fastCallOffset,
+                CodeOffset* slowCallOffset);
+-  void returnCallRef(const Stk& calleeRef, const FunctionCall& call,
++  bool returnCallRef(const Stk& calleeRef, const FunctionCall& call,
+                      const FuncType& funcType);
+   CodeOffset builtinCall(SymbolicAddress builtin, const FunctionCall& call);
+   void builtinInstanceMethodCall(const SymbolicAddressSignature& builtin,
+@@ -1808,12 +1808,20 @@ struct BaseCompiler final {
+   struct NoNullCheck {
+     static void emitNullCheck(BaseCompiler* bc, RegRef rp) {}
+     static void emitTrapSite(BaseCompiler* bc, FaultingCodeRange fcr,
+-                             TrapMachineInsn tmi) {}
++                             TrapMachineInsn tmi, StackMap* debugOnlyStackMap) {
++      MOZ_ASSERT(!debugOnlyStackMap);
++    }
++    static StackMap* createDebugOnlyStackMapForNonResumingTrap(BaseCompiler* bc,
++                                                               Trap kind) {
++      return nullptr;
++    }
+   };
+   struct SignalNullCheck {
+     static void emitNullCheck(BaseCompiler* bc, RegRef rp);
+     static void emitTrapSite(BaseCompiler* bc, FaultingCodeRange fcr,
+-                             TrapMachineInsn tmi);
++                             TrapMachineInsn tmi, StackMap* debugOnlyStackMap);
++    static StackMap* createDebugOnlyStackMapForNonResumingTrap(BaseCompiler* bc,
++                                                               Trap kind);
+   };
+ 
+   // Load a pointer to the AllocSite for current bytecode offset
+diff --git a/js/src/wasm/WasmBCFrame.cpp b/js/src/wasm/WasmBCFrame.cpp
+index 208ae01ed3..9216d2ab28 100644
+--- a/js/src/wasm/WasmBCFrame.cpp
++++ b/js/src/wasm/WasmBCFrame.cpp
+@@ -184,8 +184,10 @@ bool BaseCompiler::createDebugOnlyStackMapForNonResumingTrap(StackMap** result,
+   MOZ_ASSERT(!TrapMightResume(t1));
+   MOZ_ASSERT_IF(t2 != Trap::Limit, !TrapMightResume(t2));
+ 
++  // Ensure `*result` is always defined.
++  *result = nullptr;
++
+   if (MOZ_LIKELY(!compilerEnv_.debugEnabled())) {
+-    *result = nullptr;
+     return true;
+   }
+ 
+diff --git a/js/src/wasm/WasmBaselineCompile.cpp b/js/src/wasm/WasmBaselineCompile.cpp
+index dd49556efc..4645c77519 100644
+--- a/js/src/wasm/WasmBaselineCompile.cpp
++++ b/js/src/wasm/WasmBaselineCompile.cpp
+@@ -2259,11 +2259,19 @@ bool BaseCompiler::callRef(const Stk& calleeRef, const FunctionCall& call,
+     MOZ_ASSERT(callRefIndex.isNothing());
+   }
+ 
+-  masm.wasmCallRef(desc, callee, fastCallOffset, slowCallOffset);
++  StackMap* debugStackMap;
++  if (!createDebugOnlyStackMapForNonResumingTrap(&debugStackMap,
++                                                 Trap::IndirectCallToNull)) {
++    return false;
++  }
++  BaselineStackMapRegistry stackMapRegistry(stackMaps_);
++
++  masm.wasmCallRef(desc, callee, fastCallOffset, slowCallOffset, debugStackMap,
++                   debugStackMap ? &stackMapRegistry : nullptr);
+   return true;
+ }
+ 
+-void BaseCompiler::returnCallRef(const Stk& calleeRef, const FunctionCall& call,
++bool BaseCompiler::returnCallRef(const Stk& calleeRef, const FunctionCall& call,
+                                  const FuncType& funcType) {
+   CallSiteDesc desc(bytecodeOffset(), CallSiteKind::FuncRef);
+   CalleeDesc callee = CalleeDesc::wasmFuncRef();
+@@ -2271,7 +2279,17 @@ void BaseCompiler::returnCallRef(const Stk& calleeRef, const FunctionCall& call,
+   loadRef(calleeRef, RegRef(WasmCallRefReg));
+   ReturnCallAdjustmentInfo retCallInfo =
+       BuildReturnCallAdjustmentInfo(this->funcType(), funcType);
+-  masm.wasmReturnCallRef(desc, callee, retCallInfo);
++
++  StackMap* debugStackMap;
++  if (!createDebugOnlyStackMapForNonResumingTrap(&debugStackMap,
++                                                 Trap::IndirectCallToNull)) {
++    return false;
++  }
++  BaselineStackMapRegistry stackMapRegistry(stackMaps_);
++
++  masm.wasmReturnCallRef(desc, callee, retCallInfo, debugStackMap,
++                         debugStackMap ? &stackMapRegistry : nullptr);
++  return true;
+ }
+ 
+ // Precondition: sync()
+@@ -5876,7 +5894,9 @@ bool BaseCompiler::emitReturnCallRef() {
+   }
+ 
+   const Stk& callee = peek(0);
+-  returnCallRef(callee, baselineCall, funcType);
++  if (!returnCallRef(callee, baselineCall, funcType)) {
++    return false;
++  }
+ 
+   MOZ_ASSERT(stackMapGenerator_.framePushedExcludingOutboundCallArgs.isSome());
+   stackMapGenerator_.framePushedExcludingOutboundCallArgs.reset();
+@@ -7814,10 +7834,26 @@ void BaseCompiler::SignalNullCheck::emitNullCheck(BaseCompiler* bc, RegRef rp) {
+ /* static */
+ void BaseCompiler::SignalNullCheck::emitTrapSite(BaseCompiler* bc,
+                                                  FaultingCodeRange fcr,
+-                                                 TrapMachineInsn tmi) {
++                                                 TrapMachineInsn tmi,
++                                                 StackMap* debugOnlyStackMap) {
+   MacroAssembler& masm = bc->masm;
+   masm.appendAndVerify(wasm::Trap::NullPointerDereference, tmi, fcr,
+                        bc->trapSiteDesc());
++  if (MOZ_UNLIKELY(debugOnlyStackMap) && fcr.isValid()) {
++    MOZ_ASSERT(bc->compilerEnv_.debugEnabled());
++    masm.propagateOOM(
++        bc->stackMaps_->add(fcr.resumeOffset(), debugOnlyStackMap));
++  }
++}
++
++/* static */
++StackMap*
++BaseCompiler::SignalNullCheck::createDebugOnlyStackMapForNonResumingTrap(
++    BaseCompiler* bc, Trap kind) {
++  StackMap* debugOnlyStackMap = nullptr;
++  bc->masm.propagateOOM(
++      bc->createDebugOnlyStackMapForNonResumingTrap(&debugOnlyStackMap, kind));
++  return debugOnlyStackMap;
+ }
+ 
+ template <typename NullCheckPolicy>
+@@ -7827,7 +7863,8 @@ RegPtr BaseCompiler::emitGcArrayGetData(RegRef rp) {
+   RegPtr rdata = needPtr();
+   FaultingCodeRange fcr =
+       masm.loadPtr(Address(rp, WasmArrayObject::offsetOfData()), rdata);
+-  NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsnForLoadWord());
++  NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsnForLoadWord(),
++                                nullptr);
+   return rdata;
+ }
+ 
+@@ -7839,7 +7876,7 @@ RegI32 BaseCompiler::emitGcArrayGetNumElements(RegRef rp) {
+   RegI32 numElements = needI32();
+   FaultingCodeRange fcr = masm.load32(
+       Address(rp, WasmArrayObject::offsetOfNumElements()), numElements);
+-  NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load32);
++  NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load32, nullptr);
+   return numElements;
+ }
+ 
+@@ -7853,6 +7890,12 @@ void BaseCompiler::emitGcArrayBoundsCheck(RegI32 index, RegI32 numElements) {
+ template <typename T, typename NullCheckPolicy>
+ void BaseCompiler::emitGcGet(StorageType type, FieldWideningOp wideningOp,
+                              const T& src) {
++  // Trap::NullPointerDereference needs to match what
++  // NullCheckPolicy::emitTrapSite creates.
++  StackMap* debugOnlyStackMap =
++      NullCheckPolicy::createDebugOnlyStackMapForNonResumingTrap(
++          this, Trap::NullPointerDereference);
++
+   switch (type.kind()) {
+     case StorageType::I8: {
+       MOZ_ASSERT(wideningOp != FieldWideningOp::None);
+@@ -7863,7 +7906,8 @@ void BaseCompiler::emitGcGet(StorageType type, FieldWideningOp wideningOp,
+       } else {
+         fcr = masm.load8SignExtend(src, r);
+       }
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load8);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load8,
++                                    debugOnlyStackMap);
+       pushI32(r);
+       break;
+     }
+@@ -7876,7 +7920,8 @@ void BaseCompiler::emitGcGet(StorageType type, FieldWideningOp wideningOp,
+       } else {
+         fcr = masm.load16SignExtend(src, r);
+       }
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load16);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load16,
++                                    debugOnlyStackMap);
+       pushI32(r);
+       break;
+     }
+@@ -7884,7 +7929,8 @@ void BaseCompiler::emitGcGet(StorageType type, FieldWideningOp wideningOp,
+       MOZ_ASSERT(wideningOp == FieldWideningOp::None);
+       RegI32 r = needI32();
+       FaultingCodeRange fcr = masm.load32(src, r);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load32);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load32,
++                                    debugOnlyStackMap);
+       pushI32(r);
+       break;
+     }
+@@ -7893,11 +7939,14 @@ void BaseCompiler::emitGcGet(StorageType type, FieldWideningOp wideningOp,
+       RegI64 r = needI64();
+ #ifdef JS_64BIT
+       FaultingCodeRange fcr = masm.load64(src, r);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load64);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load64,
++                                    debugOnlyStackMap);
+ #else
+       FaultingCodeRangePair fcrp = masm.load64(src, r);
+-      NullCheckPolicy::emitTrapSite(this, fcrp.first, TrapMachineInsn::Load32);
+-      NullCheckPolicy::emitTrapSite(this, fcrp.second, TrapMachineInsn::Load32);
++      NullCheckPolicy::emitTrapSite(this, fcrp.first, TrapMachineInsn::Load32,
++                                    debugOnlyStackMap);
++      NullCheckPolicy::emitTrapSite(this, fcrp.second, TrapMachineInsn::Load32,
++                                    debugOnlyStackMap);
+ #endif
+       pushI64(r);
+       break;
+@@ -7906,7 +7955,8 @@ void BaseCompiler::emitGcGet(StorageType type, FieldWideningOp wideningOp,
+       MOZ_ASSERT(wideningOp == FieldWideningOp::None);
+       RegF32 r = needF32();
+       FaultingCodeRange fcr = masm.loadFloat32(src, r);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load32);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load32,
++                                    debugOnlyStackMap);
+       pushF32(r);
+       break;
+     }
+@@ -7914,7 +7964,8 @@ void BaseCompiler::emitGcGet(StorageType type, FieldWideningOp wideningOp,
+       MOZ_ASSERT(wideningOp == FieldWideningOp::None);
+       RegF64 r = needF64();
+       FaultingCodeRange fcr = masm.loadDouble(src, r);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load64);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load64,
++                                    debugOnlyStackMap);
+       pushF64(r);
+       break;
+     }
+@@ -7923,7 +7974,8 @@ void BaseCompiler::emitGcGet(StorageType type, FieldWideningOp wideningOp,
+       MOZ_ASSERT(wideningOp == FieldWideningOp::None);
+       RegV128 r = needV128();
+       FaultingCodeRange fcr = masm.loadUnalignedSimd128(src, r);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load128);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Load128,
++                                    debugOnlyStackMap);
+       pushV128(r);
+       break;
+     }
+@@ -7932,7 +7984,8 @@ void BaseCompiler::emitGcGet(StorageType type, FieldWideningOp wideningOp,
+       MOZ_ASSERT(wideningOp == FieldWideningOp::None);
+       RegRef r = needRef();
+       FaultingCodeRange fcr = masm.loadPtr(src, r);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsnForLoadWord());
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsnForLoadWord(),
++                                    debugOnlyStackMap);
+       pushRef(r);
+       break;
+     }
+@@ -7945,48 +7998,62 @@ void BaseCompiler::emitGcGet(StorageType type, FieldWideningOp wideningOp,
+ template <typename T, typename NullCheckPolicy>
+ void BaseCompiler::emitGcSetScalar(const T& dst, StorageType type,
+                                    AnyReg value) {
++  // Trap::NullPointerDereference needs to match what
++  // NullCheckPolicy::emitTrapSite creates.
++  StackMap* debugOnlyStackMap =
++      NullCheckPolicy::createDebugOnlyStackMapForNonResumingTrap(
++          this, Trap::NullPointerDereference);
++
+   switch (type.kind()) {
+     case StorageType::I8: {
+       FaultingCodeRange fcr = masm.store8(value.i32(), dst);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store8);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store8,
++                                    debugOnlyStackMap);
+       break;
+     }
+     case StorageType::I16: {
+       FaultingCodeRange fcr = masm.store16(value.i32(), dst);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store16);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store16,
++                                    debugOnlyStackMap);
+       break;
+     }
+     case StorageType::I32: {
+       FaultingCodeRange fcr = masm.store32(value.i32(), dst);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store32);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store32,
++                                    debugOnlyStackMap);
+       break;
+     }
+     case StorageType::I64: {
+ #ifdef JS_64BIT
+       FaultingCodeRange fcr = masm.store64(value.i64(), dst);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store64);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store64,
++                                    debugOnlyStackMap);
+ #else
+       FaultingCodeRangePair fcrp = masm.store64(value.i64(), dst);
+-      NullCheckPolicy::emitTrapSite(this, fcrp.first, TrapMachineInsn::Store32);
+-      NullCheckPolicy::emitTrapSite(this, fcrp.second,
+-                                    TrapMachineInsn::Store32);
++      NullCheckPolicy::emitTrapSite(this, fcrp.first, TrapMachineInsn::Store32,
++                                    debugOnlyStackMap);
++      NullCheckPolicy::emitTrapSite(this, fcrp.second, TrapMachineInsn::Store32,
++                                    debugOnlyStackMap);
+ #endif
+       break;
+     }
+     case StorageType::F32: {
+       FaultingCodeRange fcr = masm.storeFloat32(value.f32(), dst);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store32);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store32,
++                                    debugOnlyStackMap);
+       break;
+     }
+     case StorageType::F64: {
+       FaultingCodeRange fcr = masm.storeDouble(value.f64(), dst);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store64);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store64,
++                                    debugOnlyStackMap);
+       break;
+     }
+ #ifdef ENABLE_JIT_SIMD
+     case StorageType::V128: {
+       FaultingCodeRange fcr = masm.storeUnalignedSimd128(value.v128(), dst);
+-      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store128);
++      NullCheckPolicy::emitTrapSite(this, fcr, TrapMachineInsn::Store128,
++                                    debugOnlyStackMap);
+       break;
+     }
+ #endif
+@@ -8308,7 +8375,13 @@ bool BaseCompiler::emitStructGet(FieldWideningOp wideningOp) {
+     RegPtr outlineBase = needPtr();
+     FaultingCodeRange fcr =
+         masm.loadPtr(Address(object, path.ilOffset()), outlineBase);
+-    SignalNullCheck::emitTrapSite(this, fcr, TrapMachineInsnForLoadWord());
++    SignalNullCheck::emitTrapSite(this, fcr, TrapMachineInsnForLoadWord(),
++                                  nullptr);
++    if (compilerEnv_.debugEnabled() && fcr.isValid() &&
++        !createStackMap(Some(Trap::NullPointerDereference), fcr,
++                        HasDebugFrameWithLiveRefs::Maybe)) {
++      return false;
++    }
+     // Load the value
+     emitGcGet<Address, NoNullCheck>(fieldType, wideningOp,
+                                     Address(outlineBase, path.oolOffset()));
+@@ -8362,7 +8435,13 @@ bool BaseCompiler::emitStructSet() {
+     // the offset where the OOL pointer is stored.  Hence `path.ilOffset()`.
+     FaultingCodeRange fcr =
+         masm.loadPtr(Address(object, path.ilOffset()), outlineBase);
+-    SignalNullCheck::emitTrapSite(this, fcr, TrapMachineInsnForLoadWord());
++    SignalNullCheck::emitTrapSite(this, fcr, TrapMachineInsnForLoadWord(),
++                                  nullptr);
++    if (compilerEnv_.debugEnabled() && fcr.isValid() &&
++        !createStackMap(Some(Trap::NullPointerDereference), fcr,
++                        HasDebugFrameWithLiveRefs::Maybe)) {
++      return false;
++    }
+     // Consumes `value`. `object` is unchanged by this call.
+     if (!emitGcStructSet<NoNullCheck>(object, outlineBase, path.oolOffset(),
+                                       fieldType, value,
+@@ -12942,7 +13021,8 @@ bool js::wasm::BaselineCompileFunctions(const CodeMetadata& codeMeta,
+     auto checkThisTrapKind_debugMode = [](Trap t) -> bool {
+       // Trap kinds to check in debug mode
+       return t == Trap::InvalidConversionToInteger ||
+-             t == Trap::IntegerOverflow || t == Trap::IntegerDivideByZero;
++             t == Trap::IntegerOverflow || t == Trap::IntegerDivideByZero ||
++             t == Trap::NullPointerDereference;
+     };
+     auto checkThisTrapKind_normalMode = [](Trap t) -> bool {
+       // Trap kinds to check in non-debug mode
+diff --git a/js/src/wasm/WasmStubs.cpp b/js/src/wasm/WasmStubs.cpp
+index 7ae2686d9a..763bea8c6d 100644
+--- a/js/src/wasm/WasmStubs.cpp
++++ b/js/src/wasm/WasmStubs.cpp
+@@ -2989,7 +2989,8 @@ bool wasm::GenerateContBaseFrameStub(jit::MacroAssembler& masm,
+   wasm::CalleeDesc callee = wasm::CalleeDesc::wasmFuncRef();
+   CodeOffset fastCallOffset;
+   CodeOffset slowCallOffset;
+-  masm.wasmCallRef(callSite, callee, &fastCallOffset, &slowCallOffset);
++  masm.wasmCallRef(callSite, callee, &fastCallOffset, &slowCallOffset, nullptr,
++                   nullptr);
+ 
+   // The current stack pointer might not match the one before the call if the
+   // callee performed a tail call, so recover it from FP before reading the

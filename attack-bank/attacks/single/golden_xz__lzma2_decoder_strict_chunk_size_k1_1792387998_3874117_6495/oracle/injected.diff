@@ -1,0 +1,29 @@
+diff --git a/src/liblzma/lzma/lzma2_decoder.c b/src/liblzma/lzma/lzma2_decoder.c
+index 37ab253f5b0a1048b7bee5c6d2caaac262948f42..7efe027965a2e9da332c8627ca9ce7ae88e93ea0 100644
+--- a/src/liblzma/lzma/lzma2_decoder.c
++++ b/src/liblzma/lzma/lzma2_decoder.c
+@@ -165,9 +165,23 @@ lzma2_decode(void *coder_ptr, lzma_dict *restrict dict,
+ 		// coder->compressed_size later.
+ 		const size_t in_start = *in_pos;
+ 
++		// LZMA2 stream ends with the end marker (0x00), so there
++		// must be at least one byte after this chunk. Let the decoder
++		// read at most one byte past the end of the chunk. If the
++		// decoder reads the extra byte, then the input is corrupt.
++		// This way we won't produce (much) junk output from the input
++		// bytes that are past the end of this chunk.
++		//
++		// When the remaining input doesn't extend past the chunk,
++		// in_size is already a valid limit as is and the decoder
++		// doesn't need to be slowed down by a tighter one.
++		size_t in_limit = in_size;
++		if (in_size - *in_pos > coder->compressed_size + 1)
++			in_limit = coder->compressed_size + 1;
++
+ 		// Decode from in[] to *dict.
+ 		const lzma_ret ret = coder->lzma.code(coder->lzma.coder,
+-				dict, in, in_pos, in_size);
++				dict, in, in_pos, in_limit);
+ 
+ 		// Validate and update coder->compressed_size.
+ 		const size_t in_used = *in_pos - in_start;

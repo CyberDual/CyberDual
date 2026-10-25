@@ -1,0 +1,48 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0ae..5d47afb8 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -460,6 +460,13 @@ IDManifest::init (const char* data, const char* endOfData)
+         }
+     }
+ 
++    //
++    // the mapping is only ever indexed by values below currentIndex, so
++    // drop the slots the RLE table did not fill
++    //
++    mapping.resize (currentIndex);
++    mapping.shrink_to_fit ();
++
+ #ifdef DUMP_TABLE
+     //
+     // dump mapping table for debugging
+@@ -470,6 +477,20 @@ IDManifest::init (const char* data, const char* endOfData)
+     }
+ #endif
+ 
++    //
++    // the RLE table is not required to cover every string in the table;
++    // entries it leaves out stay zeroed. Check the decoded mapping before
++    // it is used to resolve component names below.
++    //
++    for (size_t i = 0; i < stringList.size (); ++i)
++    {
++        if (mapping[i] < 0 || mapping[i] >= int (stringList.size ()))
++        {
++            throw IEX_NAMESPACE::InputExc (
++                "Corrupt mapping table in IDManifest");
++        }
++    }
++
+     //
+     // number of manifest entries comes after string list
+     //
+@@ -571,7 +592,7 @@ IDManifest::init (const char* data, const char* endOfData)
+             for (size_t i = 0; i < m.getComponents ().size (); ++i)
+             {
+                 int stringIndex = readVariableLengthInteger (data, endOfData);
+-                if (size_t (stringIndex) >= stringList.size () ||
++                if (size_t (stringIndex) >= mapping.size () ||
+                     stringIndex < 0)
+                 {
+                     throw IEX_NAMESPACE::InputExc (

@@ -1,0 +1,25 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 513f94b..733c069 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -1238,7 +1238,7 @@ void QuickTimeVideo::audioDescDecoder() {
+ }  // QuickTimeVideo::audioDescDecoder
+ 
+ void QuickTimeVideo::imageDescDecoder() {
+-  DataBuf buf(40);
++  DataBuf buf(32 + 1);
+   std::memset(buf.data(), 0x0, buf.size());
+   buf.data()[4] = '\0';
+   io_->readOrThrow(buf.data(), 4);
+@@ -1278,8 +1278,9 @@ void QuickTimeVideo::imageDescDecoder() {
+         size -= 3;
+         break;
+       case CompressorName:
+-        io_->readOrThrow(buf.data(), 32);
+-        size -= 32;
++        io_->readOrThrow(buf.data(), 33);
++        buf.data()[33] = '\0';  // nul-terminate string
++        size -= 33;
+         xmpData_["Xmp.video.Compressor"] = buf.data();
+         break;
+       default:

@@ -1,0 +1,43 @@
+diff --git a/libarchive/archive_string.c b/libarchive/archive_string.c
+index 970d03b8..c685974d 100644
+--- a/libarchive/archive_string.c
++++ b/libarchive/archive_string.c
+@@ -312,8 +312,7 @@ archive_string_ensure(struct archive_string *as, size_t s)
+ 	 * a larger constant factor.
+ 	 */
+ 	if (as->buffer_length < 32)
+-		/* Start with a minimum 32-character buffer. */
+-		new_length = 32;
++		new_length = s;
+ 	else if (as->buffer_length < 8192)
+ 		/* Buffers under 8k are doubled for speed. */
+ 		new_length = as->buffer_length + as->buffer_length;
+diff --git a/libarchive/archive_string_sprintf.c b/libarchive/archive_string_sprintf.c
+index c49de3e1..bd25966b 100644
+--- a/libarchive/archive_string_sprintf.c
++++ b/libarchive/archive_string_sprintf.c
+@@ -57,6 +57,15 @@ append_uint(struct archive_string *as, uintmax_t d, unsigned base,
+ 	static const char digits_upper[] = "0123456789ABCDEF";
+ 	const char *digits = upper ? digits_upper : digits_lower;
+ 
++	if (as->length == 0) {
++		if (archive_string_ensure(as, 1) == NULL)
++			return;
++		as->s[0] = digits[d % base];
++		as->s[1] = '\0';
++		as->length = 1;
++		return;
++	}
++
+ 	if (d >= base)
+ 		append_uint(as, d/base, base, upper);
+ 	archive_strappend_char(as, digits[d % base]);
+@@ -100,7 +109,7 @@ archive_string_vsprintf(struct archive_string *as, const char *fmt,
+ 	const char *p, *p2;
+ 	const wchar_t *pw;
+ 
+-	if (archive_string_ensure(as, 64) == NULL)
++	if (archive_string_ensure(as, 1) == NULL)
+ 		__archive_errx(1, "Out of memory");
+ 
+ 	if (fmt == NULL) {

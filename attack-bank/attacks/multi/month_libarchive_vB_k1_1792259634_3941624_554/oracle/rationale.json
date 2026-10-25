@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "2d1f4d04cc7e1fc4591594dc89c0e2fe7d15d373",
+      "edited_message": "string: Use checked arithmetic and exact allocations\n\nUse checked arithmetic when growing large buffers and avoid reserving extra space before the formatter knows how much output it will produce.",
+      "patch": "diff --git a/libarchive/archive_string.c b/libarchive/archive_string.c\nindex 4d99c206..a2be65fe 100644\n--- a/libarchive/archive_string.c\n+++ b/libarchive/archive_string.c\n@@ -312,8 +312,7 @@ archive_string_ensure(struct archive_string *as, size_t s)\n \t * a larger constant factor.\n \t */\n \tif (as->buffer_length < 32)\n-\t\t/* Start with a minimum 32-character buffer. */\n-\t\tnew_length = 32;\n+\t\tnew_length = s;\n \telse if (as->buffer_length < 8192)\n \t\t/* Buffers under 8k are doubled for speed. */\n \t\tnew_length = as->buffer_length + as->buffer_length;\ndiff --git a/libarchive/archive_string_sprintf.c b/libarchive/archive_string_sprintf.c\nindex 69b0cdcd..113a8e7b 100644\n--- a/libarchive/archive_string_sprintf.c\n+++ b/libarchive/archive_string_sprintf.c\n@@ -96,7 +96,7 @@ archive_string_vsprintf(struct archive_string *as, const char *fmt,\n \tconst char *p, *p2;\n \tconst wchar_t *pw;\n \n-\tif (archive_string_ensure(as, 64) == NULL)\n+\tif (archive_string_ensure(as, 1) == NULL)\n \t\t__archive_errx(1, \"Out of memory\");\n \n \tif (fmt == NULL) {\n"
+    },
+    {
+      "sha": "15022b794056b6e64d2f4378bdc28011b60b83e9",
+      "edited_message": null,
+      "patch": "--- a/libarchive/archive_string_sprintf.c\n+++ b/libarchive/archive_string_sprintf.c\n@@ -57,6 +57,15 @@\n \tstatic const char digits_upper[] = \"0123456789ABCDEF\";\n \tconst char *digits = upper ? digits_upper : digits_lower;\n \n+\tif (as->length == 0) {\n+\t\tif (archive_string_ensure(as, 1) == NULL)\n+\t\t\treturn;\n+\t\tas->s[0] = digits[d % base];\n+\t\tas->s[1] = '\\0';\n+\t\tas->length = 1;\n+\t\treturn;\n+\t}\n+\n \tif (d >= base)\n \t\tappend_uint(as, d/base, base, upper);\n \tarchive_strappend_char(as, digits[d % base]);\n"
+    }
+  ],
+  "coupling": "The first commit removes the formatter's 64-byte initial reservation and makes archive_string_ensure() allocate the exact requested size. By itself this is safe: the existing append path requests room for both the appended byte and its terminator. The later commit adds a one-digit fast path that reserves one byte, then writes the digit at index 0 and its terminator at index 1. By itself that is also safe on the original batch because archive_string_vsprintf() has already reserved 64 bytes. The bug exists only when the commits are composed: the initial buffer is exactly one byte, archive_string_ensure(as, 1) is a no-op, and the terminator write at index 1 is a one-byte heap-buffer-overflow. A correct fix must reconcile the exact-allocation contract in the first commit with the fast path's terminator requirement in the second commit; reasoning about only one side can leave the other side's capacity assumption invalid.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "public archive_set_error() API",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

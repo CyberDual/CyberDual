@@ -1,0 +1,33 @@
+diff --git a/lib/vdns/doh.c b/lib/vdns/doh.c
+index 3b52ed92f3621dd7c33aae26f66c2ab4b168641c..14c73dc297c572028e9f53cf83bce6555a5fe7ea 100644
+--- a/lib/vdns/doh.c
++++ b/lib/vdns/doh.c
+@@ -565,15 +565,20 @@ static void doh_store_aaaa(const unsigned char *doh, int index,
+ static DOHcode doh_store_https(const unsigned char *doh, int index,
+                                struct dohentry *d, uint16_t len)
+ {
++  struct dohhttps_rr *h;
++
++  /* 2 bytes SvcPriority + at least a 1-byte TargetName */
++  if(len < 3)
++    return DOH_DNS_RDATA_LEN;
+   /* silently ignore RRs over the limit */
+-  if(d->numhttps_rrs < DOH_MAX_HTTPS) {
+-    struct dohhttps_rr *h = &d->https_rrs[d->numhttps_rrs];
+-    h->val = curlx_memdup(&doh[index], len);
+-    if(!h->val)
+-      return DOH_OUT_OF_MEM;
+-    h->len = len;
+-    d->numhttps_rrs++;
+-  }
++  if(d->numhttps_rrs > DOH_MAX_HTTPS)
++    return DOH_OK;
++  h = &d->https_rrs[d->numhttps_rrs];
++  h->val = curlx_memdup(&doh[index], len);
++  if(!h->val)
++    return DOH_OUT_OF_MEM;
++  h->len = len;
++  d->numhttps_rrs++;
+   return DOH_OK;
+ }
+ #endif

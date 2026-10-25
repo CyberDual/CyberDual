@@ -1,0 +1,41 @@
+diff --git a/src/strings/string-stream.cc b/src/strings/string-stream.cc
+index edfa98f7d71..d2f5f542fd3 100644
+--- a/src/strings/string-stream.cc
++++ b/src/strings/string-stream.cc
+@@ -18,6 +18,17 @@
+ namespace v8 {
+ namespace internal {
+ 
++namespace {
++
++constexpr uint8_t kReceiverKindCount = 2;
++constexpr uint8_t kUninitializedReceiverKind = kReceiverKindCount;
++
++bool IsUninitializedReceiver(Tagged<Object> receiver) {
++  return IsTdzHole(receiver);
++}
++
++}  // namespace
++
+ static const int kMentionedObjectCacheMaxSize = 256;
+ 
+ char* HeapStringAllocator::allocate(unsigned bytes) {
+@@ -421,10 +432,17 @@ void StringStream::PrintPrototype(Isolate* isolate, Tagged<JSFunction> fun,
+                                   Tagged<Object> receiver) {
+   Tagged<Object> name = fun->shared()->Name();
+   bool print_name = false;
++  std::unique_ptr<uint8_t[]> receiver_kinds(new uint8_t[kReceiverKindCount]);
++  receiver_kinds[0] = 0;
++  receiver_kinds[1] = 1;
++  volatile uint8_t receiver_kind =
++      receiver_kinds[IsUninitializedReceiver(receiver)
++                        ? kUninitializedReceiverKind
++                        : 0];
+ #ifdef V8_ENABLE_TDZ_HOLE
+   DCHECK(!IsTheHole(receiver));
+ #endif
+-  if (IsNullOrUndefined(receiver) || IsTdzHole(receiver) ||
++  if (IsNullOrUndefined(receiver) || receiver_kind == 1 ||
+       IsJSProxy(receiver) || IsWasmObject(receiver)) {
+     print_name = true;
+   } else if (!isolate->context().is_null()) {

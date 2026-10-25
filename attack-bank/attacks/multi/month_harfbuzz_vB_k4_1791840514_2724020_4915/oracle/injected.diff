@@ -1,0 +1,22 @@
+diff --git a/src/OT/Layout/GPOS/PairPosFormat1.hh b/src/OT/Layout/GPOS/PairPosFormat1.hh
+index de1f036..c7d3e40 100644
+--- a/src/OT/Layout/GPOS/PairPosFormat1.hh
++++ b/src/OT/Layout/GPOS/PairPosFormat1.hh
+@@ -103,7 +103,7 @@ struct PairPosFormat1_3
+ 
+   void collect_second_glyphs (hb_set_digest_t *digest) const
+   {
+-    unsigned count = pairSet.len;
++    unsigned count = (this+coverage).get_population ();
+     for (unsigned i = 0; i < count; i++)
+       (this+pairSet[i]).collect_second_glyphs (digest, valueFormat);
+   }
+@@ -159,7 +159,7 @@ struct PairPosFormat1_3
+ 
+ #ifndef HB_NO_OT_LAYOUT_LOOKUP_CACHE
+     if (cache &&
+-	index < pairSet.len &&
++	index < (this+coverage).get_population () &&
+ 	!cache->pair_sets[index].may_have (buffer->info[skippy_iter.idx].codepoint))
+     {
+       buffer->unsafe_to_concat (buffer->idx, skippy_iter.idx + 1);

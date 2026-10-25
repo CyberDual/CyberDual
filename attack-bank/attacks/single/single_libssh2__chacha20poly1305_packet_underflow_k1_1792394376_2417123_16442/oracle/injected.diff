@@ -1,0 +1,86 @@
+diff --git a/src/crypt.c b/src/crypt.c
+index 11efd28a8873f23f1ae2527957e70db3c7efcec8..ea3eff5ebc9c3f60777ac1f7e44622787a0e5e91 100644
+--- a/src/crypt.c
++++ b/src/crypt.c
+@@ -438,8 +438,11 @@ static int crypt_encrypt_chacha20_poly_buffer(LIBSSH2_SESSION *session,
+ 
+             /* the api expects the size field to already be removed
+                from the decrypted packet so we help it out */
+-            if(ret == 0)
++            if(ret == 0) {
++                if(buf_len < 4)
++                    return 1;  /* fail: too short to hold the size field */
+                 memmove(buf, buf + 4, buf_len - 4);
++            }
+         }
+     }
+ 
+diff --git a/src/knownhost.c b/src/knownhost.c
+index d380a8385b46927809b1832143a008c0aaa42e75..641420573700e80caac72b05a365531af2d8a6a6 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -712,7 +712,6 @@ static int knownhost_line_hashed(LIBSSH2_KNOWNHOSTS *hosts,
+                                  const char *comment, size_t commentlen)
+ {
+     const char *p;
+-    char saltbuf[32];
+     char hostbuf[256];
+ 
+     const char *salt = &host[3]; /* skip the magic marker */
+@@ -725,14 +724,17 @@ static int knownhost_line_hashed(LIBSSH2_KNOWNHOSTS *hosts,
+     if((size_t)(p - salt) < hostlen && *p == '|') {
+         const char *hash = NULL;
+         size_t saltlen = p - salt;
+-        if(saltlen >= (sizeof(saltbuf) - 1)) /* weird length */
+-            return ssh2_err(hosts->session, LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+-                            "Failed to parse known_hosts line "
+-                            "(unexpectedly long salt)");
++        char *saltcopy;
++        int rc;
+ 
+-        memcpy(saltbuf, salt, saltlen);
+-        saltbuf[saltlen] = '\0';
+-        salt = saltbuf; /* point to the stack based buffer */
++        /* the salt within the line is not NUL-terminated, make a copy */
++        saltcopy = SSH2_ALLOC(hosts->session, saltlen);
++        if(!saltcopy)
++            return ssh2_err(hosts->session, LIBSSH2_ERROR_ALLOC,
++                            "Unable to allocate memory for salt");
++
++        memcpy(saltcopy, salt, saltlen);
++        saltcopy[saltlen] = '\0';
+ 
+         hash = p + 1; /* the host hash is after the separator */
+ 
+@@ -741,20 +743,24 @@ static int knownhost_line_hashed(LIBSSH2_KNOWNHOSTS *hosts,
+         hostlen -= saltlen + 1; /* deduct the salt and separator */
+ 
+         /* check that the lengths seem sensible */
+-        if(hostlen >= sizeof(hostbuf) - 1)
++        if(hostlen >= sizeof(hostbuf) - 1) {
++            SSH2_FREE(hosts->session, saltcopy);
+             return ssh2_err(hosts->session, LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                             "Failed to parse known_hosts line "
+                             "(unexpected length)");
++        }
+ 
+         memcpy(hostbuf, host, hostlen);
+         hostbuf[hostlen] = '\0';
+ 
+-        return knownhost_add(hosts, hostbuf, salt,
+-                             key_type_name, key_type_len,
+-                             key, keylen,
+-                             comment, commentlen,
+-                             key_type | LIBSSH2_KNOWNHOST_TYPE_SHA1 |
+-                             LIBSSH2_KNOWNHOST_KEYENC_BASE64, NULL);
++        rc = knownhost_add(hosts, hostbuf, saltcopy,
++                           key_type_name, key_type_len,
++                           key, keylen,
++                           comment, commentlen,
++                           key_type | LIBSSH2_KNOWNHOST_TYPE_SHA1 |
++                           LIBSSH2_KNOWNHOST_KEYENC_BASE64, NULL);
++        SSH2_FREE(hosts->session, saltcopy);
++        return rc;
+     }
+     else
+         return 0; /* XXX: This should be an error, should it not? */

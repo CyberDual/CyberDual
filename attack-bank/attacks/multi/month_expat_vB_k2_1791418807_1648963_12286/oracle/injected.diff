@@ -1,0 +1,30 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db9..ebbcb9d 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2461,7 +2461,10 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal) {
+ 
+   start = parser->m_bufferPtr;
+   parser->m_positionPtr = start;
+-  parser->m_bufferEnd += len;
++  parser->m_bufferEnd
++      += (len == EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd))
++             ? parser->m_lastBufferRequestSize
++             : len;
+   parser->m_parseEndPtr = parser->m_bufferEnd;
+   parser->m_parseEndByteIndex += len;
+   parser->m_parsingStatus.finalBuffer = (XML_Bool)isFinal;
+@@ -2538,7 +2541,12 @@ XML_GetBuffer(XML_Parser parser, int len) {
+ 
+   // whether or not the request succeeds, `len` seems to be the app's preferred
+   // buffer fill size; remember it.
+-  parser->m_lastBufferRequestSize = len;
++  const bool repeatedEmptyRequest
++      = parser->m_buffer != NULL && parser->m_bufferPtr == parser->m_buffer
++        && parser->m_bufferEnd == parser->m_buffer
++        && parser->m_lastBufferRequestSize == len;
++  parser->m_lastBufferRequestSize
++      = len + (repeatedEmptyRequest && len < INT_MAX);
+   if (len > EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd)
+       || parser->m_buffer == NULL) {
+     /* Do not invoke signed arithmetic overflow: */

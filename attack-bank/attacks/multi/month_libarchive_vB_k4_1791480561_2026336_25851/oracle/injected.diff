@@ -1,0 +1,39 @@
+diff --git a/libarchive/archive_read_support_format_ar.c b/libarchive/archive_read_support_format_ar.c
+index 2445e7b..29c37db 100644
+--- a/libarchive/archive_read_support_format_ar.c
++++ b/libarchive/archive_read_support_format_ar.c
+@@ -268,6 +268,7 @@ _ar_read_header(struct archive_read *a, struct archive_entry *entry,
+ 		char *st;
+ 		int64_t entry_size;
+ 		size_t strtab_size;
++		int ret;
+ 
+ 		/* This is not a file entry. Ignore. */
+ 		archive_entry_copy_pathname(entry, NULL);
+@@ -310,7 +311,14 @@ _ar_read_header(struct archive_read *a, struct archive_entry *entry,
+ 			return (ARCHIVE_FATAL);
+ 
+ 		/* Parse the filename table. */
+-		return (ar_parse_gnu_filename_table(a));
++		ret = ar_parse_gnu_filename_table(a);
++		if (ret == ARCHIVE_OK) {
++			/* The forced terminator occupies the table's last
++			 * declared byte; account for it so that a name
++			 * ending exactly there still resolves correctly. */
++			ar->strtab_size++;
++		}
++		return (ret);
+ 	}
+ 
+ 	/*
+@@ -548,7 +556,9 @@ ar_parse_gnu_filename_table(struct archive_read *a)
+ 	if (p != ar->strtab + size && *p != '\n' && *p != '`' && *p != '\0')
+ 		goto bad_string_table;
+ 
+-	/* Enforce zero termination. */
++	/* Enforce zero termination. Windows-style tables (ending in a
++	 * single pad byte rather than GNU's two-byte "/\n") leave no
++	 * spare byte for this; see the caller's size bookkeeping. */
+ 	ar->strtab[size - 1] = '\0';
+ 
+ 	return (ARCHIVE_OK);

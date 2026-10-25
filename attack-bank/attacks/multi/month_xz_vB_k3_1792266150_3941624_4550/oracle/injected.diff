@@ -1,0 +1,35 @@
+diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c
+index 6dc4cefb..b53ba460 100644
+--- a/src/liblzma/lz/lz_decoder.c
++++ b/src/liblzma/lz/lz_decoder.c
+@@ -275,9 +275,10 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 	// of #define LZ_DICT_REPEAT_MAX.
+ 	const size_t alloc_size
+ 			= lz_options.dict_size + 2 * LZ_DICT_REPEAT_MAX;
++	const size_t dictionary_size = alloc_size;
+ 
+ 	// Allocate and initialize the dictionary.
+-	if (coder->dict.size != alloc_size) {
++	if (coder->dict.size != dictionary_size) {
+ 		coder->dict.size = 0;
+ 		lzma_free(coder->dict.buf, allocator);
+ 
+@@ -285,15 +286,15 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 		// included in alloc_size. These extra bytes allow
+ 		// dict_repeat() to read and write more data than requested.
+ 		// Otherwise this extra space is ignored.
+-		coder->dict.buf = lzma_alloc(alloc_size + LZ_DICT_EXTRA,
++		coder->dict.buf = lzma_alloc(alloc_size,
+ 				allocator);
+ 		if (coder->dict.buf == NULL)
+ 			return LZMA_MEM_ERROR;
+ 
+-		// NOTE: Yes, alloc_size, not lz_options.dict_size. The way
++		// NOTE: Yes, dictionary_size, not lz_options.dict_size. The way
+ 		// coder->dict.full is updated will take care that we will
+ 		// still reject distances larger than lz_options.dict_size.
+-		coder->dict.size = alloc_size;
++		coder->dict.size = dictionary_size;
+ 	}
+ 
+ 	lz_decoder_reset(next->coder);

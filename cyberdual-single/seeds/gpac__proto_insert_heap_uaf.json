@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-416",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "4a1eca9ea69a51af2bdd183d8533bc7731ec2105",
+  "parent_sha": "4a1eca9ea69a51af2bdd183d8533bc7731ec2105",
+  "project": "gpac",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/gpac/gpac",
+  "repo_url": "https://github.com/gpac/gpac",
+  "source": "reselect",
+  "target": "gpac",
+  "task": "Load a crafted XMT/BT scene via MP4Box: a malformed GF_SG_PROTO_INSERT command moves a GF_Proto not present in graph->unregistered_protos straight into graph->protos, leaving a stale/dangling pointer that a later PROTO_DELETE_ALL walk dereferences (heap-use-after-free at vrml_proto.c:108). Single file src/scenegraph/commands.c.",
+  "task_iid": "gpac__proto_insert_heap_uaf",
+  "vuln_desc": "Load a crafted XMT/BT scene via MP4Box: a malformed GF_SG_PROTO_INSERT command moves a GF_Proto not present in graph->unregistered_protos straight into graph->protos, leaving a stale/dangling pointer that a later PROTO_DELETE_ALL walk dereferences (heap-use-after-free at vrml_proto.c:108). Single file src/scenegraph/commands.c."
+}

@@ -1,0 +1,91 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index 3fbb5b1c..dade99d0 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -82,7 +82,7 @@ typedef struct {
+ 	/// Number of Blocks in this Stream before this group.
+ 	lzma_vli number_base;
+ 
+-	/// Number of Records that can be put in records[].
++	/// Index of the last Record that can be put in records[].
+ 	size_t allocated;
+ 
+ 	/// Index of the last Record in use.
+@@ -494,7 +494,7 @@ lzma_index_end(lzma_index *i, const lzma_allocator *allocator)
+ extern bool
+ lzma_index_prealloc(lzma_index *i, lzma_vli records)
+ {
+-	if (records > PREALLOC_MAX)
++	if (records >= PREALLOC_MAX)
+ 		return true;
+ 
+ 	// If index_decoder.c calls us with records == 0, it's decoding
+@@ -517,7 +517,7 @@ lzma_index_prealloc(lzma_index *i, lzma_vli records)
+ 	if (records == 0)
+ 		records = INDEX_GROUP_SIZE;
+ 
+-	i->prealloc = (size_t)(records);
++	i->prealloc = (size_t)(records + 1);
+ 	return false;
+ }
+ 
+@@ -762,7 +762,7 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,
+ 			> LZMA_BACKWARD_SIZE_MAX)
+ 		return LZMA_DATA_ERROR;
+ 
+-	if (g != NULL && g->last + 1 < g->allocated) {
++	if (g != NULL && g->last + 1 <= g->allocated) {
+ 		// There is space in the last group at least for one Record.
+ 		++g->last;
+ 	} else {
+@@ -775,7 +775,7 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,
+ 			return LZMA_MEM_ERROR;
+ 
+ 		g->last = 0;
+-		g->allocated = i->prealloc;
++		g->allocated = i->prealloc - 1;
+ 
+ 		// Reset prealloc so that if the application happens to
+ 		// add new Records, the allocation size will be sane.
+@@ -885,12 +885,12 @@ lzma_index_cat(lzma_index *restrict dest, lzma_index *restrict src,
+ 	{
+ 		index_stream *s = (index_stream *)(dest->streams.rightmost);
+ 		index_group *g = (index_group *)(s->groups.rightmost);
+-		if (g != NULL && g->last + 1 < g->allocated) {
++		if (g != NULL && g->last < g->allocated) {
+ 			assert(g->node.left == NULL);
+ 			assert(g->node.right == NULL);
+ 
+ 			index_group *newg = lzma_alloc(sizeof(index_group)
+-					+ (g->last + 1)
++					+ (g->last + 2)
+ 					* sizeof(index_record),
+ 					allocator);
+ 			if (newg == NULL)
+@@ -994,7 +994,7 @@ index_dup_stream(const index_stream *src, const lzma_allocator *allocator)
+ 	// a single group. It's simplest and also tends to make
+ 	// lzma_index_locate() a little bit faster with very big Indexes.
+ 	index_group *destg = lzma_alloc(sizeof(index_group)
+-			+ src->record_count * sizeof(index_record),
++			+ (src->record_count + 1) * sizeof(index_record),
+ 			allocator);
+ 	if (destg == NULL) {
+ 		index_stream_end(dest, allocator);
+@@ -1005,7 +1005,7 @@ index_dup_stream(const index_stream *src, const lzma_allocator *allocator)
+ 	destg->node.uncompressed_base = 0;
+ 	destg->node.compressed_base = 0;
+ 	destg->number_base = 1;
+-	destg->allocated = src->record_count;
++	destg->allocated = src->record_count + 1;
+ 	destg->last = src->record_count - 1;
+ 
+ 	// Go through all the groups in src and copy the Records into destg.
+@@ -1018,7 +1018,7 @@ index_dup_stream(const index_stream *src, const lzma_allocator *allocator)
+ 		srcg = index_tree_next(&srcg->node);
+ 	} while (srcg != NULL);
+ 
+-	assert(i == destg->allocated);
++	assert(i + 1 == destg->allocated);
+ 
+ 	// Add the group to the new Stream.
+ 	index_tree_append(&dest->groups, &destg->node, false);

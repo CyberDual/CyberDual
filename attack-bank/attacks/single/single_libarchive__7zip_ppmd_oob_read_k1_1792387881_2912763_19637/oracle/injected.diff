@@ -1,0 +1,36 @@
+diff --git a/libarchive/archive_read_support_format_7zip.c b/libarchive/archive_read_support_format_7zip.c
+index b3803fc7ae58a8be2704b65b54c43247e20c0ae4..0064966b6927cd0fd0911e03e74f5f71f429cdf7 100644
+--- a/libarchive/archive_read_support_format_7zip.c
++++ b/libarchive/archive_read_support_format_7zip.c
+@@ -1300,7 +1300,21 @@ ppmd_read(void *p)
+ 		 * and we are on boundary;
+ 		 * last resort to read using __archive_read_ahead.
+ 		 */
+-		const uint8_t *data = __archive_read_ahead(a,
++		const uint8_t *data;
++
++		if (zip->ppstream.stream_in >=
++		    (uint64_t)zip->pack_stream_inbytes_remaining) {
++			/*
++			 * The decoder has consumed all bytes of the current
++			 * pack stream; never read past its end.
++			 */
++			archive_set_error(&a->archive,
++			    ARCHIVE_ERRNO_FILE_FORMAT,
++			    "Truncated 7z file data");
++			zip->ppstream.overconsumed = 1;
++			return (0);
++		}
++		data = __archive_read_ahead(a,
+ 		    zip->ppstream.stream_in + 1, NULL);
+ 		if (data == NULL) {
+ 			archive_set_error(&a->archive,
+@@ -1596,7 +1610,7 @@ init_decompression(struct archive_read *a, struct _7zip *zip,
+ 			zip->ppmd7_valid = 0;
+ 		}
+ 
+-		if (coder1->propertiesSize < 5) {
++		if (coder1->propertiesSize < 4) {
+ 			archive_set_error(&a->archive, ARCHIVE_ERRNO_MISC,
+ 			    "Malformed PPMd parameter");
+ 			return (ARCHIVE_FAILED);

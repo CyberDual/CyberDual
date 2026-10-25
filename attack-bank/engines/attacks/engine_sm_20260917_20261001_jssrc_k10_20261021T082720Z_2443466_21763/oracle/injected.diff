@@ -1,0 +1,41 @@
+diff --git a/js/src/shell/js.cpp b/js/src/shell/js.cpp
+index e65272735a604..bffb35f407e85 100644
+--- a/js/src/shell/js.cpp
++++ b/js/src/shell/js.cpp
+@@ -11463,6 +11463,9 @@ static const JSClass global_class = {
+ /* Fow now just use to a constant we can check. */
+ static const void* DOM_PRIVATE_VALUE = (void*)0x1234;
+ 
++#define FAKE_DOM_GLOBAL_PROPERTY_PREFIX "__fakeDOMGlobalPropX"
++#define FAKE_DOM_GLOBAL_PROPERTY_INITIAL_COUNTER 1000000000
++
+ static bool dom_genericGetter(JSContext* cx, unsigned argc, JS::Value* vp);
+ 
+ static bool dom_genericSetter(JSContext* cx, unsigned argc, JS::Value* vp);
+@@ -11536,12 +11539,24 @@ static bool dom_get_pendingGlobalProperties(JSContext* cx, HandleObject obj,
+   // Define new properties on the global, like a Gecko DOM getter that lazily
+   // defines interface constructors while creating a reflector. This may
+   // reallocate the global's dynamic slots.
++#ifdef FAKE_DOM_GLOBAL_PROPERTY_PREFIX
++  static mozilla::Atomic<uint32_t> counter(FAKE_DOM_GLOBAL_PROPERTY_INITIAL_COUNTER);
++#else
+   static mozilla::Atomic<uint32_t> counter(0);
++#endif
+   RootedObject global(cx, cx->global());
+   uint32_t count = sFakeDOMPendingGlobalProperties.exchange(0);
+   for (uint32_t i = 0; i < count; i++) {
+-    char name[32];
+-    SprintfLiteral(name, "__fakeDOMGlobalProp%u", uint32_t(counter++));
++    char name[31];
++#ifdef FAKE_DOM_GLOBAL_PROPERTY_PREFIX
++    int length = SprintfLiteral(name, FAKE_DOM_GLOBAL_PROPERTY_PREFIX "%u",
++                                uint32_t(counter++));
++#else
++    int length = SprintfLiteral(name, "__fakeDOMGlobalProp%u",
++                                uint32_t(counter++));
++#endif
++    name[length] = '_';
++    name[length + 1] = '\0';
+     if (!JS_DefineProperty(cx, global, name, UndefinedHandleValue, 0)) {
+       return false;
+     }

@@ -1,0 +1,111 @@
+diff --git a/src/heap/marking-visitor-inl.h b/src/heap/marking-visitor-inl.h
+index e863015f..f3fdf6fb 100644
+--- a/src/heap/marking-visitor-inl.h
++++ b/src/heap/marking-visitor-inl.h
+@@ -266,17 +266,20 @@ void MarkingVisitorBase<ConcreteVisitor>::VisitExternalPointer(
+     }
+   }
+   table->Mark(space, handle, slot.address());
+-  if (slot.tag_range() != kArrayBufferExtensionTag) {
++  if (handle == kNullExternalPointerHandle ||
++      table->GetTag(handle) != kArrayBufferExtensionTag) {
+     return;
+   }
+-  Address maybe_extension = table->Get(handle, slot.tag_range());
++  Address maybe_extension = table->Get(handle, kArrayBufferExtensionTag);
+   if (maybe_extension) {
+     ArrayBufferExtension* extension =
+         reinterpret_cast<ArrayBufferExtension*>(maybe_extension);
+-    SBXCHECK_EQ(space == heap_->young_external_pointer_space()
+-                    ? ArrayBufferExtension::Age::kYoung
+-                    : ArrayBufferExtension::Age::kOld,
+-                extension->age());
++    if (slot.tag_range() == kArrayBufferExtensionTag) {
++      SBXCHECK_EQ(space == heap_->young_external_pointer_space()
++                      ? ArrayBufferExtension::Age::kYoung
++                      : ArrayBufferExtension::Age::kOld,
++                  extension->age());
++    }
+   }
+ #else   // !V8_COMPRESS_POINTERS
+   if (slot.tag_range() != kArrayBufferExtensionTag) {
+diff --git a/src/heap/scavenger.cc b/src/heap/scavenger.cc
+index 32e6bde3..5eaa6d42 100644
+--- a/src/heap/scavenger.cc
++++ b/src/heap/scavenger.cc
+@@ -531,7 +531,8 @@ class ScavengerObjectVisitorBase : public NewSpaceVisitor<ConcreteVisitor> {
+     }
+ 
+     ArrayBufferExtension* array_buffer_extension =
+-        slot.tag_range() == kArrayBufferExtensionTag
++        handle != kNullExternalPointerHandle &&
++                table.GetTag(handle) == kArrayBufferExtensionTag
+             ? reinterpret_cast<ArrayBufferExtension*>(
+                   table.Get(handle, kArrayBufferExtensionTag))
+             : nullptr;
+@@ -544,6 +545,9 @@ class ScavengerObjectVisitorBase : public NewSpaceVisitor<ConcreteVisitor> {
+ #endif  // !V8_COMPRESS_POINTERS
+     if (array_buffer_extension) {
+       array_buffer_extension->InitializationBarrier();
++      if (array_buffer_extension->age() != ArrayBufferExtension::Age::kYoung) {
++        return;
++      }
+       if constexpr (kExpectedObjectAge == ObjectAge::kYoung) {
+         array_buffer_extension->YoungMark();
+       } else {
+diff --git a/src/heap/young-generation-marking-visitor-inl.h b/src/heap/young-generation-marking-visitor-inl.h
+index 744cbfb1..5adc8543 100644
+--- a/src/heap/young-generation-marking-visitor-inl.h
++++ b/src/heap/young-generation-marking-visitor-inl.h
+@@ -129,7 +129,7 @@ void YoungGenerationMarkingVisitor<marking_mode>::VisitExternalPointer(
+     ExternalPointerTable& table = isolate_->external_pointer_table();
+     auto* space = isolate_->heap()->young_external_pointer_space();
+     table.Mark(space, handle, slot.address());
+-    if (slot.tag_range() == kArrayBufferExtensionTag) {
++    if (table.GetTag(handle) == kArrayBufferExtensionTag) {
+       maybe_extension = table.Get(handle, kArrayBufferExtensionTag);
+     }
+   }
+@@ -149,7 +149,9 @@ void YoungGenerationMarkingVisitor<marking_mode>::VisitExternalPointer(
+   if (ArrayBufferExtension* extension =
+           reinterpret_cast<ArrayBufferExtension*>(maybe_extension)) {
+     extension->InitializationBarrier();
+-    extension->YoungMark();
++    if (extension->age() == ArrayBufferExtension::Age::kYoung) {
++      extension->YoungMark();
++    }
+   }
+ }
+ 
+diff --git a/src/objects/js-array-buffer-inl.h b/src/objects/js-array-buffer-inl.h
+index 5e90240d..065fbd02 100644
+--- a/src/objects/js-array-buffer-inl.h
++++ b/src/objects/js-array-buffer-inl.h
+@@ -137,6 +137,11 @@ ArrayBufferExtension* JSArrayBuffer::extension() const {
+   Isolate* isolate = Isolate::Current();
+   ExternalPointerHandle handle =
+       base::AsAtomic32::Relaxed_Load(extension_handle_location());
++  if (handle != kNullExternalPointerHandle &&
++      isolate->external_pointer_table().GetTag(handle) !=
++          kArrayBufferExtensionTag) {
++    return nullptr;
++  }
+   return reinterpret_cast<ArrayBufferExtension*>(
+       isolate->external_pointer_table().Get(handle, kArrayBufferExtensionTag));
+ #else
+diff --git a/src/objects/js-array-buffer.cc b/src/objects/js-array-buffer.cc
+index 9c10ef1b..f3b3fae7 100644
+--- a/src/objects/js-array-buffer.cc
++++ b/src/objects/js-array-buffer.cc
+@@ -338,9 +338,9 @@ std::shared_ptr<BackingStore> JSArrayBuffer::RemoveExtension() {
+   // swapped the extension pointer to a shared buffer's extension.
+   SBXCHECK(!extension->is_shared());
+   auto result = extension->RemoveBackingStore();
+-  // Remove pointer to extension such that the next GC will free it
+-  // automatically.
++  // Remove the buffer's reference to its extension.
+   set_extension(nullptr);
++  if (result->byte_length() == 0) delete extension;
+   return result;
+ }
+ 

@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "608abc1008e12a04996719017f1ea1e1733f0e69",
+      "edited_message": "parsedate: time zone strings\n\nRepresent the fixed-length timezone names as packed integers instead of NUL-terminated strings.\n\nThe single-letter table omits the unused J slot and indexes K through Z accordingly.",
+      "patch": "diff --git a/lib/parsedate.c b/lib/parsedate.c\nindex 9630a988b9..a92e0007b3 100644\n--- a/lib/parsedate.c\n+++ b/lib/parsedate.c\n@@ -114,7 +114,7 @@ struct tzinfo {\n \n #define DST (-60)     /* offset for daylight savings time */\n \n-/* alpha-sorted list of single-letter time zones, A - Z */\n+/* alpha-sorted list of single-letter time zones, A-I and K-Z */\n static const int16_t tzone[] = {\n   -1 * 60,            /* Alpha */\n   -2 * 60,            /* Bravo */\n@@ -125,7 +125,6 @@ static const int16_t tzone[] = {\n   -7 * 60,            /* Golf */\n   -8 * 60,            /* Hotel */\n   -9 * 60,            /* India */\n-  -1,                 /* J - not a timezone */\n   -10 * 60,           /* Kilo */\n   -11 * 60,           /* Lima */\n   -12 * 60,           /* Mike */\n@@ -344,7 +343,7 @@ UNITTEST int checktz(const char *check, size_t len)\n     /* short-cut single letter names */\n     if((first > 'Z') || (first == 'J'))\n       return -1; /* no such tz */\n-    return tzone[first - 'A'] * 60;\n+    return tzone[(first > 'J') ? first - 'B' : first - 'A'] * 60;\n   }\n   else if(len == 2) {\n     /* two-letter names */\n"
+    },
+    {
+      "sha": "5a4a3e8f17bbdc1323d1dc615227cc853673a1d4",
+      "edited_message": "parsedate: validate NULL date pointer in curl_getdate\n\nReturn -1 when curl_getdate() is called with a NULL date pointer instead of dereferencing it.\n\nAlso simplify the single-letter timezone index while touching the parser.\n\nCloses https://github.com/curl/curl/pull/23156",
+      "patch": "--- a/lib/parsedate.c\n+++ b/lib/parsedate.c\n@@ -346,7 +346,7 @@\n     /* short-cut single letter names */\n     if((first > 'Z') || (first == 'J'))\n       return -1; /* no such tz */\n-    return tzone[first - 'A'] * 60;\n+    return 60 * tzone[first - 'A'];\n   }\n   else if(len == 2) {\n     /* two-letter names */\n"
+    }
+  ],
+  "coupling": "The timezone-refactor commit changes tzone from a contiguous 26-entry A-Z table to 25 entries by omitting the invalid J slot, and safely compensates with a gap-aware index. The later curl_getdate commit simplifies the lookup to a direct first - A index. That later change is safe with the original 26-entry table, but once both edits compose, a valid single-letter Z maps to index 25 and reads two bytes past the 25-entry global tzone array. The fault is therefore split between the commit that establishes the compact table representation and the later commit that consumes it with an index assuming the old contiguous layout. A correct fix must reconcile the table cardinality from the first commit with the indexing contract in the second commit; reviewing or adjusting either diff without the other cannot establish the shared representation/index invariant.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "curl_getdate (public libcurl API)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

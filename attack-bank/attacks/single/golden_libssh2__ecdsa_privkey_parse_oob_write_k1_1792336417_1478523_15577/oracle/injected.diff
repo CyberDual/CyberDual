@@ -1,0 +1,16 @@
+diff --git a/src/misc.c b/src/misc.c
+index 85caed1640cb677aade316e8c8d4db9fbb652879..aaabe85f6503be3f30d54fccde5b893050347c30 100644
+--- a/src/misc.c
++++ b/src/misc.c
+@@ -941,8 +941,9 @@ int ssh2_get_bignum_bytes(struct string_buf *buf, unsigned char **outbuf,
+     bn_len = data_len;
+     bnptr = buf->dataptr;
+ 
+-    /* trim leading zeros */
+-    while(bn_len > 0 && *bnptr == 0x00) {
++    /* trim leading zeros, but keep at least one byte so the value is
++       never returned with a zero length */
++    while(bn_len > 1 && *bnptr == 0x00) {
+         bn_len--;
+         bnptr++;
+     }

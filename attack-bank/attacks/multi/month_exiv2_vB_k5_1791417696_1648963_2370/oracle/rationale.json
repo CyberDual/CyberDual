@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "45165c0d42e8e9eaed52dfd13713d29d56c1d80e",
+      "edited_message": null,
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 6b5f65a..b9eb79c 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -1234,7 +1234,7 @@ void QuickTimeVideo::audioDescDecoder() {\n }  // QuickTimeVideo::audioDescDecoder\n \n void QuickTimeVideo::imageDescDecoder() {\n-  DataBuf buf(40);\n+  DataBuf buf(32);\n   std::memset(buf.data(), 0x0, buf.size());\n   buf.data()[4] = '\\0';\n   io_->readOrThrow(buf.data(), 4);\n@@ -1275,7 +1275,10 @@ void QuickTimeVideo::imageDescDecoder() {\n       case CompressorName:\n         io_->readOrThrow(buf.data(), 32);\n         size -= 32;\n-        xmpData_[\"Xmp.video.Compressor\"] = buf.data();\n+        {\n+          const std::string compressor(buf.c_str(), 32);\n+          xmpData_[\"Xmp.video.Compressor\"] = compressor.substr(0, compressor.find('\\0'));\n+        }\n         break;\n       default:\n         break;\n"
+    },
+    {
+      "sha": "31e7ebc9c2e8e74582496de5105dbb5dba8cbc17",
+      "edited_message": null,
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 513f94b..1a2a043 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -1238,7 +1238,7 @@ void QuickTimeVideo::audioDescDecoder() {\n }  // QuickTimeVideo::audioDescDecoder\n \n void QuickTimeVideo::imageDescDecoder() {\n-  DataBuf buf(40);\n+  DataBuf buf(32);\n   std::memset(buf.data(), 0x0, buf.size());\n   buf.data()[4] = '\\0';\n   io_->readOrThrow(buf.data(), 4);\n@@ -1280,6 +1280,7 @@ void QuickTimeVideo::imageDescDecoder() {\n       case CompressorName:\n         io_->readOrThrow(buf.data(), 32);\n         size -= 32;\n+        buf.data()[32] = '\\0';\n         xmpData_[\"Xmp.video.Compressor\"] = buf.data();\n         break;\n       default:\n"
+    }
+  ],
+  "coupling": "The earlier resize-cleanup commit reduces imageDescDecoder\u2019s scratch DataBuf from 40 to 32 bytes and switches the 32-byte compressor field to bounded string extraction, so that commit remains safe. The later string-termination commit writes a NUL at index 32 and returns the field to C-string extraction. That write fits the original 40-byte buffer and is safe without the earlier edit, but it is one byte past the earlier 32-byte allocation. A repair must reconcile the buffer size with the terminator and the string extraction across both commits; either edited diff looks valid against its original counterpart in isolation.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Exiv2::ImageFactory::open(const byte*, size_t) followed by Image::readMetadata()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

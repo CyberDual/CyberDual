@@ -1,0 +1,39 @@
+diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc
+index 5134f7f..012c4d9 100644
+--- a/src/hb-raster-draw.cc
++++ b/src/hb-raster-draw.cc
+@@ -1693,11 +1693,12 @@ hb_raster_draw_render (hb_raster_draw_t *draw)
+   /* ── 4. Bucket edges by starting row and rasterize scanlines ──── */
+   if (draw->edges.length && ext.width && ext.height)
+   {
+-    if (unlikely (!draw->row_area.resize_dirty (ext.width) ||
+-		  !draw->row_cover.resize_dirty (ext.width)))
++    unsigned sweep_width = ext.width + 1;
++    if (unlikely (!draw->row_area.resize_dirty (sweep_width) ||
++		  !draw->row_cover.resize_dirty (sweep_width)))
+       return nullptr;
+-    hb_memset (draw->row_area.arrayZ,  0, ext.width * sizeof (int32_t));
+-    hb_memset (draw->row_cover.arrayZ, 0, ext.width * sizeof (int16_t));
++    hb_memset (draw->row_area.arrayZ,  0, sweep_width * sizeof (int32_t));
++    hb_memset (draw->row_cover.arrayZ, 0, sweep_width * sizeof (int16_t));
+ 
+     /* Bucket edges by their starting pixel row.
+        Only grow the outer vector; clear inner vectors without freeing. */
+@@ -1754,14 +1755,15 @@ hb_raster_draw_render (hb_raster_draw_t *draw)
+ 
+ 	if (unlikely (use_wide))
+ 	  edge_sweep_row (draw->row_area_wide.arrayZ, draw->row_cover_wide.arrayZ,
+-			  ext.width, ext.x_origin, y_top, e, x_min, x_max);
++			  draw->row_area.length, ext.x_origin, y_top, e, x_min, x_max);
+ 	else
+ 	  edge_sweep_row (draw->row_area.arrayZ, draw->row_cover.arrayZ,
+-			  ext.width, ext.x_origin, y_top, e, x_min, x_max);
++			  draw->row_area.length, ext.x_origin, y_top, e, x_min, x_max);
+ 	draw->active_edges.arrayZ[write++] = edge_idx;
+       }
+       draw->active_edges.resize (write);
+ 
++      x_max = hb_min (x_max, ext.width - 1);
+       if (x_min <= x_max)
+       {
+ 	int64_t cover_accum = use_wide ?

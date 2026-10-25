@@ -1,0 +1,269 @@
+diff --git a/src/heap/heap-write-barrier.cc b/src/heap/heap-write-barrier.cc
+index 378b75bd..f40c7c22 100644
+--- a/src/heap/heap-write-barrier.cc
++++ b/src/heap/heap-write-barrier.cc
+@@ -153,7 +153,7 @@ void WriteBarrier::MarkingSlow(Tagged<HeapObject> host,
+   DCHECK(!space->is_internal_read_only_space());
+ 
+   ExternalPointerHandle handle = slot.Relaxed_LoadHandle();
+-  table.Mark(space, handle, slot.address());
++  table.Mark(space, handle, slot.address(), slot.tag_range());
+ 
+   if (marking_barrier->is_minor() && HeapLayout::InYoungGeneration(host)) {
+     MutablePage* host_page =
+diff --git a/src/heap/mark-compact.cc b/src/heap/mark-compact.cc
+index 1a3717bd..caa1192d 100644
+--- a/src/heap/mark-compact.cc
++++ b/src/heap/mark-compact.cc
+@@ -1227,7 +1227,7 @@ class MarkExternalPointerFromExternalStringTable : public RootVisitor {
+       DCHECK(!slot.tag_range().IsEmpty());
+       DCHECK(IsSharedExternalPointerType(slot.tag_range()));
+       ExternalPointerHandle handle = slot.Relaxed_LoadHandle();
+-      table_->Mark(space_, handle, slot.address());
++      table_->Mark(space_, handle, slot.address(), slot.tag_range());
+     }
+     void VisitPointers(Tagged<HeapObject> host, ObjectSlot start,
+                        ObjectSlot end) override {
+diff --git a/src/heap/marking-visitor-inl.h b/src/heap/marking-visitor-inl.h
+index e863015f..5651e9a9 100644
+--- a/src/heap/marking-visitor-inl.h
++++ b/src/heap/marking-visitor-inl.h
+@@ -265,8 +265,9 @@ void MarkingVisitorBase<ConcreteVisitor>::VisitExternalPointer(
+                   : heap_->old_external_pointer_space();
+     }
+   }
+-  table->Mark(space, handle, slot.address());
+-  if (slot.tag_range() != kArrayBufferExtensionTag) {
++  table->Mark(space, handle, slot.address(), slot.tag_range());
++  if (slot.tag_range() != kArrayBufferExtensionTag ||
++      space == heap_->young_external_pointer_space()) {
+     return;
+   }
+   Address maybe_extension = table->Get(handle, slot.tag_range());
+diff --git a/src/heap/minor-mark-sweep.cc b/src/heap/minor-mark-sweep.cc
+index 89ff1bae..ea2805d9 100644
+--- a/src/heap/minor-mark-sweep.cc
++++ b/src/heap/minor-mark-sweep.cc
+@@ -898,7 +898,7 @@ bool ShouldMovePage(NormalPage* p, intptr_t live_bytes, intptr_t wasted_bytes) {
+ 
+ }  // namespace
+ 
+-void MinorMarkSweepCollector::EvacuateExternalPointerReferences(
++void MinorMarkSweepCollector::EvacuateExternalPointerReferencesDuringSweeping(
+     MutablePage* p) {
+ #ifdef V8_COMPRESS_POINTERS
+   using BasicSlotSet = ::heap::base::BasicSlotSet<kTaggedSize>;
+@@ -911,7 +911,8 @@ void MinorMarkSweepCollector::EvacuateExternalPointerReferences(
+     ExternalPointerHandle handle =
+         *reinterpret_cast<ExternalPointerHandle*>(handle_location);
+     table.Evacuate(young, old, handle, handle_location,
+-                   ExternalPointerTable::EvacuateMarkMode::kClearMark);
++                   ExternalPointerTable::EvacuateMarkMode::kClearMark,
++                   kAnyExternalPointerTagRange);
+     return KEEP_SLOT;
+   };
+   auto slot_count = slots->Iterate<BasicSlotSet::AccessMode::NON_ATOMIC>(
+@@ -949,7 +950,7 @@ bool MinorMarkSweepCollector::StartSweepNewSpace() {
+     }
+ 
+     if (ShouldMovePage(p, live_bytes_on_page, p->wasted_memory())) {
+-      EvacuateExternalPointerReferences(p);
++      EvacuateExternalPointerReferencesDuringSweeping(p);
+       // free list categories will be relinked by the sweeper after sweeping is
+       // done.
+       p->set_will_be_promoted(true);
+@@ -1029,7 +1030,7 @@ bool MinorMarkSweepCollector::SweepNewLargeSpace() {
+     current->ClearFlagNonExecutable(MemoryChunk::TO_PAGE);
+     current->SetFlagNonExecutable(MemoryChunk::FROM_PAGE);
+     current->marking_progress_tracker().ResetIfEnabled();
+-    EvacuateExternalPointerReferences(current);
++    EvacuateExternalPointerReferencesDuringSweeping(current);
+     old_lo_space->PromoteNewLargeObject(current);
+     has_promoted_pages = true;
+     sweeper()->AddPromotedPage(current);
+diff --git a/src/heap/minor-mark-sweep.h b/src/heap/minor-mark-sweep.h
+index dbb9cad1..93f7f048 100644
+--- a/src/heap/minor-mark-sweep.h
++++ b/src/heap/minor-mark-sweep.h
+@@ -207,7 +207,7 @@ class MinorMarkSweepCollector final {
+       YoungGenerationRootMarkingVisitor& root_visitor);
+   void MarkRootsFromConservativeStack(
+       YoungGenerationRootMarkingVisitor& root_visitor);
+-  void EvacuateExternalPointerReferences(MutablePage* p);
++  void EvacuateExternalPointerReferencesDuringSweeping(MutablePage* p);
+ 
+   void TraceFragmentation();
+   void ClearNonLiveReferences();
+diff --git a/src/heap/scavenger.cc b/src/heap/scavenger.cc
+index 32e6bde3..64d996f2 100644
+--- a/src/heap/scavenger.cc
++++ b/src/heap/scavenger.cc
+@@ -517,7 +517,8 @@ class ScavengerObjectVisitorBase : public NewSpaceVisitor<ConcreteVisitor> {
+       // For survivor objects, mark their EPT entries when they are
+       // copied. Scavenger then sweeps the young EPT space at the end of
+       // collection, reclaiming unmarked EPT entries.
+-      table.Mark(heap->young_external_pointer_space(), handle, slot.address());
++      table.Mark(heap->young_external_pointer_space(), handle, slot.address(),
++                 slot.tag_range());
+     } else {
+       // When promoting, we just evacuate the entry from new to old space.
+       // Usually the entry will be unmarked, unless the slot was initialized
+@@ -527,7 +528,8 @@ class ScavengerObjectVisitorBase : public NewSpaceVisitor<ConcreteVisitor> {
+       handle = table.Evacuate(
+           heap->young_external_pointer_space(),
+           heap->old_external_pointer_space(), handle, slot.address(),
+-          ExternalPointerTable::EvacuateMarkMode::kTransferMark);
++          ExternalPointerTable::EvacuateMarkMode::kTransferMark,
++          slot.tag_range());
+     }
+ 
+     ArrayBufferExtension* array_buffer_extension =
+diff --git a/src/heap/young-generation-marking-visitor-inl.h b/src/heap/young-generation-marking-visitor-inl.h
+index 744cbfb1..14c6c693 100644
+--- a/src/heap/young-generation-marking-visitor-inl.h
++++ b/src/heap/young-generation-marking-visitor-inl.h
+@@ -128,7 +128,7 @@ void YoungGenerationMarkingVisitor<marking_mode>::VisitExternalPointer(
+   if (handle != kNullExternalPointerHandle) {
+     ExternalPointerTable& table = isolate_->external_pointer_table();
+     auto* space = isolate_->heap()->young_external_pointer_space();
+-    table.Mark(space, handle, slot.address());
++    table.Mark(space, handle, slot.address(), slot.tag_range());
+     if (slot.tag_range() == kArrayBufferExtensionTag) {
+       maybe_extension = table.Get(handle, kArrayBufferExtensionTag);
+     }
+diff --git a/src/objects/embedder-data-slot-inl.h b/src/objects/embedder-data-slot-inl.h
+index 22aab5e3..c89d266d 100644
+--- a/src/objects/embedder-data-slot-inl.h
++++ b/src/objects/embedder-data-slot-inl.h
+@@ -167,10 +167,12 @@ bool EmbedderDataSlot::store_handle(IsolateForSandbox isolate,
+   // The actual type tag does not matter here, as it is only used  to load the
+   // correct external pointer table and space, both here and in the write
+   // barrier code below. It only has to be in the range of embedder data tags.
+-  constexpr ExternalPointerTag kAnyTag = kFirstEmbedderDataTag;
+-  ExternalPointerTable& table = isolate.GetExternalPointerTableFor(kAnyTag);
++  constexpr ExternalPointerTagRange kAnyEmbedderTag = {kFirstEmbedderDataTag,
++                                                       kLastEmbedderDataTag};
++  ExternalPointerTable& table =
++      isolate.GetExternalPointerTableFor(kAnyEmbedderTag);
+   ExternalPointerTable::Space* space =
+-      isolate.GetExternalPointerTableSpaceFor(kAnyTag, host.address());
++      isolate.GetExternalPointerTableSpaceFor(kAnyEmbedderTag, host.address());
+ 
+   ExternalPointerHandle new_handle = table.DuplicateEntry(space, handle);
+   if (new_handle == kNullExternalPointerHandle) return false;
+@@ -184,7 +186,10 @@ bool EmbedderDataSlot::store_handle(IsolateForSandbox isolate,
+   // Use `offset` to avoid compilation issues for gn arg
+   // `v8_disable_write_barriers = true`.
+   USE(offset);
+-  EXTERNAL_POINTER_WRITE_BARRIER(host, static_cast<int>(offset), kAnyTag);
++  // This method is only used by `EmbedderDataArray::EnsureCapacity` for copying
++  // handles in a relocated EmbedderDataArray.
++  EXTERNAL_POINTER_WRITE_BARRIER(host, static_cast<int>(offset),
++                                 kAnyEmbedderTag);
+   ObjectSlot(address() + kTaggedPayloadOffset).Relaxed_Store(Smi::zero());
+   return true;
+ }
+diff --git a/src/sandbox/external-pointer-table-inl.h b/src/sandbox/external-pointer-table-inl.h
+index ae3bef70..b718e5d5 100644
+--- a/src/sandbox/external-pointer-table-inl.h
++++ b/src/sandbox/external-pointer-table-inl.h
+@@ -63,7 +63,8 @@ void ExternalPointerTableEntry::SetExternalPointer(Address value,
+ bool ExternalPointerTableEntry::HasExternalPointer(
+     ExternalPointerTagRange tag_range) const {
+   auto payload = payload_.load(std::memory_order_relaxed);
+-  if (!payload.ContainsPointer()) return false;
++  DCHECK(!tag_range.Contains(kExternalPointerFreeEntryTag));
++  DCHECK(!tag_range.Contains(kExternalPointerEvacuationEntryTag));
+   return payload.IsTaggedWithTagIn(tag_range);
+ }
+ 
+@@ -120,10 +121,13 @@ std::optional<uint32_t> ExternalPointerTableEntry::GetNextFreelistEntryIndex()
+   return payload.ExtractFreelistLink();
+ }
+ 
+-bool ExternalPointerTableEntry::Mark() {
++bool ExternalPointerTableEntry::Mark(ExternalPointerTagRange tag_range) {
+   auto old_payload = payload_.load(std::memory_order_relaxed);
+   while (true) {
+-    DCHECK(old_payload.ContainsPointer());
++    // Some entry types (e.g. ArrayBufferExtension) are managed and require that
++    // the EPT mark bit and the speicifc type handling (e.g. marking an
++    // ArrayBufferExtension) stay in sync.
++    SBXCHECK(old_payload.IsTaggedWithTagIn(tag_range));
+     if (old_payload.HasMarkBitSet()) {
+       return false;
+     }
+@@ -254,7 +258,8 @@ ExternalPointerHandle ExternalPointerTable::DuplicateEntry(
+ }
+ 
+ void ExternalPointerTable::Mark(Space* space, ExternalPointerHandle handle,
+-                                Address handle_location) {
++                                Address handle_location,
++                                ExternalPointerTagRange tag_range) {
+   DCHECK(space->BelongsTo(this));
+ 
+   // The handle_location must always contain the given handle. Except if the
+@@ -275,7 +280,7 @@ void ExternalPointerTable::Mark(Space* space, ExternalPointerHandle handle,
+   DCHECK(space->Contains(index));
+ 
+   // Bail out in case the entry was already marked.
+-  if (!at(index).Mark()) {
++  if (!at(index).Mark(tag_range)) {
+     return;
+   }
+ 
+@@ -288,7 +293,8 @@ void ExternalPointerTable::Mark(Space* space, ExternalPointerHandle handle,
+ 
+ ExternalPointerHandle ExternalPointerTable::Evacuate(
+     Space* from_space, Space* to_space, ExternalPointerHandle handle,
+-    Address handle_location, EvacuateMarkMode mode) {
++    Address handle_location, EvacuateMarkMode mode,
++    ExternalPointerTagRange tag_range) {
+   DCHECK(from_space->BelongsTo(this));
+   DCHECK(to_space->BelongsTo(this));
+ 
+@@ -301,11 +307,12 @@ ExternalPointerHandle ExternalPointerTable::Evacuate(
+   const uint32_t from_index = HandleToIndex(handle);
+   // The handle may legitimately already point into old space.
+   if (!from_space->Contains(from_index)) {
++    SBXCHECK(at(from_index).HasExternalPointer(tag_range));
+     return handle;
+   }
+ 
+   auto old_payload = at(from_index).GetRawPayload();
+-  SBXCHECK(old_payload.ContainsPointer());
++  SBXCHECK(old_payload.IsTaggedWithTagIn(tag_range));
+ 
+   const uint32_t to_index = AllocateEntry(to_space);
+   ExternalPointerHandle new_handle = IndexToHandle(to_index);
+diff --git a/src/sandbox/external-pointer-table.h b/src/sandbox/external-pointer-table.h
+index 583241a8..d7be4291 100644
+--- a/src/sandbox/external-pointer-table.h
++++ b/src/sandbox/external-pointer-table.h
+@@ -101,7 +101,7 @@ struct ExternalPointerTableEntry {
+ 
+   // Mark this entry as alive during table garbage collection. Returns true if
+   // the entry transitioned from un-marked to marked, and false otherwise.
+-  inline bool Mark();
++  inline bool Mark(ExternalPointerTagRange tag_range);
+ 
+   static constexpr bool IsWriteProtected = false;
+ 
+@@ -343,14 +343,15 @@ class V8_EXPORT_PRIVATE ExternalPointerTable
+   //
+   // This method is atomic and can be called from background threads.
+   inline void Mark(Space* space, ExternalPointerHandle handle,
+-                   Address handle_location);
++                   Address handle_location, ExternalPointerTagRange tag_range);
+ 
+   // Evacuate the specified entry from one space to another, updating the handle
+   // location in place and returning the valid evacuated handle.
+   inline ExternalPointerHandle Evacuate(Space* from_space, Space* to_space,
+                                         ExternalPointerHandle handle,
+                                         Address handle_location,
+-                                        EvacuateMarkMode mode);
++                                        EvacuateMarkMode mode,
++                                        ExternalPointerTagRange tag_range);
+ 
+   // Evacuate all segments from from_space to to_space, leaving from_space empty
+   // with an empty free list.  Then free unmarked entries, finishing compaction

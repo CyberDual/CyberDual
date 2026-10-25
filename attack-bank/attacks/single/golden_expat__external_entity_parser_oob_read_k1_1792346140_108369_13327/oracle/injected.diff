@@ -1,0 +1,18 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index b0b30e7350846b379726a8e794ae40c2187cac8b..52a04605d2fbe5007f74db2e5b906e4e3753f942 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -7832,8 +7832,11 @@ dtdCopy(XML_Parser oldParser, DTD *newDtd, const DTD *oldDtd,
+       } else
+         newE->defaultAtts[i].value = NULL;
+ 
+-      NAMED *const nameAddedOrFound = lookup(parser, &(newE->defaultAttForName),
+-                                             attributeName, sizeof(NAMED));
++      const size_t nameSize = oldE->defaultAtts[i].value
++                                  ? sizeof(NAME_AND_DEFAULT_ATTRIBUTE)
++                                  : sizeof(NAMED);
++      NAMED *const nameAddedOrFound
++          = lookup(parser, &(newE->defaultAttForName), attributeName, nameSize);
+       if (! nameAddedOrFound) {
+         return 0;
+       }

@@ -1,0 +1,28 @@
+diff --git a/expat/lib/internal.h b/expat/lib/internal.h
+index 86655371..81ac3d0f 100644
+--- a/expat/lib/internal.h
++++ b/expat/lib/internal.h
+@@ -116,9 +116,8 @@
+ #  define EXPAT_ALLOC_TRACKER_ACTIVATION_THRESHOLD_DEFAULT                     \
+     67108864 // 64 MiB, 2^26
+ 
+-// NOTE: If function expat_alloc was user facing, EXPAT_MALLOC_ALIGNMENT would
+-//       have to take sizeof(long double) into account
+ union expat_align {
++  long double ld;
+   long long l;
+   void *p;
+ };
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db91..574ade47 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -1022,7 +1022,7 @@ expat_realloc(XML_Parser parser, void *ptr, size_t size, int sourceLine) {
+ 
+   // Actually allocate
+   mallocedPtr = parser->m_mem.realloc_fcn(
+-      mallocedPtr, sizeof(size_t) + EXPAT_MALLOC_PADDING + size);
++      mallocedPtr, sizeof(size_t) + size);
+ 
+   if (mallocedPtr == NULL) {
+     return NULL;

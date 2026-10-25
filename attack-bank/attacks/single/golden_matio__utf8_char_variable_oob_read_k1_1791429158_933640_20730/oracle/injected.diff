@@ -1,0 +1,61 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 9726ba2b9bd6c8e0b690100e98a46b3b961e60d9..c171eba3af88a6ee060a53a35abb9fe31d51756e 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -3453,6 +3453,37 @@ Mat_VarReadNumeric5(mat_t *mat, matvar_t *matvar, void *data, size_t N)
+     return err;
+ }
+ 
++static int
++ValidateUtf8CharData(const mat_uint8_t *data, size_t nbytes, size_t expected)
++{
++    size_t i = 0;
++    size_t nchars = 0;
++
++    while ( i < nbytes ) {
++        const mat_uint8_t c = data[i];
++        size_t len;
++
++        if ( c <= 0x7F )
++            len = 1;
++        else if ( (c & 0xE0) == 0xC0 )
++            len = 2;
++        else if ( (c & 0xF0) == 0xE0 )
++            len = 3;
++        else if ( (c & 0xF8) == 0xF0 )
++            len = 4;
++        else
++            return MATIO_E_FILE_FORMAT_VIOLATION;
++
++        if ( i + len - 1 > nbytes )
++            return MATIO_E_FILE_FORMAT_VIOLATION;
++
++        i += len;
++        nchars++;
++    }
++
++    return nchars == expected ? MATIO_E_NO_ERROR : MATIO_E_FILE_FORMAT_VIOLATION;
++}
++
+ /** @if mat_devman
+  * @brief Reads the data of a version 5 MAT variable
+  *
+@@ -3700,6 +3731,18 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                 }
+ #endif
+             }
++            if ( matvar->data_type == MAT_T_UTF8 ) {
++                size_t nchars = 1;
++                err = Mat_MulDims(matvar, &nchars);
++                if ( !err )
++                    err = ValidateUtf8CharData((const mat_uint8_t *)matvar->data, matvar->nbytes,
++                                               nchars);
++                if ( err ) {
++                    free(matvar->data);
++                    matvar->data = NULL;
++                    matvar->nbytes = 0;
++                }
++            }
+             break;
+         case MAT_C_STRUCT: {
+             matvar_t **fields;

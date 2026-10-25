@@ -1,0 +1,14 @@
+{
+ "project": "curl",
+ "window_id": "7fc95ed4dc4ce49ded8f5edec0e34d8525769034c49174ee603eb4a66fe7c397",
+ "base": "3a397f7a05a46521b2772670b92ffda53fe05598",
+ "maint_batch_tip": "28157b9e99a06243ff90926ee2ca5e7332c46d10",
+ "tree": "1628a9359d8624cf4c9e7af8197b3af8faf08160",
+ "n_commits": 199,
+ "n_editable": 199,
+ "list_sha1": "87919c96aa9c95c06ff59b84a3510d542ba0cd87",
+ "tar_sha256": "a05b7369f270fecc37e1ecde2b2d01b4207433f96e246cc946e1d9087d0eb24b",
+ "tar_bytes": 167168000,
+ "built_utc": "2026-10-17T20:11:42Z",
+ "cyberdual": "f685a97c"
+}

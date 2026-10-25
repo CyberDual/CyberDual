@@ -1,0 +1,38 @@
+diff --git a/src/hb-ot-layout-gsubgpos.hh b/src/hb-ot-layout-gsubgpos.hh
+index 73af70f06..53839fb9a 100644
+--- a/src/hb-ot-layout-gsubgpos.hh
++++ b/src/hb-ot-layout-gsubgpos.hh
+@@ -1593,6 +1593,15 @@ struct hb_ot_layout_ruleset_digest_t
+   uint64_t mask;
+ };
+ 
++/* Number of per-RuleSet digests a format-2 contextual subtable stores in
++ * its external cache.  Capped: rule sets past the cap keep the uncached
++ * rule walk, so fonts with pathological class counts do not grow the
++ * external cache without bound at face load. */
++static constexpr unsigned HB_CACHED_RULE_SET_COUNT = 512;
++
++static inline unsigned cached_rule_set_count (unsigned rule_set_len)
++{ return hb_min (rule_set_len, HB_CACHED_RULE_SET_COUNT); }
++
+ struct ContextClosureFuncs
+ {
+   intersects_func_t intersects;
+@@ -3878,7 +3887,7 @@ struct ContextFormat2_5
+   };
+   void *external_cache_create () const
+   {
+-    unsigned count = ruleSet.len;
++    unsigned count = cached_rule_set_count (ruleSet.len);
+     unsigned size = sizeof (external_cache_t) -
+ 		    HB_VAR_ARRAY * sizeof (hb_ot_layout_ruleset_digest_t) +
+ 		    count * sizeof (hb_ot_layout_ruleset_digest_t);
+@@ -5521,7 +5530,7 @@ struct ChainContextFormat2_5
+   };
+   void *external_cache_create () const
+   {
+-    unsigned count = ruleSet.len;
++    unsigned count = cached_rule_set_count (ruleSet.len);
+     unsigned size = sizeof (external_cache_t) -
+ 		    HB_VAR_ARRAY * sizeof (hb_ot_layout_ruleset_digest_t) +
+ 		    count * sizeof (hb_ot_layout_ruleset_digest_t);

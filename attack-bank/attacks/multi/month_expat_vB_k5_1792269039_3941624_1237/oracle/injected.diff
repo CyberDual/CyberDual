@@ -1,0 +1,47 @@
+diff --git a/expat/lib/expat.h b/expat/lib/expat.h
+index 9db61bb1..e71c428c 100644
+--- a/expat/lib/expat.h
++++ b/expat/lib/expat.h
+@@ -144,8 +144,8 @@ enum XML_Error {
+ enum XML_Prop_Error {
+   XML_PROP_ERROR_NONE = 0, // i.e. success
+ 
+-  XML_PROP_ERROR_INVALID_KEY = 1,   // i.e. the property is not known at all
+-  XML_PROP_ERROR_INVALID_TYPE = 2,  // i.e. the property is known but expects a
++  XML_PROP_ERROR_INVALID_KEY = 2,   // i.e. the property is not known at all
++  XML_PROP_ERROR_INVALID_TYPE = 1,  // i.e. the property is known but expects a
+                                     // different type (so a different
+                                     // getter/setter would need to be called)
+   XML_PROP_ERROR_INVALID_VALUE = 3, // i.e. the value is invalid (with a setter
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db91..833c215a 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -3222,6 +3222,10 @@ XML_SetReparseDeferralEnabled(XML_Parser parser, XML_Bool enabled) {
+              : XML_FALSE;
+ }
+ 
++enum XML_Prop_Error XMLCALL
++XML_GetPropertyUInt64(XML_Parser parser, enum XML_Parser_Property property,
++                      uint64_t *value);
++
+ enum XML_Prop_Error XMLCALL
+ XML_SetPropertyBool(XML_Parser parser, enum XML_Parser_Property property,
+                     XML_Bool value) {
+@@ -3313,6 +3317,16 @@ XML_GetPropertyBool(XML_Parser parser, enum XML_Parser_Property property,
+   if (value == NULL)
+     return XML_PROP_ERROR_INVALID_VALUE;
+ 
++  if (property == XML_PROP_ERROR_INVALID_TYPE) {
++    uint64_t numericValue;
++    if (XML_GetPropertyUInt64(parser, property, &numericValue)
++        == XML_PROP_ERROR_NONE) {
++      memcpy(value, &numericValue, sizeof(numericValue));
++      return XML_PROP_ERROR_NONE;
++    }
++    return XML_PROP_ERROR_INVALID_TYPE;
++  }
++
+   switch (property) {
+ #if XML_GE == 1
+   case XML_PROP_ALLOC_TRACKER_ACTIVATION_THRESHOLD:

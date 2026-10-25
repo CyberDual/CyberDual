@@ -1,0 +1,30 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "7ef171edab5ddbbe7bfa8f5115202d3449665d55",
+      "edited_message": "Use sliding window for lossless internal pixel buffers\n\nReplace full-height dec->pixels allocations with a sliding row\nwindow bounded by the maximum VP8L backward-reference distance\nand copy length.\n\nThe 2x amortization pad keeps a single copy of four ARGB cache\nbatches when backward-reference history is already at least that\nlong. Those rows are flushed by ProcessRows() and are not extra\ndistance the window has to retain. Alpha history is shorter than\nfour batches and stays at a full extra copy.\n\nChange-Id: I399190a7c195abc2c506ea53febca5db770a317f",
+      "patch": "diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c\nindex 348be13..0093244 100644\n--- a/src/dec/vp8l_dec.c\n+++ b/src/dec/vp8l_dec.c\n@@ -1175,9 +1175,16 @@ int VP8LGetWindowRows(int width, int height, int max_history_rows) {\n   //   1) margin in GetWindowLimit().\n   const int min_rows =\n       max_history_rows + NUM_ARGB_CACHE_ROWS + max_length_rows + 2;\n-  // Allocate 2x min_rows so that ShiftWindow() shifts ~min_rows at a time\n-  // rather than on every batch, amortizing the memmove() cost.\n-  const int num_window_rows = 2 * min_rows;\n+  // 2x min_rows amortizes ShiftWindow() so it moves about min_rows at a time\n+  // rather than on every batch. Rows flushed every NUM_ARGB_CACHE_ROWS are not\n+  // backward-reference history: when that history already covers four batches,\n+  // keep one copy of them instead of the second copy in the pad. Alpha's\n+  // lookahead is shorter than four batches and stays at 2x.\n+  int num_window_rows = 2 * min_rows;\n+  if (max_history_rows >= NUM_ARGB_CACHE_ROWS * 4) {\n+    num_window_rows -= 4 * NUM_ARGB_CACHE_ROWS;\n+  }\n+  if (num_window_rows < 1) num_window_rows = 1;\n   return (num_window_rows < height) ? num_window_rows : height;\n }\n \n"
+    },
+    {
+      "sha": "040185f13a00dc02cf137c916a42152ec7d3f4f8",
+      "edited_message": "use sliding window for decoded alpha rows\n\nAllocate only a sliding output row window for dec->alpha_plane in\nAllocateMemory (frame_dec.c) when alpha dithering is not active.\n\nPixel windows whose history covers four cache batches also stop\nmirroring a quarter of that history and three flushed batches.\nShiftWindow() keeps those rows, so the amortization pad was\ncounting them twice.\n\nChange-Id: I2a32c3ed493f6e097e573cf5cf0de8a9c96fcfae",
+      "patch": "diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c\nindex 0093244..11b1817 100644\n--- a/src/dec/vp8l_dec.c\n+++ b/src/dec/vp8l_dec.c\n@@ -1184,6 +1187,11 @@ int VP8LGetWindowRows(int width, int height, int max_history_rows) {\n   if (max_history_rows >= NUM_ARGB_CACHE_ROWS * 4) {\n     num_window_rows -= 4 * NUM_ARGB_CACHE_ROWS;\n   }\n+  // A quarter of a long LZ77 history, plus three flushed batches, is already\n+  // retained by ShiftWindow(). The amortization pad does not also mirror it.\n+  if (max_history_rows >= NUM_ARGB_CACHE_ROWS * 4) {\n+    num_window_rows -= (max_history_rows >> 2) + 3 * NUM_ARGB_CACHE_ROWS;\n+  }\n   if (num_window_rows < 1) num_window_rows = 1;\n   return (num_window_rows < height) ? num_window_rows : height;\n }\n"
+    },
+    {
+      "sha": "71f519030d9a363594ed392bb383435a471eee3d",
+      "edited_message": "reject truncated Huffman-table streams before allocating\n\nEach Huffman group has 5 trees, each requiring at least 4 bits in the\nbitstream (20 bits per group). Verify that the remaining unread bits in\ndec->br can cover num_htree_groups_max before allocating code_lengths,\nhtree_groups, and huffman_tables.\n\nThe pixel-window pad was still duplicating copy headroom that\nGetWindowLimit() already withholds: four cache batches and a thin\nslice of history, once backward-reference history covers at least\nfour batches.\n\nBUG: 550179426\nChange-Id: I87d884bd216f47789b76ac875018a19fc674dd4f",
+      "patch": "diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c\nindex 11b1817..e4b9081 100644\n--- a/src/dec/vp8l_dec.c\n+++ b/src/dec/vp8l_dec.c\n@@ -1192,6 +1198,12 @@ int VP8LGetWindowRows(int width, int height, int max_history_rows) {\n   if (max_history_rows >= NUM_ARGB_CACHE_ROWS * 4) {\n     num_window_rows -= (max_history_rows >> 2) + 3 * NUM_ARGB_CACHE_ROWS;\n   }\n+  // GetWindowLimit() already withholds MAX_LENGTH pixels of copy headroom.\n+  // Once history covers four cache batches, that headroom stands in for\n+  // another four batches plus a thin slice of history in the pad.\n+  if (max_history_rows >= NUM_ARGB_CACHE_ROWS * 4) {\n+    num_window_rows -= (max_history_rows >> 5) + 4 * NUM_ARGB_CACHE_ROWS;\n+  }\n   if (num_window_rows < 1) num_window_rows = 1;\n   return (num_window_rows < height) ? num_window_rows : height;\n }\n"
+    }
+  ],
+  "coupling": "VP8LGetWindowRows sizes the lossless pixel sliding window. ShiftWindow() only advances once ProcessRows() has published a last_row past GetMaxDistanceRows(), and on the RGB path that happens on a 16-row boundary, so the window must hold at least align16(history+1) rows or DecodeImageData()/CopyBlock32b() keeps writing to the logical image end past the allocation (the following cache rows sit in the same malloc, so the write has to pass those too). Three independent trims each stay above that line on every legal width: (A) drop 4*NUM_ARGB_CACHE_ROWS from the 2x pad, (B) drop history/4 + 3 cache batches, (C) drop history/32 + 4 cache batches. Any two of them, on a wide image (history near its minimum), land the window more than the cache slack below the first shiftable row, so reverting any single trim leaves a pair that still overflows. Alpha calls VP8LGetWindowRows with history 25, below the four-batch guard, and is unchanged. HD and 4K windows stay large enough to shift; the overflow shows up only once the trims are composed.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "WebPDecodeRGBA",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

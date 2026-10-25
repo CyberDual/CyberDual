@@ -1,0 +1,13 @@
+diff --git a/src/misc.c b/src/misc.c
+index 85caed1640cb677aade316e8c8d4db9fbb652879..7a0ad5305ea9dc7e0b4674ee755a610e620b285f 100644
+--- a/src/misc.c
++++ b/src/misc.c
+@@ -935,6 +935,8 @@ int ssh2_get_bignum_bytes(struct string_buf *buf, unsigned char **outbuf,
+ 
+     if(ssh2_get_u32(buf, &data_len))
+         return -1;
++    if(data_len == 0)
++        return -1;
+     if(!ssh2_check_length(buf, data_len))
+         return -1;
+ 

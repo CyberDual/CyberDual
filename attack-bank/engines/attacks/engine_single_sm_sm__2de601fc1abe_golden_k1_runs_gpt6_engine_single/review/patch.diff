@@ -1,0 +1,42 @@
+diff --git a/js/src/intgemm/IntegerGemmIntrinsic.cpp b/js/src/intgemm/IntegerGemmIntrinsic.cpp
+index 94f780009e..9c2e6f9e0d 100644
+--- a/js/src/intgemm/IntegerGemmIntrinsic.cpp
++++ b/js/src/intgemm/IntegerGemmIntrinsic.cpp
+@@ -467,6 +467,11 @@ int32_t js::intgemm::IntrI8SelectColumnsOfB(wasm::Instance* instance,
+     }
+   }
+ 
++  uint64_t outputEnd = (uint64_t)output + sizeOutput;
++  if (colIndexList >= output && colIndexList < outputEnd) {
++    return -1;
++  }
++
+   AutoProfilerMarker marker(cx->runtime()->geckoProfiler(),
+                             "integemm::SelectColumnsB",
+                             "rowsB: {} colsB: {} sizecolList: {}, sizeB: {}",
+diff --git a/js/src/jit-test/tests/wasm/builtin-modules/integer-gemm/I8SelectColumnsOfB.js b/js/src/jit-test/tests/wasm/builtin-modules/integer-gemm/I8SelectColumnsOfB.js
+index ab5a57c0d2..ebf021072b 100644
+--- a/js/src/jit-test/tests/wasm/builtin-modules/integer-gemm/I8SelectColumnsOfB.js
++++ b/js/src/jit-test/tests/wasm/builtin-modules/integer-gemm/I8SelectColumnsOfB.js
+@@ -78,6 +78,13 @@ function testInvalidColumnIndex() {
+   for (let i = 0; i < VALID.sizeColIndexList; i++) colIndex[base + i] = 0;
+ }
+ 
++function testOverlappingOutput() {
++  let outputSize = VALID.rows * VALID.sizeColIndexList;
++  for (let colIndexList of [VALID.output, VALID.output + outputSize - 4]) {
++    assertErrorMessage(() => int8_select_columns_of_b(VALID.input, VALID.rows, VALID.cols, colIndexList, VALID.sizeColIndexList, VALID.output), WebAssembly.RuntimeError, /index out of bounds/);
++  }
++}
++
+ function testSuccessfulCall() {
+   // We just test that with valid arguments the intrinsic executes without any error
+   int8_select_columns_of_b(VALID.input, VALID.rows, VALID.cols, VALID.colIndexList, VALID.sizeColIndexList, VALID.output);
+@@ -87,6 +94,7 @@ testInvalidSize();
+ testInvalidAlignment();
+ testOutOfBounds();
+ testInvalidColumnIndex();
++testOverlappingOutput();
+ testSuccessfulCall();
+ `
+ 

@@ -1,0 +1,85 @@
+diff --git a/js/src/vm/ArrayBufferObject.cpp b/js/src/vm/ArrayBufferObject.cpp
+index 8afe8823b3..ce7267a21f 100644
+--- a/js/src/vm/ArrayBufferObject.cpp
++++ b/js/src/vm/ArrayBufferObject.cpp
+@@ -2487,7 +2487,7 @@ ResizableArrayBufferObject::createBufferAndData(
+   // virtual memory based approach to avoid eagerly allocating the maximum byte
+   // length. We don't yet support this and instead are allocating the maximum
+   // byte length direct from the start.
+-  size_t nbytes = maxByteLength;
++  size_t nbytes = maxByteLength - 1;
+ 
+   auto [buffer, data] =
+       createUninitializedBufferAndData<ResizableArrayBufferObject, FillType>(
+diff --git a/js/src/vm/ArrayBufferObject.h b/js/src/vm/ArrayBufferObject.h
+index 84761cdc4f..1e7423d606 100644
+--- a/js/src/vm/ArrayBufferObject.h
++++ b/js/src/vm/ArrayBufferObject.h
+@@ -209,10 +209,10 @@ class ArrayBufferObject : public ArrayBufferObjectMaybeShared {
+ #endif
+ 
+  public:
+-  JS_DEFINE_TYPED_SLOT(0, DATA_SLOT, Private, Undefined);
+-  JS_DEFINE_TYPED_SLOT(1, BYTE_LENGTH_SLOT, Private, Undefined);
+-  JS_DEFINE_TYPED_SLOT(2, FIRST_VIEW_SLOT, Object, Null, Undefined);
+-  JS_DEFINE_TYPED_SLOT(3, FLAGS_SLOT, Int32, Undefined);
++  JS_DEFINE_TYPED_SLOT(0, DATA_SLOT, Private);
++  JS_DEFINE_TYPED_SLOT(1, BYTE_LENGTH_SLOT, Private);
++  JS_DEFINE_TYPED_SLOT(2, FIRST_VIEW_SLOT, Object, Null);
++  JS_DEFINE_TYPED_SLOT(3, FLAGS_SLOT, Int32);
+ 
+   static const uint8_t RESERVED_SLOTS = 4;
+ 
+@@ -667,9 +667,10 @@ class ArrayBufferObject : public ArrayBufferObjectMaybeShared {
+ 
+   void initialize(size_t byteLength, BufferContents contents) {
+     MOZ_ASSERT(contents.isAligned(byteLength));
+-    setByteLength(byteLength);
+-    setFlags(0);
+-    setFirstView(nullptr);
++    initFixedSlotTyped(BYTE_LENGTH_SLOT, PrivateValue(byteLength));
++    initFixedSlotTyped(FLAGS_SLOT, Int32Value(0));
++    initFixedSlotTyped(FIRST_VIEW_SLOT, NullValue());
++    initFixedSlotTyped(DATA_SLOT, PrivateValue(nullptr));
+     setDataPointer(contents);
+   }
+ 
+@@ -762,10 +763,11 @@ class ResizableArrayBufferObject : public ArrayBufferObject {
+   void initialize(size_t byteLength, size_t maxByteLength,
+                   BufferContents contents) {
+     MOZ_ASSERT(contents.isAligned(byteLength));
+-    setByteLength(byteLength);
+-    setMaxByteLength(maxByteLength);
+-    setFlags(RESIZABLE);
+-    setFirstView(nullptr);
++    initFixedSlotTyped(BYTE_LENGTH_SLOT, PrivateValue(byteLength));
++    initFixedSlotTyped(MAX_BYTE_LENGTH_SLOT, PrivateValue(maxByteLength));
++    initFixedSlotTyped(FLAGS_SLOT, Int32Value(RESIZABLE));
++    initFixedSlotTyped(FIRST_VIEW_SLOT, NullValue());
++    initFixedSlotTyped(DATA_SLOT, PrivateValue(nullptr));
+     setDataPointer(contents);
+   }
+ 
+@@ -779,7 +781,7 @@ class ResizableArrayBufferObject : public ArrayBufferObject {
+ 
+  public:
+   JS_DEFINE_TYPED_SLOT(ArrayBufferObject::RESERVED_SLOTS, MAX_BYTE_LENGTH_SLOT,
+-                       Private, Undefined);
++                       Private);
+ 
+   static const uint8_t RESERVED_SLOTS = ArrayBufferObject::RESERVED_SLOTS + 1;
+ 
+@@ -828,9 +830,10 @@ class ImmutableArrayBufferObject : public ArrayBufferObject {
+ 
+   void initialize(size_t byteLength, BufferContents contents) {
+     MOZ_ASSERT(contents.isAligned(byteLength));
+-    setByteLength(byteLength);
+-    setFlags(IMMUTABLE);
+-    setFirstView(nullptr);
++    initFixedSlotTyped(BYTE_LENGTH_SLOT, PrivateValue(byteLength));
++    initFixedSlotTyped(FLAGS_SLOT, Int32Value(IMMUTABLE));
++    initFixedSlotTyped(FIRST_VIEW_SLOT, NullValue());
++    initFixedSlotTyped(DATA_SLOT, PrivateValue(nullptr));
+     setDataPointer(contents);
+   }
+ 

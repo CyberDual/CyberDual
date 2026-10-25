@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-190",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "4102f9ebf3089b6762fecd469682bfcf59660194",
+  "parent_sha": "4102f9ebf3089b6762fecd469682bfcf59660194",
+  "project": "matio",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/tbeu/matio",
+  "repo_url": "https://github.com/tbeu/matio",
+  "source": "reselect",
+  "target": "matio",
+  "task": "Mat_Open + Mat_VarReadNext on a crafted v4 .mat sparse matrix whose ndata x element-size multiplication overflows -> undersized malloc then OOB write in Mat_VarRead4 (single file src/mat4.c).",
+  "task_iid": "matio__v4_sparse_data_int_overflow",
+  "vuln_desc": "Mat_Open + Mat_VarReadNext on a crafted v4 .mat sparse matrix whose ndata x element-size multiplication overflows -> undersized malloc then OOB write in Mat_VarRead4 (single file src/mat4.c)."
+}

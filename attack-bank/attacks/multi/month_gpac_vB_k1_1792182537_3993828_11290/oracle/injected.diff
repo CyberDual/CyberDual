@@ -1,0 +1,32 @@
+diff --git a/src/media_tools/av_parsers.c b/src/media_tools/av_parsers.c
+index a000002..074c5b2 100644
+--- a/src/media_tools/av_parsers.c
++++ b/src/media_tools/av_parsers.c
+@@ -14771,6 +14771,9 @@ static Bool gf_ac4_oamd_substream_info(GF_BitStream *bs, GF_AC4SubStream *substr
+ 		} \
+ 	}
+ 
++/*isf_config is encoded as a 3-bit field in the bitstream (ETSI TS 103 190-2)*/
++#define GF_AC4_NUM_ISF_CONFIGS (1<<3)
++
+ static Bool gf_ac4_bed_dyn_obj_assignment(GF_BitStream *bs,
+ 										  GF_AC4SubStream* substream,
+ 										  GF_AC4BedChannelAssignment* bed_dyn_obj,
+@@ -14787,7 +14790,7 @@ static Bool gf_ac4_bed_dyn_obj_assignment(GF_BitStream *bs,
+ 		if (gf_bs_read_int_log(bs, 1, "b_isf")) {
+ 			isf_config = gf_bs_read_int_log(bs, 3, "isf_config");
+ 
+-			if (isf_config >= GF_ARRAY_LENGTH(ISF_CONFIG_TO_NUM_OBJECTS)) {
++			if (isf_config >= GF_AC4_NUM_ISF_CONFIGS) {
+ 				GF_LOG(GF_LOG_ERROR, GF_LOG_CODING, ("[AC4] isf_config exceeds maximum supported (%d)\n", isf_config));
+ 				return GF_FALSE;
+ 			}
+@@ -15651,7 +15654,7 @@ static Bool gf_ac4_substream_info_obj(GF_BitStream *bs,
+ 				if (gf_bs_read_int_log(bs, 1, "b_isf_start")) {
+ 					isf_config = gf_bs_read_int_log(bs, 3, "isf_config");
+ 
+-					if (isf_config >= GF_ARRAY_LENGTH(ISF_CONFIG_TO_NUM_OBJECTS)) {
++					if (isf_config >= GF_AC4_NUM_ISF_CONFIGS) {
+ 						GF_LOG(GF_LOG_ERROR, GF_LOG_CODING, ("[AC4] isf_config exceeds maximum supported (%d)\n", isf_config));
+ 						return GF_FALSE;
+ 					}

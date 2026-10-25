@@ -1,0 +1,26 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 513f94b..666e1b9 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -575,7 +575,7 @@ void QuickTimeVideo::readMetadata() {
+ void QuickTimeVideo::decodeBlock(size_t recursion_depth, std::string const& entered_from) {
+   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);
+ 
+-  const long bufMinSize = 4;
++  const size_t bufMinSize = 4;
+   DataBuf buf(bufMinSize + 1);
+   uint64_t size = 0;
+   buf.data()[4] = '\0';
+@@ -698,6 +698,12 @@ void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size, size_t recursi
+     xmpData_["Xmp.video.Compressor"] = readString(*io_, size);
+   }
+ 
++  else if (equalsQTimeTag(buf, "name")) {
++    io_->readOrThrow(buf.data(), size);
++    buf.write_uint8(size, 0);  // nul-terminate string
++    xmpData_["Xmp.video.Name"] = buf.data();
++  }
++
+   else if (equalsQTimeTag(buf, "smhd")) {
+     io_->readOrThrow(buf.data(), 4);
+     io_->readOrThrow(buf.data(), 4);

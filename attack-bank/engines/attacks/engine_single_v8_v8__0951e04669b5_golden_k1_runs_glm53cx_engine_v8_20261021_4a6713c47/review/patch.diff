@@ -1,0 +1,43 @@
+diff --git a/src/builtins/x64/builtins-x64.cc b/src/builtins/x64/builtins-x64.cc
+index a5a151bf..b42c4a9a 100644
+--- a/src/builtins/x64/builtins-x64.cc
++++ b/src/builtins/x64/builtins-x64.cc
+@@ -3667,6 +3667,7 @@ void GenerateExceptionHandlingLandingPad(MacroAssembler* masm,
+ 
+ void JSToWasmWrapperHelper(MacroAssembler* masm, wasm::Promise mode) {
+   bool stack_switch = mode == wasm::kPromise || mode == wasm::kStressSwitch;
++  Label stack_overflow;
+   __ EnterFrame(stack_switch ? StackFrame::WASM_JSPI : StackFrame::JS_TO_WASM);
+ 
+   __ AllocateStackSpace(WasmJspiFrameConstants::kNumSpillSlots *
+@@ -3706,6 +3707,10 @@ void JSToWasmWrapperHelper(MacroAssembler* masm, wasm::Promise mode) {
+           wrapper_buffer,
+           JSToWasmWrapperFrameConstants::kWrapperBufferStackReturnBufferSize));
+   __ shlq(result_size, Immediate(kSystemPointerSizeLog2));
++  __ movq(r10, rsp);
++  __ subq(r10, result_size);
++  __ cmpq(r10, __ StackLimitAsOperand(StackLimitKind::kRealStackLimit));
++  __ j(below, &stack_overflow);
+   __ subq(rsp, result_size);
+   __ movq(
+       MemOperand(
+@@ -3836,6 +3841,19 @@ void JSToWasmWrapperHelper(MacroAssembler* masm, wasm::Promise mode) {
+   if (mode == wasm::kPromise) {
+     GenerateExceptionHandlingLandingPad(masm, &return_promise);
+   }
++
++  __ bind(&stack_overflow);
++  if (stack_switch) {
++    __ movq(kContextRegister,
++            MemOperand(rbp, WasmJspiFrameConstants::kImplicitArgOffset));
++  } else {
++    __ movq(kContextRegister,
++            MemOperand(rbp,
++                       JSToWasmWrapperFrameConstants::kWrapperBufferOffset));
++  }
++  GetContextFromImplicitArg(masm, kContextRegister);
++  __ CallRuntime(Runtime::kThrowStackOverflow);
++  __ Trap();
+ }
+ }  // namespace
+ 

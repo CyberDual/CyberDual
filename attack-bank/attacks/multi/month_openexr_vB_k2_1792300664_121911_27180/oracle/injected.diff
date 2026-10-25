@@ -1,0 +1,45 @@
+diff --git a/src/lib/OpenEXRCore/internal_ht.cpp b/src/lib/OpenEXRCore/internal_ht.cpp
+index 896a57e6..493df15f 100644
+--- a/src/lib/OpenEXRCore/internal_ht.cpp
++++ b/src/lib/OpenEXRCore/internal_ht.cpp
+@@ -413,8 +413,6 @@ ht_undo_impl (
+         for (int cs_i = 0; cs_i < decode->channel_count; cs_i++)
+         {
+             int file_i = cs_to_file_ch[cs_i].file_index;
+-            if (file_i >= decode->channel_count)
+-                return EXR_ERR_CORRUPT_CHUNK;
+ 
+             int64_t computedoffset = 0;
+             for (int i = 0; i < file_i; ++i)
+diff --git a/src/lib/OpenEXRCore/internal_ht_common.cpp b/src/lib/OpenEXRCore/internal_ht_common.cpp
+index b7b4a4a7..e1e6c23f 100644
+--- a/src/lib/OpenEXRCore/internal_ht_common.cpp
++++ b/src/lib/OpenEXRCore/internal_ht_common.cpp
+@@ -324,12 +324,22 @@ read_header (
+     map.resize (header.pull_uint16 (), {visual, -1, 0, 0});
+     for (size_t i = 0; i < map.size (); i++)
+     {
+-        uint16_t file_index = header.pull_uint16 ();
+-        if (file_index >= map.size() || map.at (file_index).scratch > 0)
++        map.at (i).file_index = header.pull_uint16 ();
++    }
++
++    /* Two codestream components that map to the same file channel would both
++     * be unpacked into that channel. Only duplicates need to be caught here:
++     * a file_index outside [0, N) is not a valid channel number, and
++     * ht_undo_impl() already rejects a channel map whose entries are not
++     * valid channel indices for the chunk being decoded. */
++    for (size_t i = 0; i < map.size (); i++)
++    {
++        size_t target = (size_t) map.at (i).file_index;
++        if (target >= map.size ()) continue;
++        if (map.at (target).scratch > 0)
+             throw std::runtime_error (
+-                "HTJ2K chunk header contains invalid file_index values.");
+-        map.at (i).file_index = file_index;
+-        map.at (file_index).scratch = 1;
++                "HTJ2K chunk header contains duplicate file_index values.");
++        map.at (target).scratch = 1;
+     }
+ 
+     return prefix_sz + payload_sz;

@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "259600518",
+      "edited_message": "* src/truetype/ttvarc.c (tt_varc_get_item_deltas): Fix integer overflow.\n\n(tt_face_load_varc_glyph): Use a conservative coordinate-stack limit.",
+      "patch": "diff --git a/src/truetype/ttvarc.c b/src/truetype/ttvarc.c\n--- a/src/truetype/ttvarc.c\n+++ b/src/truetype/ttvarc.c\n@@ -64,7 +64,7 @@\n   /* Stack allocation limits for performance. */\n #define VARC_STACK_AXIS_COUNT     64\n #define VARC_STACK_DELTA_COUNT    128\n-#define VARC_STACK_COORD_COUNT    64\n+#define VARC_STACK_COORD_COUNT    63\n #define VARC_STACK_INDICES_COUNT  64\n \n \n@@ -3445,7 +3445,7 @@\n       {\n         /* allocate new_coords only                  */\n         /* (`parent_coords` replaces `saved_coords`) */\n-        if ( num_coords <= VARC_STACK_COORD_COUNT )\n+        if ( num_coords < VARC_STACK_COORD_COUNT )\n           new_coords = stack_new_coords;\n         else\n         {\n"
+    },
+    {
+      "sha": "4cdc5c359",
+      "edited_message": "[varc] Support static component axes.\n\n* src/truetype/ttgxvar.c (ft_var_load_gvar): Set up a private blend for fonts with gvar but no fvar.\n\n* src/truetype/ttvarc.c (tt_face_load_varc_glyph): Inherit private static axes and use the full 64-entry coordinate stack.",
+      "patch": "diff --git a/src/truetype/ttvarc.c b/src/truetype/ttvarc.c\n--- a/src/truetype/ttvarc.c\n+++ b/src/truetype/ttvarc.c\n@@ -3272,7 +3272,7 @@\n       {\n         /* allocate new_coords only                  */\n         /* (`parent_coords` replaces `saved_coords`) */\n-        if ( num_coords <= VARC_STACK_COORD_COUNT )\n+        if ( num_coords <= 64 )\n           new_coords = stack_new_coords;\n         else\n         {\n"
+    }
+  ],
+  "coupling": "The first commit reduces VARC_STACK_COORD_COUNT from 64 to 63 and changes the stack-selection predicate to num_coords < VARC_STACK_COORD_COUNT, so its own tree safely heap-allocates every vector that can reach the 63-entry stack. The later static-axis commit changes that predicate to num_coords <= 64; with the original 64-entry stack this is benign, but combined with the earlier commit it selects the 63-entry stack for a 64-coordinate gvar font. The subsequent 64-element FT_MEM_COPY writes 512 bytes into a 504-byte stack array. Restoring either commit's local invariant removes the bug, so a correct fix must reconcile the array capacity and selection threshold across both commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "FT_New_Memory_Face/FT_Load_Glyph",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

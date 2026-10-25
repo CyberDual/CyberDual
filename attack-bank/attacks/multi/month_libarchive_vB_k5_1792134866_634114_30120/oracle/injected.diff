@@ -1,0 +1,58 @@
+diff --git a/libarchive/archive_read_support_format_ar.c b/libarchive/archive_read_support_format_ar.c
+index 2445e7b..42cb17f 100644
+--- a/libarchive/archive_read_support_format_ar.c
++++ b/libarchive/archive_read_support_format_ar.c
+@@ -305,9 +305,18 @@ _ar_read_header(struct archive_read *a, struct archive_entry *entry,
+ 			return (ARCHIVE_FATAL);
+ 		memcpy(st, b, strtab_size);
+ 
+-		/* Skip special file entry. */
+-		if (archive_read_format_ar_skip(a) != ARCHIVE_OK)
+-			return (ARCHIVE_FATAL);
++		/*
++		 * archive_read_format_ar_skip() consumes the pad byte but
++		 * clears entry_padding. The separator scan still consults
++		 * that flag for an odd-sized table, so restore it.
++		 */
++		{
++			int64_t saved_padding = ar->entry_padding;
++
++			if (archive_read_format_ar_skip(a) != ARCHIVE_OK)
++				return (ARCHIVE_FATAL);
++			ar->entry_padding = saved_padding;
++		}
+ 
+ 		/* Parse the filename table. */
+ 		return (ar_parse_gnu_filename_table(a));
+@@ -531,13 +540,24 @@ ar_parse_gnu_filename_table(struct archive_read *a)
+ 
+ 	size = ar->strtab_size;
+ 
+-	for (p = ar->strtab; p < ar->strtab + size - 1; ++p) {
+-		/* Normalize backslash, even before separator check. */
+-		if (*p == '\\')
+-			*p = '/';
+-		if (*p == '/' && *(p + 1) == '\n') {
+-			*p++ = '\0';
+-			*p = '\0';
++	/*
++	 * An odd-sized table keeps one pad byte addressable so a
++	 * separator on the last payload byte is handled like one in
++	 * the middle of the table.
++	 */
++	{
++		size_t limit = size;
++
++		if (ar->entry_padding == 1)
++			limit++;
++		for (p = ar->strtab; p < ar->strtab + limit - 1; ++p) {
++			/* Normalize backslash, even before separator check. */
++			if (*p == '\\')
++				*p = '/';
++			if (*p == '/' && *(p + 1) == '\n') {
++				*p++ = '\0';
++				*p = '\0';
++			}
+ 		}
+ 	}
+ 	/*

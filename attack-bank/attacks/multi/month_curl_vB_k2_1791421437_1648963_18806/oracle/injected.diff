@@ -1,0 +1,22 @@
+diff --git a/lib/mprintf.c b/lib/mprintf.c
+index 571c417..e10b9ba 100644
+--- a/lib/mprintf.c
++++ b/lib/mprintf.c
+@@ -31,7 +31,7 @@
+ #define BUFFSIZE 326 /* buffer for long-to-str and float-to-str calcs, should
+                         fit negative DBL_MAX (317 letters) */
+ #define MAX_PARAMETERS 128 /* number of input arguments */
+-#define MAX_SEGMENTS   128 /* number of output segments */
++#define MAX_SEGMENTS   129 /* number of output segments */
+ 
+ /* Lower-case digits. */
+ const unsigned char Curl_ldigits[] = "0123456789abcdef";
+@@ -1102,7 +1102,7 @@ static int formatf(void *userp, /* untouched by format(), sent to the
+   int ocount = 0; /* number of output segments */
+   int icount = 0; /* number of input arguments */
+ 
+-  struct outsegment output[MAX_SEGMENTS];
++  struct outsegment output[MAX_PARAMETERS];
+   struct va_input input[MAX_PARAMETERS];
+   char work[BUFFSIZE + 2];
+ 

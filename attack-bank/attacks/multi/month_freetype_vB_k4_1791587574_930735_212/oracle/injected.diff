@@ -1,0 +1,30 @@
+diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c
+index 151aeac..a2da115 100644
+--- a/src/type1/t1parse.c
++++ b/src/type1/t1parse.c
+@@ -277,6 +277,9 @@
+ 
+       for (;;)
+       {
++        FT_ULong  old_len = priv_len;
++
++
+         error = read_pfb_tag( stream, &tag, &size );
+         if ( error )
+           break;
+@@ -284,11 +287,11 @@
+         if ( tag != 0x8002U || size > stream->size - stream->pos )
+           break;
+ 
+-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||
+-             FT_STREAM_READ( priv_dict + priv_len, size )        )
+-          break;
+-
+         priv_len += size;
++
++        if ( FT_QREALLOC( priv_dict, old_len, priv_len ) ||
++             FT_STREAM_READ( priv_dict + priv_len, size )  )
++          break;
+       }
+ 
+       /* Check that we have a private dictionary there */

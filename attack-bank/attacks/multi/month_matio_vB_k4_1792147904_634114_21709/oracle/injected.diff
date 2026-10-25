@@ -1,0 +1,38 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 5d3bbb2..9129709 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -4618,7 +4618,8 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+             size_t input_index = (size_t)start[0];                                                \
+             for ( j = 1; j < rank; j++ ) {                                                        \
+                 const size_t coordinate = block % (size_t)edge[j];                                \
+-                input_index += ((size_t)start[j] + coordinate * (size_t)stride[j]) * dimp[j - 1]; \
++                input_index += ((size_t)start[j] + coordinate * (size_t)stride[j]) *              \
++                               (dims[j] == 0 ? 0 : dimp[j] / dims[j]);                            \
+                 block /= (size_t)edge[j];                                                         \
+             }                                                                                     \
+             for ( k = 0; k < edge[0]; k++ )                                                       \
+@@ -4887,6 +4888,23 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+             if ( err )
+                 return err;
+         }
++        if ( rank > 2 && dims[rank - 1] != 0 ) {
++            size_t span = 0;
++
++            err = Mul(&span, dimp[rank - 1], dims[rank - 1]);
++            if ( err )
++                return err;
++            dimp[rank - 1] = span;
++        }
++
++        if ( rank > 2 && dims[rank - 1] != 0 ) {
++            size_t span = dimp[rank - 1];
++
++            dimp[rank - 2] = (span + dims[rank - 1] - 1) / dims[rank - 1];
++            err = Mul(&dimp[rank - 1], span, dims[rank - 1]);
++            if ( err )
++                return err;
++        }
+ 
+         switch ( class_type ) {
+             case MAT_C_DOUBLE: {

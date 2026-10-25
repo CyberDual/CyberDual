@@ -1,0 +1,14 @@
+diff --git a/src/mux/anim_encode.c b/src/mux/anim_encode.c
+index 86aeef0624bb2ed5345e7435e16af4da885fb045..f8d545446ad29826cebbc19d614ea5f641b2f7a5 100644
+--- a/src/mux/anim_encode.c
++++ b/src/mux/anim_encode.c
+@@ -1327,6 +1327,9 @@ static WebPEncodingError SetFrame(WebPAnimEncoder* const enc,
+   goto End;
+ 
+ Err:
++  if (is_key_frame) {
++    WebPDataInit(&encoded_frame->key_frame.bitstream);
++  }
+   for (i = 0; i < CANDIDATE_COUNT; ++i) {
+     if (candidates[i].evaluate) {
+       WebPMemoryWriterClear(&candidates[i].mem);

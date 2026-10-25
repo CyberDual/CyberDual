@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-476",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "0979e4a0c83ca837c399feaa0f74d78eb0d4ed6f",
+  "parent_sha": "0979e4a0c83ca837c399feaa0f74d78eb0d4ed6f",
+  "project": "libheif",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/strukturag/libheif",
+  "repo_url": "https://github.com/strukturag/libheif",
+  "source": "reselect",
+  "target": "libheif",
+  "task": "Public decode compositing an alpha channel into a YCbCr/monochrome target (e.g. decoding any HEIC/AVIF-with-alpha to a YCbCr output); Op_flatten_alpha_plane allocates R/G/B planes with target depth 0, the dropped add_channel() error leaves plane ptrs null, and the composite loop writes through them -> null-pointer write. Single lib file libheif/color-conversion/alpha.cc (+8/-1, rest tests).",
+  "task_iid": "libheif__alpha_composite_ycbcr_null_write",
+  "vuln_desc": "Public decode compositing an alpha channel into a YCbCr/monochrome target (e.g. decoding any HEIC/AVIF-with-alpha to a YCbCr output); Op_flatten_alpha_plane allocates R/G/B planes with target depth 0, the dropped add_channel() error leaves plane ptrs null, and the composite loop writes through them -> null-pointer write. Single lib file libheif/color-conversion/alpha.cc (+8/-1, rest tests)."
+}

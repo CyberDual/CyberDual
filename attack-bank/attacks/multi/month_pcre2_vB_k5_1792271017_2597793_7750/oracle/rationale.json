@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "abbf6915235c5cb21485c6d7807b20e475f3c78a",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2posix.c b/src/pcre2posix.c\nindex 2f2cdf54..e228cdda 100644\n--- a/src/pcre2posix.c\n+++ b/src/pcre2posix.c\n@@ -101,6 +101,9 @@ changed. This #define is a copy of the one in pcre2_internal.h. */\n \n #define COMPILE_ERROR_BASE 100\n \n+/* Match slots include the whole match in addition to capturing groups. */\n+#define POSIX_MATCH_SLOTS(captures) ((captures) + 1)\n+\n \n /* Standard C headers */\n \n@@ -427,7 +430,10 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t\n   if (rc >= 0)\n   {\n     size_t i;\n+    size_t match_count = POSIX_MATCH_SLOTS((size_t)preg->re_nsub);\n     PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(md);\n+    if ((size_t)rc > match_count)\n+      rc = (int)match_count;\n     if ((size_t)rc > nmatch)\n       rc = (int)nmatch;\n     for (i = 0; i < (size_t)rc; i++)\n"
+    },
+    {
+      "sha": "2d3a98a9f7c908cfd7c6ac81620580fa85c67acf",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2posix.c b/src/pcre2posix.c\n--- a/src/pcre2posix.c\n+++ b/src/pcre2posix.c\n@@ -448,12 +451,13 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t\n   if (rc >= 0)\n   {\n     size_t i;\n     size_t match_count = POSIX_MATCH_SLOTS((size_t)preg->re_nsub);\n+    size_t output_count = POSIX_MATCH_SLOTS(nmatch);\n     PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(md);\n     if ((size_t)rc > match_count)\n       rc = (int)match_count;\n-    if ((size_t)rc > nmatch)\n-      rc = (int)nmatch;\n+    if ((size_t)rc > output_count)\n+      rc = (int)output_count;\n     for (i = 0; i < (size_t)rc; i++)\n     {\n       if (ovector[i * 2] == PCRE2_UNSET || ovector[i * 2] + so > (PCRE2_SIZE)INT_MAX ||\n@@ -455,7 +457,7 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t\n       }\n     }\n \n-    for (; i < nmatch; i++)\n+    for (; i < output_count; i++)\n       pmatch[i].rm_so = pmatch[i].rm_eo = -1;\n     return 0;\n   }\n"
+    }
+  ],
+  "coupling": "The first commit defines POSIX_MATCH_SLOTS(captures) as captures + 1 and applies it only to preg->re_nsub, where the addition of the whole-match slot is correct. It retains the independent nmatch cap, so that commit is safe by itself. The later validation commit reuses that abstraction on nmatch, although POSIX nmatch already counts the whole-match slot, and replaces both the rc clamp and the unset-entry fill bound with nmatch + 1. Only their composition double-counts the whole match. For an in-contract call with pattern (a), nmatch == 1, and pmatch[1], output_count becomes 2 and regexec writes pmatch[1]. A reviewer must reconcile the slot convention across both commits; changing only one of the two later consumers of the convention still leaves the other successful-match write path beyond the caller's pmatch bound.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "POSIX regcomp/regexec public API",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

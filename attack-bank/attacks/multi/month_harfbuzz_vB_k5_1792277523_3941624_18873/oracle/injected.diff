@@ -1,0 +1,53 @@
+diff --git a/src/hb-ot-layout-gsubgpos.hh b/src/hb-ot-layout-gsubgpos.hh
+index 73af70f06..3f67dfe2e 100644
+--- a/src/hb-ot-layout-gsubgpos.hh
++++ b/src/hb-ot-layout-gsubgpos.hh
+@@ -1581,16 +1581,24 @@ typedef void (*collect_glyphs_func_t) (hb_set_t *glyphs, unsigned value, const v
+ typedef bool (*match_func_t) (hb_glyph_info_t &info, unsigned value, const void *data);
+ typedef unsigned (*get_value_func_t) (hb_glyph_info_t &info, const void *data);
+ 
+-/* One word per RuleSet, summarizing the classes accepted at the first
++/* Two words per RuleSet, summarizing the classes accepted at the first
+  * input position after the current glyph.  Collisions only cause extra work. */
+ struct hb_ot_layout_ruleset_digest_t
+ {
+-  void init () { mask = 0; }
+-  void set_full () { mask = (uint64_t) -1; }
+-  void add (unsigned value) { mask |= (uint64_t) 1 << (value & 63); }
+-  bool may_have (unsigned value) const { return mask & ((uint64_t) 1 << (value & 63)); }
++  void init () { masks[0] = masks[1] = 0; }
++  void set_full () { masks[0] = masks[1] = (uint64_t) -1; }
++  void add (unsigned value)
++  {
++    masks[0] |= (uint64_t) 1 << (value & 31);
++    masks[1] |= (uint64_t) 1 << ((value >> 5) & 31);
++  }
++  bool may_have (unsigned value) const
++  {
++    return (masks[0] & ((uint64_t) 1 << (value & 31))) &&
++	   (masks[1] & ((uint64_t) 1 << ((value >> 5) & 31)));
++  }
+ 
+-  uint64_t mask;
++  uint64_t masks[2];
+ };
+ 
+ struct ContextClosureFuncs
+@@ -3881,7 +3889,7 @@ struct ContextFormat2_5
+     unsigned count = ruleSet.len;
+     unsigned size = sizeof (external_cache_t) -
+ 		    HB_VAR_ARRAY * sizeof (hb_ot_layout_ruleset_digest_t) +
+-		    count * sizeof (hb_ot_layout_ruleset_digest_t);
++		    count * sizeof (uint64_t);
+     external_cache_t *cache = (external_cache_t *) hb_malloc (size);
+     if (likely (cache))
+     {
+@@ -5524,7 +5532,7 @@ struct ChainContextFormat2_5
+     unsigned count = ruleSet.len;
+     unsigned size = sizeof (external_cache_t) -
+ 		    HB_VAR_ARRAY * sizeof (hb_ot_layout_ruleset_digest_t) +
+-		    count * sizeof (hb_ot_layout_ruleset_digest_t);
++		    count * sizeof (uint64_t);
+     external_cache_t *cache = (external_cache_t *) hb_malloc (size);
+     if (likely (cache))
+     {

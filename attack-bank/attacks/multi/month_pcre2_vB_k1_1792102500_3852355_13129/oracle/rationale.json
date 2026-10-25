@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "046ce557caba91eaba24b3e489ec0053702fb66a",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2_substitute.c b/src/pcre2_substitute.c\nindex 5c07241..c5318dc 100644\n--- a/src/pcre2_substitute.c\n+++ b/src/pcre2_substitute.c\n@@ -932,7 +932,8 @@ pcre2_substitute(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length,\n     internal_match_data->heapframes = NULL;\n     internal_match_data->heapframes_size = 0;\n     /* Ensure that the subject is not freed when internal_match_data is */\n-    internal_match_data->flags &= ~PCRE2_MD_COPIED_SUBJECT;\n+    if (match_data->flags == PCRE2_MD_COPIED_SUBJECT)\n+      internal_match_data->flags &= ~PCRE2_MD_COPIED_SUBJECT;\n     match_data = internal_match_data;\n   }\n \n"
+    },
+    {
+      "sha": "4fb2f0c1bc5611aa211f131ec29cff54ce6dee95",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2_internal.h b/src/pcre2_internal.h\nindex 4913149..c4977df 100644\n--- a/src/pcre2_internal.h\n+++ b/src/pcre2_internal.h\n@@ -523,6 +523,7 @@ enum {\n /* Values for the flags field in a match data block. */\n \n #define PCRE2_MD_COPIED_SUBJECT 0x01u\n+#define PCRE2_MD_EMPTY_SUBJECT 0x02u\n \n /* Magic number to provide a small check against being handed junk. */\n \ndiff --git a/src/pcre2_match.c b/src/pcre2_match.c\nindex 25cbda4..7dd0b0a 100644\n--- a/src/pcre2_match.c\n+++ b/src/pcre2_match.c\n@@ -7875,6 +7875,7 @@ pcre2_match(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length, PCRE2\n \n   match_data->subject = NULL;\n   match_data->subject_length = 0;\n+  match_data->flags &= ~PCRE2_MD_EMPTY_SUBJECT;\n \n   /* Zero the error offset in case the first code unit is invalid UTF. */\n \n@@ -7975,6 +7976,8 @@ pcre2_match(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length, PCRE2\n       ((PCRE2_UCHAR *)match_data->subject)[length] = 0;\n \n       match_data->flags |= PCRE2_MD_COPIED_SUBJECT;\n+      if (length == 0)\n+        match_data->flags |= PCRE2_MD_EMPTY_SUBJECT;\n     }\n     else\n     {\n@@ -8957,6 +8960,8 @@ ENDLOOP:\n       ((PCRE2_UCHAR *)match_data->subject)[length] = 0;\n \n       match_data->flags |= PCRE2_MD_COPIED_SUBJECT;\n+      if (length == 0)\n+        match_data->flags |= PCRE2_MD_EMPTY_SUBJECT;\n     }\n     else\n     {\n"
+    }
+  ],
+  "coupling": "The NULL-buffer substitution maintenance commit changes how a shallow copy of match data drops copied-subject ownership: it clears that ownership bit only when it is the sole match-data flag. The later get_subject maintenance commit records zero-length copied subjects with a second match-data flag, while allocating a one-byte subject for them. Before the later commit the extra flag is absent, and with only the later edit the original unconditional ownership clear remains. Together, substitution of a successful empty copied match leaves the ownership bit in the internal shallow copy. Substitution frees the copied subject through that copy; freeing the caller-owned match data frees the same allocation again. Repair requires relating the flag added for empty copied subjects to ownership transfer in the earlier substitution change.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "pcre2_compile_8, pcre2_match_8, pcre2_substitute_8, pcre2_match_data_free_8",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

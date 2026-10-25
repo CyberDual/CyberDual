@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "abbf6915235c5cb21485c6d7807b20e475f3c78a",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2posix.c b/src/pcre2posix.c\n--- a/src/pcre2posix.c\n+++ b/src/pcre2posix.c\n@@ -411,7 +411,7 @@\n     if (pmatch[0].rm_so < 0 || pmatch[0].rm_eo < 0 || pmatch[0].rm_so > pmatch[0].rm_eo)\n       return REG_INVARG;\n     so = (PCRE2_SIZE)pmatch[0].rm_so;\n-    eo = (PCRE2_SIZE)pmatch[0].rm_eo;\n+    eo = (PCRE2_SIZE)(pmatch[0].rm_eo - pmatch[0].rm_so);\n   }\n   else\n   {\n@@ -419,7 +419,7 @@\n     eo = strlen(string);\n   }\n \n-  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, (eo - so), 0,\n+  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, eo, 0,\n                    options, md, NULL);\n \n   /* Successful match */\n"
+    },
+    {
+      "sha": "2d3a98a9f7c908cfd7c6ac81620580fa85c67acf",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2posix.c b/src/pcre2posix.c\n--- a/src/pcre2posix.c\n+++ b/src/pcre2posix.c\n@@ -440,6 +440,9 @@\n     eo = strlen(string);\n   }\n \n+  if (eo < so)\n+    eo = so;\n+\n   rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, (eo - so), 0,\n                    options, md, NULL);\n \n"
+    }
+  ],
+  "coupling": "The earlier regexec length change stores the REG_STARTEND span in eo and passes it directly to pcre2_match; that representation is safe by itself. The later offset-validation change adds a lower-bound clamp that assumes eo is an absolute end offset. For a valid range whose start exceeds its span, the clamp enlarges the span beyond the backing subject. The fix must restore a consistent meaning for eo across both commits and calculate the match length from that meaning; changing only the new clamp to another absolute-offset adjustment leaves the length calculation wrong.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "pcre2_regcomp/pcre2_regexec with REG_STARTEND via pcre2posix.h",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

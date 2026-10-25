@@ -1,0 +1,38 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0a..628a716 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -502,6 +502,24 @@ IDManifest::init (const char* data, const char* endOfData)
+         readStringList (data, endOfData, m._channels);
+         readStringList (data, endOfData, m._components);
+ 
++        //
++        // cache the component count once per entry, rather than calling
++        // getComponents().size() on every iteration of the per-ID loop
++        // below
++        //
++        const size_t componentCount = m.getComponents ().size ();
++
++        //
++        // an empty component name carries no information, and a channel
++        // group manifest that declares one at the end of its component
++        // list most likely indicates a corrupt manifest; drop any
++        // trailing empty entries rather than keep storing them
++        //
++        while (!m._components.empty () && m._components.back ().empty ())
++        {
++            m._components.pop_back ();
++        }
++
+         char lifetime;
+         if (endOfData < data + 4)
+         {
+@@ -568,7 +586,7 @@ IDManifest::init (const char* data, const char* endOfData)
+                     "ID manifest contains multiple entries for the same ID");
+             }
+             (insertion.first)->second.resize (m.getComponents ().size ());
+-            for (size_t i = 0; i < m.getComponents ().size (); ++i)
++            for (size_t i = 0; i < componentCount; ++i)
+             {
+                 int stringIndex = readVariableLengthInteger (data, endOfData);
+                 if (size_t (stringIndex) >= stringList.size () ||

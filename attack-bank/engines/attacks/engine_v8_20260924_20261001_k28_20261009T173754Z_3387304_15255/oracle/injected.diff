@@ -1,0 +1,48 @@
+diff --git a/src/regexp/regexp-compiler-tonode.cc b/src/regexp/regexp-compiler-tonode.cc
+index 2ae70c3fe7e..8d595b8bf00 100644
+--- a/src/regexp/regexp-compiler-tonode.cc
++++ b/src/regexp/regexp-compiler-tonode.cc
+@@ -1001,7 +1001,14 @@ void Disjunction::RationalizeConsecutiveAtoms(Compiler* compiler) {
+       unibrow::uchar new_prefix = alt_atom->data().at(0);
+       if (!Equals(ignore_case, canonicalize, new_prefix, common_prefix)) break;
+ #endif  // V8_INTL_SUPPORT
+-      prefix_length = std::min(prefix_length, alt_atom->length());
++      // The shared prefix cannot be longer than the shortest alternative. When
++      // reading forward we can bound it by the raw atom length right away. The
++      // backward matcher compares case-folded code units from the opposite end
++      // (see TextNode::GetCaseIndependentLetters), so there the common length is
++      // settled by the per-character comparison below instead.
++      if (!compiler->read_backward()) {
++        prefix_length = std::min(prefix_length, alt_atom->length());
++      }
+       i++;
+     }
+     if (i > first_with_prefix + 2) {
+@@ -1147,15 +1154,18 @@ Node* Disjunction::ToNodeImpl(Compiler* compiler, Node* on_success) {
+   ZoneList<Tree*>* alternatives = this->alternatives();
+ 
+   if (alternatives->length() > 2) {
+-    if (!compiler->read_backward() && v8_flags.regexp_optimization) {
+-      // We deliberately disable SortConsecutiveAtoms and
+-      // RationalizeConsecutiveAtoms in lookbehinds rather than keep
+-      // rationalizing already-adjacent runs. Lookbehind disjunctions must keep
+-      // source order. The code generator already turns off quick checks,
+-      // Boyer-Moore and first-char dispatch when reading backward, so the
+-      // passes buy almost nothing there.
+-      bool found_consecutive_atoms = SortConsecutiveAtoms(compiler);
+-      if (found_consecutive_atoms) RationalizeConsecutiveAtoms(compiler);
++    if (v8_flags.regexp_optimization) {
++      // SortConsecutiveAtoms reorders alternatives by first character, which
++      // changes the match result in a lookbehind (where source order is
++      // significant), so sorting stays forward-only. Rationalizing an
++      // already-adjacent run only factors out a shared prefix and preserves the
++      // order of the alternatives, so it is applied in both directions.
++      if (!compiler->read_backward()) {
++        bool found_consecutive_atoms = SortConsecutiveAtoms(compiler);
++        if (found_consecutive_atoms) RationalizeConsecutiveAtoms(compiler);
++      } else {
++        RationalizeConsecutiveAtoms(compiler);
++      }
+       TRACE_WITH_NODE("* After rationalizing consecutive atoms: ", this);
+     }
+     FixSingleCharacterDisjunctions(compiler);

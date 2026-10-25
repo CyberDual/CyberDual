@@ -1,0 +1,39 @@
+diff --git a/src/lib/OpenEXR/ImfBytesAttribute.cpp b/src/lib/OpenEXR/ImfBytesAttribute.cpp
+index ee6a6f5755528de870b2b75de0e20a2030273493..a4eab458c3088af7bc3f58d7613d509e0a32a7e3 100644
+--- a/src/lib/OpenEXR/ImfBytesAttribute.cpp
++++ b/src/lib/OpenEXR/ImfBytesAttribute.cpp
+@@ -34,19 +34,26 @@ BytesAttribute::BytesAttribute (
+     {
+         THROW (IEX_NAMESPACE::ArgExc, "Invalid data pointer.");
+     }
+-    memcpy (
+-        (unsigned char*) _data,
+-        (const unsigned char*) data,
+-        size);
++    if (size > 0)
++        memcpy (
++            (unsigned char*) _data,
++            (const unsigned char*) data,
++            size);
+ }
+ 
+ BytesAttribute::BytesAttribute (const BytesAttribute& other)
+     : typeHint (other.typeHint), _data (other._data.size ())
+ {
+-    memcpy (
+-        (unsigned char*) _data,
+-        (const unsigned char*) other._data,
+-        other._data.size ());
++    const size_t dataBytes = static_cast<size_t> (other._data.size ());
++    const size_t n         = dataBytes > 0
++                                 ? dataBytes
++                                 : (typeHint.empty () ? sizeof (unsigned int) : 0);
++
++    if (n > 0)
++        memcpy (
++            (unsigned char*) _data,
++            (const unsigned char*) other._data,
++            n);
+ }
+ 
+ // Note the destructor is defined here and not in the header file to

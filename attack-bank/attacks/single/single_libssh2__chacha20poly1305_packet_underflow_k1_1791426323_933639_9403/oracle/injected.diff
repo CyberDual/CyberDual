@@ -1,0 +1,27 @@
+diff --git a/src/crypt.c b/src/crypt.c
+index 11efd28a8873f23f1ae2527957e70db3c7efcec8..cc286a3f720591fd14c58f4ab3caa2a4a989da57 100644
+--- a/src/crypt.c
++++ b/src/crypt.c
+@@ -431,6 +431,9 @@ static int crypt_encrypt_chacha20_poly_buffer(LIBSSH2_SESSION *session,
+                                    buf_len - 4, 4, ctx->encrypt);
+         }
+         else {
++            if(buf_len < 4)
++                return 1;
++
+             /* buf is full packet including size and auth tag but buf_len
+                does not include size */
+             ret = chachapoly_crypt(&ctx->chachapoly_ctx, seqno, buf, buf,
+diff --git a/src/knownhost.c b/src/knownhost.c
+index d380a8385b46927809b1832143a008c0aaa42e75..4381d5b5b1aaae29374c1e3139f4cff4de3728be 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -673,7 +673,7 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+             char hostbuf[256];
+ 
+             /* make sure we do not overflow the buffer */
+-            if(namelen >= sizeof(hostbuf) - 1)
++            if(namelen > sizeof(hostbuf))
+                 return ssh2_err(hosts->session,
+                                 LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                                 "Failed to parse known_hosts line "

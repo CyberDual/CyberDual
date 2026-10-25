@@ -1,0 +1,105 @@
+diff --git a/src/openssl.c b/src/openssl.c
+index ad67f5cba9cb304771ced217d2ff8b2c46ea51b3..accc8c4597240a54913f777c827d9ca531f18305 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -183,6 +183,11 @@ static SSH2_INLINE void ossl_swap_bytes(unsigned char *buf, size_t len)
+ {
+ #if !defined(WORDS_BIGENDIAN) || !WORDS_BIGENDIAN
+     size_t i, j;
++
++    /* A zero length underflows j and walks off the buffer. */
++    if(len < 2)
++        return;
++
+     for(i = 0, j = len - 1; i < j; i++, j--) {
+         unsigned char temp = buf[i];
+         buf[i] = buf[j];
+@@ -2576,6 +2581,8 @@ static int ossl_ecdsa_openssh_priv_to_pubkey(LIBSSH2_SESSION *session,
+     OSSL_PARAM params[4];
+     const char *n = EC_curve_nid2nist(curve);
+     char *group_name = NULL;
++    unsigned char *x_buf = NULL;
++    size_t xlen_max = 0;
+ #else
+     BIGNUM *bn_exponent;
+ #endif
+@@ -2602,6 +2609,26 @@ static int ossl_ecdsa_openssh_priv_to_pubkey(LIBSSH2_SESSION *session,
+     if(!n)
+         return -1;
+ 
++    if(!exponent_len) {
++        ssh2_err(session, LIBSSH2_ERROR_PROTO, "ECDSA empty exponent");
++        return -1;
++    }
++
++    if(curve == SSH2_EC_CURVE_NISTP256)
++        xlen_max = 32;
++    else if(curve == SSH2_EC_CURVE_NISTP384)
++        xlen_max = 48;
++    else if(curve == SSH2_EC_CURVE_NISTP521)
++        xlen_max = 66;
++    else
++        xlen_max = exponent_len;
++
++    /* mpint may include one leading sign byte past the curve order */
++    if(exponent_len > xlen_max + 1) {
++        ssh2_err(session, LIBSSH2_ERROR_PROTO, "ECDSA exponent too large");
++        return -1;
++    }
++
+     fromdata_ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_EC, NULL);
+     if(!fromdata_ctx)
+         goto fail;
+@@ -2611,13 +2638,23 @@ static int ossl_ecdsa_openssh_priv_to_pubkey(LIBSSH2_SESSION *session,
+         goto fail;
+ 
+     memcpy(group_name, n, strlen(n) + 1);
+-    ossl_swap_bytes(exponent, exponent_len);
++
++    /* Little-endian copy for OSSL_PARAM; do not mutate the key blob. */
++    x_buf = OPENSSL_zalloc(xlen_max);
++    if(!x_buf) {
++        rc = -1;
++        ssh2_err(session, LIBSSH2_ERROR_ALLOC,
++                 "Unable to allocate memory for private key data");
++        goto fail;
++    }
++    memcpy(x_buf, exponent, exponent_len);
++    ossl_swap_bytes(x_buf, exponent_len);
+ 
+     params[0] = OSSL_PARAM_construct_utf8_string(OSSL_PKEY_PARAM_GROUP_NAME,
+                                                  group_name, 0);
+     params[1] = OSSL_PARAM_construct_octet_string(OSSL_PKEY_PARAM_PUB_KEY,
+                                                   pointbuf, pointbuf_len);
+-    params[2] = OSSL_PARAM_construct_BN(OSSL_PKEY_PARAM_PRIV_KEY, exponent,
++    params[2] = OSSL_PARAM_construct_BN(OSSL_PKEY_PARAM_PRIV_KEY, x_buf,
+                                         exponent_len);
+     params[3] = OSSL_PARAM_construct_end();
+ 
+@@ -2627,8 +2664,14 @@ static int ossl_ecdsa_openssh_priv_to_pubkey(LIBSSH2_SESSION *session,
+     rc = EVP_PKEY_fromdata(fromdata_ctx, &ctx, EVP_PKEY_KEYPAIR, params);
+     rc = rc != 1;
+ 
+-    if(group_name)
++    if(group_name) {
+         OPENSSL_clear_free(group_name, strlen(n) + 1);
++        group_name = NULL;
++    }
++    if(x_buf) {
++        OPENSSL_clear_free(x_buf, xlen_max);
++        x_buf = NULL;
++    }
+ #else
+     rc = ssh2_ecdsa_curve_name_with_octal_new(&ctx, pointbuf, pointbuf_len,
+                                               curve);
+@@ -2684,6 +2727,10 @@ fail:
+ #ifdef USE_OPENSSL_3
+     if(fromdata_ctx)
+         EVP_PKEY_CTX_free(fromdata_ctx);
++    if(group_name)
++        OPENSSL_clear_free(group_name, strlen(n) + 1);
++    if(x_buf)
++        OPENSSL_clear_free(x_buf, xlen_max);
+ #endif
+ 
+     if(ctx)

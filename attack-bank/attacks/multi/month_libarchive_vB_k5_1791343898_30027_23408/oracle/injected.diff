@@ -1,0 +1,31 @@
+diff --git a/libarchive/archive_read_support_format_zip.c b/libarchive/archive_read_support_format_zip.c
+index f862806..bc2241f 100644
+--- a/libarchive/archive_read_support_format_zip.c
++++ b/libarchive/archive_read_support_format_zip.c
+@@ -723,11 +723,12 @@ process_extra(struct archive_read *a, struct archive_entry *entry,
+ 
+ 		offset += 4;
+ 		if (offset + datasize > extra_length) {
+-			archive_set_error(&a->archive,
+-			    ARCHIVE_ERRNO_FILE_FORMAT, "Extra data overflow: "
+-			    "Need %d bytes but only found %d bytes",
+-			    (int)datasize, (int)(extra_length - offset));
+-			return ARCHIVE_FAILED;
++			/* Some writers emit a final extra field whose
++			 * declared size overruns the record (often padding
++			 * that was miscounted).  Rather than rejecting the
++			 * whole entry, clamp the field to the extra data we
++			 * actually have and keep parsing. */
++			datasize = (unsigned short)(extra_length - offset);
+ 		}
+ #ifdef DEBUG
+ 		fprintf(stderr, "Header id 0x%04x, length %d\n",
+@@ -814,7 +815,7 @@ process_extra(struct archive_read *a, struct archive_entry *entry,
+ 				    archive_le16dec(p + sub_offset + 2);
+ 				sub_offset += 4;
+ 				sub_remaining -= 4;
+-				if (size > sub_remaining)
++				if (size > datasize)
+ 					break;
+ 				if (tag == 1 && size == 24) {
+ 					/* A raw FILETIME of 0 marks a slot

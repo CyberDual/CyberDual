@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "4be7143ba18df3231e37ad4fe855645f24228930",
+  "parent_sha": "4be7143ba18df3231e37ad4fe855645f24228930",
+  "project": "curl",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/curl/curl",
+  "repo_url": "https://github.com/curl/curl",
+  "source": "reuse",
+  "target": "curl",
+  "task": "curlx_inet_pton(AF_INET6,...) on IPv6 text ending in a lone ':' (e.g. '1:2:3:4:5:6:7:8:' or '::1:'); must reject the trailing colon while valid forms still parse (feature/behaviour).",
+  "task_iid": "curl__inet_pton_trailing_colon",
+  "vuln_desc": "curlx_inet_pton(AF_INET6,...) on IPv6 text ending in a lone ':' (e.g. '1:2:3:4:5:6:7:8:' or '::1:'); must reject the trailing colon while valid forms still parse (feature/behaviour)."
+}

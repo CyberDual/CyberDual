@@ -1,0 +1,41 @@
+diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c
+index 25f38b2..498115d 100644
+--- a/src/media_tools/crypt_tools.c
++++ b/src/media_tools/crypt_tools.c
+@@ -144,12 +144,13 @@ static GF_Err crypt_cpix_decode_b64(const char *input, u8 **out_data, u32 *out_s
+ 			break;
+ 		}
+ 	}
+-	data = (u8 *) gf_malloc(len);
++	/*max size of a base64 payload is 3/4 of its length*/
++	data = (u8 *) gf_malloc(len/4*3);
+ 	if (!data) {
+ 		gf_free(clean);
+ 		return GF_OUT_OF_MEM;
+ 	}
+-	decoded = gf_base64_decode(clean, len, data, len);
++	decoded = gf_base64_decode(clean, len, data, len/4*3);
+ 	gf_free(clean);
+ 	if (!decoded) {
+ 		gf_free(data);
+@@ -175,7 +176,8 @@ static GF_Err crypt_cpix_parse_pssh(const char *b64, GF_CryptDRMInfo *drm)
+ 	e = crypt_cpix_decode_b64(b64, &data, &size);
+ 	if (e)
+ 		return e;
+-	if (size < 32) {
++	/*28 bytes: full box header + systemID*/
++	if (size < 28) {
+ 		gf_free(data);
+ 		return GF_NON_COMPLIANT_BITSTREAM;
+ 	}
+@@ -201,10 +203,6 @@ static GF_Err crypt_cpix_parse_pssh(const char *b64, GF_CryptDRMInfo *drm)
+ 
+ 	nb_kids = 0;
+ 	if (version) {
+-		if (size-pos < 4) {
+-			gf_free(data);
+-			return GF_NON_COMPLIANT_BITSTREAM;
+-		}
+ 		nb_kids = crypt_cpix_read_u32(data+pos);
+ 		pos += 4;
+ 		if (nb_kids > (size-pos)/16) {

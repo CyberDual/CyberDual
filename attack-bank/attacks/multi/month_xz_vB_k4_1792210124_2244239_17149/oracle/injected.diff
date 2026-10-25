@@ -1,0 +1,76 @@
+diff --git a/src/liblzma/common/alone_decoder.c b/src/liblzma/common/alone_decoder.c
+index 174b3b1..ab7f956 100644
+--- a/src/liblzma/common/alone_decoder.c
++++ b/src/liblzma/common/alone_decoder.c
+@@ -155,7 +155,11 @@ alone_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 		const lzma_ret ret = lzma_next_filter_init(&coder->next,
+ 				allocator, filters);
+ 		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->next, allocator);
++			// With LZMA_MEM_ERROR the filter coder hadn't
++			// been allocated yet, so there is nothing
++			// to clean up.
++			if (ret != LZMA_MEM_ERROR)
++				lzma_next_end(&coder->next, allocator);
+ 			return ret;
+ 		}
+ 
+diff --git a/src/liblzma/common/lzip_decoder.c b/src/liblzma/common/lzip_decoder.c
+index d6f929d..683dcb6 100644
+--- a/src/liblzma/common/lzip_decoder.c
++++ b/src/liblzma/common/lzip_decoder.c
+@@ -240,7 +240,11 @@ lzip_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 		const lzma_ret ret = lzma_next_filter_init(
+ 				&coder->lzma_decoder, allocator, filters);
+ 		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->lzma_decoder, allocator);
++			// With LZMA_MEM_ERROR the filter coder hadn't
++			// been allocated yet, so there is nothing
++			// to clean up.
++			if (ret != LZMA_MEM_ERROR)
++				lzma_next_end(&coder->lzma_decoder, allocator);
+ 			return ret;
+ 		}
+ 
+diff --git a/src/liblzma/common/microlzma_decoder.c b/src/liblzma/common/microlzma_decoder.c
+index a7720cc..adc41f9 100644
+--- a/src/liblzma/common/microlzma_decoder.c
++++ b/src/liblzma/common/microlzma_decoder.c
+@@ -111,7 +111,11 @@ microlzma_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 		const lzma_ret ret = lzma_next_filter_init(&coder->lzma,
+ 				allocator, filters);
+ 		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->lzma, allocator);
++			// With LZMA_MEM_ERROR the filter coder hadn't
++			// been allocated yet, so there is nothing
++			// to clean up.
++			if (ret != LZMA_MEM_ERROR)
++				lzma_next_end(&coder->lzma, allocator);
+ 			return ret;
+ 		}
+ 
+diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c
+index 6dc4cef..7a78dda 100644
+--- a/src/liblzma/lz/lz_decoder.c
++++ b/src/liblzma/lz/lz_decoder.c
+@@ -53,6 +53,12 @@ typedef struct {
+ static void
+ lz_decoder_reset(lzma_coder *coder)
+ {
++	// If allocating the dictionary failed in a previous
++	// initialization attempt, there is no dictionary. Mark its
++	// size as zero so that it will be allocated again.
++	if (coder->dict.buf == NULL)
++		coder->dict.size = 0;
++
+ 	coder->dict.pos = LZ_DICT_INIT_POS;
+ 	coder->dict.full = 0;
+ 	coder->dict.buf[LZ_DICT_INIT_POS - 1] = '\0';
+@@ -278,7 +284,6 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 
+ 	// Allocate and initialize the dictionary.
+ 	if (coder->dict.size != alloc_size) {
+-		coder->dict.size = 0;
+ 		lzma_free(coder->dict.buf, allocator);
+ 
+ 		// The LZ_DICT_EXTRA bytes at the end of the buffer aren't

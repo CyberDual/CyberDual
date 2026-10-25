@@ -1,0 +1,87 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index 3fbb5b1..863ddf5 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -190,6 +190,12 @@ struct lzma_index_s {
+ 	/// lzma_index_prealloc().
+ 	size_t prealloc;
+ 
++	/// Value last passed to lzma_index_prealloc(), or INDEX_GROUP_SIZE
++	/// when the Index was created for manual appends. prealloc is reset
++	/// to INDEX_GROUP_SIZE after a Record group is allocated; group_hint
++	/// keeps the requested count.
++	size_t group_hint;
++
+ 	/// Bitmask indicating what integrity check types have been used
+ 	/// as set by lzma_index_stream_flags(). The bit of the last Stream
+ 	/// is not included here, since it is possible to change it by
+@@ -449,6 +455,7 @@ index_init_plain(const lzma_allocator *allocator)
+ 		i->record_count = 0;
+ 		i->index_list_size = 0;
+ 		i->prealloc = INDEX_GROUP_SIZE;
++		i->group_hint = INDEX_GROUP_SIZE;
+ 		i->checks = 0;
+ 	}
+ 
+@@ -518,6 +525,7 @@ lzma_index_prealloc(lzma_index *i, lzma_vli records)
+ 		records = INDEX_GROUP_SIZE;
+ 
+ 	i->prealloc = (size_t)(records);
++	i->group_hint = i->prealloc;
+ 	return false;
+ }
+ 
+@@ -718,6 +726,17 @@ lzma_index_stream_padding(lzma_index *i, lzma_vli stream_padding)
+ }
+ 
+ 
++/// Slot count for one Record group. Never more than INDEX_GROUP_SIZE.
++static size_t
++index_group_alloc_slots(size_t hint)
++{
++	if (hint > INDEX_GROUP_SIZE)
++		return (size_t)INDEX_GROUP_SIZE;
++
++	return hint;
++}
++
++
+ extern LZMA_API(lzma_ret)
+ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,
+ 		lzma_vli unpadded_size, lzma_vli uncompressed_size)
+@@ -762,20 +781,31 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,
+ 			> LZMA_BACKWARD_SIZE_MAX)
+ 		return LZMA_DATA_ERROR;
+ 
+-	if (g != NULL && g->last + 1 < g->allocated) {
++	if (g != NULL && g->last + 1 < i->group_hint) {
+ 		// There is space in the last group at least for one Record.
+ 		++g->last;
+ 	} else {
+-		// We need to allocate a new group.
++		// We need to allocate a new group. Keep a single group at
++		// INDEX_GROUP_SIZE Records at most.
+ 		assert(i->prealloc > 0);
++		size_t slots = i->prealloc;
++		if (slots > INDEX_GROUP_SIZE)
++			slots = (size_t)INDEX_GROUP_SIZE;
++		slots = index_group_alloc_slots(slots);
+ 		g = lzma_alloc(sizeof(index_group)
+-				+ i->prealloc * sizeof(index_record),
++				+ slots * sizeof(index_record),
+ 				allocator);
+ 		if (g == NULL)
+ 			return LZMA_MEM_ERROR;
+ 
+ 		g->last = 0;
+-		g->allocated = i->prealloc;
++		g->allocated = slots;
++
++		// group_hint stays at the Record count requested for this Index
++		// after prealloc is reset below. Manual appends leave the hint at
++		// INDEX_GROUP_SIZE, which is the same as slots.
++		if (i->group_hint > g->allocated)
++			g->allocated = i->group_hint;
+ 
+ 		// Reset prealloc so that if the application happens to
+ 		// add new Records, the allocation size will be sane.

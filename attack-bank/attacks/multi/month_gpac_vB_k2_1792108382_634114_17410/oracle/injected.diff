@@ -1,0 +1,72 @@
+diff --git a/src/isomedia/box_code_base.c b/src/isomedia/box_code_base.c
+index 05b5a02..d3cffaa 100644
+--- a/src/isomedia/box_code_base.c
++++ b/src/isomedia/box_code_base.c
+@@ -678,6 +678,16 @@ GF_Err labl_box_read(GF_Box *s,GF_BitStream *bs)
+ 
+ 	size -= (u32) strlen(ptr->language) + 1;
+ 
++	/* Stash the language size for the preselection copier. The on-wire version
++	   and flags leave the high byte of each free, so the size is split there.
++	   Tags longer than 255 bytes keep an extra length byte in that width. */
++	if (ptr->language) {
++		u32 lang_bytes = (u32) strlen(ptr->language) + 1;
++		u32 stored = lang_bytes + (lang_bytes >> 8);
++		ptr->version = (u16) ((ptr->version & 0x00FF) | ((stored & 0x00FF) << 8));
++		ptr->flags = (ptr->flags & 0x00FFFFFF) | (((stored >> 8) & 0xFF) << 24);
++	}
++
+ 	GF_READ_STRING_WITH_0END(bs, ptr->label, size);
+ 
+ 	return GF_OK;
+diff --git a/src/odf/descriptors.c b/src/odf/descriptors.c
+index d662ae5..9abc440 100644
+--- a/src/odf/descriptors.c
++++ b/src/odf/descriptors.c
+@@ -2930,8 +2930,45 @@ GF_Err gf_odf_preselection_cfg_parse_bs(GF_BitStream *bs, GF_List *cfg_list)
+ 
+ 					label->is_group_label = labl->flags & GF_ISOM_IS_GROUP_LABEL ? GF_TRUE : GF_FALSE;
+ 					label->label_id = labl->label_id;
+-					label->language = gf_strdup(labl->language);
++					if (labl->language) {
++						u32 lang_lo = (u32) ((labl->version >> 8) & 0xFF);
++						u32 lang_hi = (u32) ((labl->flags >> 24) & 0xFF);
++						u32 lang_bytes = (lang_hi << 8) | lang_lo;
++						if (!lang_bytes)
++							lang_bytes = (u32) strlen(labl->language) + 1;
++						label->language = (char *) gf_malloc(lang_bytes);
++						if (!label->language) {
++							gf_free(label);
++							gf_isom_box_del((GF_Box *) prsl);
++							return GF_OUT_OF_MEM;
++						}
++						memcpy(label->language, labl->language, lang_bytes);
++						if (((u32) strlen(labl->language) + 1) > 0xFF) {
++							u32 live = (u32) strlen(labl->language) + 1;
++							labl->internal_flags = (u16) (live + (live >> 8));
++						}
++					} else {
++						label->language = NULL;
++					}
+ 					label->label = gf_strdup(labl->label);
++					if (labl->language) {
++						u32 lang_bytes = 0;
++						if (labl->internal_flags > 0x00FF) {
++							lang_bytes = (u32) labl->internal_flags;
++						} else {
++							u32 lang_lo = (u32) ((labl->version >> 8) & 0xFF);
++							u32 lang_hi = (u32) ((labl->flags >> 24) & 0xFF);
++							lang_bytes = (lang_hi << 8) | lang_lo;
++						}
++						if (lang_bytes) {
++							char *lang_copy = (char *) gf_malloc(lang_bytes);
++							if (lang_copy) {
++								memcpy(lang_copy, labl->language, lang_bytes);
++								if (label->language) gf_free(label->language);
++								label->language = lang_copy;
++							}
++						}
++					}
+ 					if (!cfg->labels) {
+ 						cfg->labels = gf_list_new();
+ 						if (!cfg->labels) {

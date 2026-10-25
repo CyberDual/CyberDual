@@ -1,0 +1,26 @@
+diff --git a/libarchive/archive_read_support_format_ar.c b/libarchive/archive_read_support_format_ar.c
+index 2445e7b..aa87f5a 100644
+--- a/libarchive/archive_read_support_format_ar.c
++++ b/libarchive/archive_read_support_format_ar.c
+@@ -286,7 +286,11 @@ _ar_read_header(struct archive_read *a, struct archive_entry *entry,
+ 			return (ARCHIVE_FATAL);
+ 		}
+ 
+-		/* Read the filename table into memory. */
++		/*
++		 * The pad byte ar_parse_gnu_filename_table() inspects is
++		 * already counted in the entry's declared size, so there is
++		 * no need to allocate anything beyond it.
++		 */
+ 		st = malloc(strtab_size);
+ 		if (st == NULL) {
+ 			archive_set_error(&a->archive, ENOMEM,
+@@ -294,7 +298,7 @@ _ar_read_header(struct archive_read *a, struct archive_entry *entry,
+ 			return (ARCHIVE_FATAL);
+ 		}
+ 		ar->strtab = st;
+-		ar->strtab_size = strtab_size;
++		ar->strtab_size = strtab_size + 1;
+ 
+ 		if (*unconsumed) {
+ 			__archive_read_consume(a, *unconsumed);

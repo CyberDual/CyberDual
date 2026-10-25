@@ -1,0 +1,31 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index e3afe51..d1a8d02 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -1192,8 +1192,6 @@ callUnknownEncodingRelease(XML_Parser parser) {
+   beforeHandler(parser);
+   parser->m_unknownEncodingRelease(parser->m_unknownEncodingData);
+   afterHandler(parser);
+-  parser->m_unknownEncodingRelease = NULL;
+-  parser->m_unknownEncodingData = NULL;
+ }
+ 
+ static int XMLCALL
+@@ -1603,6 +1601,17 @@ XML_ParserReset(XML_Parser parser, const XML_Char *encodingName) {
+   // must run before any parser state is freed.
+   if (parser->m_unknownEncodingRelease)
+     callUnknownEncodingRelease(parser);
++
++  /* Verify that the encoding name can be stored before any parser state
++     is torn down, so that a failed reset leaves the parser unchanged. */
++  if (encodingName != NULL) {
++    XML_Char *const encodingNameCopy = copyString(encodingName, parser);
++    if (encodingNameCopy == NULL) {
++      parser->m_errorCode = XML_ERROR_NO_MEMORY;
++      return XML_FALSE;
++    }
++    FREE(parser, encodingNameCopy);
++  }
+   /* move m_tagStack to m_freeTagList */
+   tStk = parser->m_tagStack;
+   while (tStk) {

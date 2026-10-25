@@ -1,0 +1,53 @@
+diff --git a/src/regexp/regexp-compiler-tonode.cc b/src/regexp/regexp-compiler-tonode.cc
+index 2ae70c3fe7e..81e29e235da 100644
+--- a/src/regexp/regexp-compiler-tonode.cc
++++ b/src/regexp/regexp-compiler-tonode.cc
+@@ -828,7 +828,7 @@ CaseFolding::Mode CaseFoldingMode(Flags flags) {
+ // conflate U+017F and 's' under /i.
+ int CompareCaseInsensitive(CaseFolding::Mode mode, base::uc16 a, base::uc16 b) {
+   if (a == b) return 0;
+-  return CaseFolding::EquivalenceKey(a, mode) -
++  return CaseFolding::EquivalenceKey(a, CaseFolding::Mode::kUnicode) -
+          CaseFolding::EquivalenceKey(b, mode);
+ }
+ 
+@@ -1001,7 +1001,12 @@ void Disjunction::RationalizeConsecutiveAtoms(Compiler* compiler) {
+       unibrow::uchar new_prefix = alt_atom->data().at(0);
+       if (!Equals(ignore_case, canonicalize, new_prefix, common_prefix)) break;
+ #endif  // V8_INTL_SUPPORT
+-      prefix_length = std::min(prefix_length, alt_atom->length());
++      // When reading backward we only tighten the shared prefix length for
++      // atoms whose leading character matches exactly; characters brought in
++      // by case folding are reconciled by the suffix split below.
++      if (!compiler->read_backward() || new_prefix == common_prefix) {
++        prefix_length = std::min(prefix_length, alt_atom->length());
++      }
+       i++;
+     }
+     if (i > first_with_prefix + 2) {
+@@ -1147,15 +1152,16 @@ Node* Disjunction::ToNodeImpl(Compiler* compiler, Node* on_success) {
+   ZoneList<Tree*>* alternatives = this->alternatives();
+ 
+   if (alternatives->length() > 2) {
+-    if (!compiler->read_backward() && v8_flags.regexp_optimization) {
+-      // We deliberately disable SortConsecutiveAtoms and
+-      // RationalizeConsecutiveAtoms in lookbehinds rather than keep
+-      // rationalizing already-adjacent runs. Lookbehind disjunctions must keep
+-      // source order. The code generator already turns off quick checks,
+-      // Boyer-Moore and first-char dispatch when reading backward, so the
+-      // passes buy almost nothing there.
+-      bool found_consecutive_atoms = SortConsecutiveAtoms(compiler);
+-      if (found_consecutive_atoms) RationalizeConsecutiveAtoms(compiler);
++    if (v8_flags.regexp_optimization) {
++      // Sorting reorders alternatives by first character, which is unsound when
++      // reading backwards. Prefix factoring, however, preserves source order,
++      // so we still rationalize already-adjacent runs in lookbehinds.
++      if (!compiler->read_backward()) {
++        bool found_consecutive_atoms = SortConsecutiveAtoms(compiler);
++        if (found_consecutive_atoms) RationalizeConsecutiveAtoms(compiler);
++      } else {
++        RationalizeConsecutiveAtoms(compiler);
++      }
+       TRACE_WITH_NODE("* After rationalizing consecutive atoms: ", this);
+     }
+     FixSingleCharacterDisjunctions(compiler);

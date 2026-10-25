@@ -1,0 +1,25 @@
+diff --git a/libarchive/archive_read.c b/libarchive/archive_read.c
+index d7bcbc09..d323ce34 100644
+--- a/libarchive/archive_read.c
++++ b/libarchive/archive_read.c
+@@ -1379,7 +1379,6 @@ read_client_data(struct archive_read_filter *f)
+ 		f->fatal = 1;
+ 	} else if (bytes_read == 0) {
+ 		f->client_total = f->client_avail = 0;
+-		f->client_next = f->client_buff = NULL;
+ 		f->end_of_file = 1;
+ 	} else {
+ 		f->client_total = bytes_read;
+@@ -1437,8 +1436,10 @@ __archive_read_filter_ahead(struct archive_read_filter *f,
+ 		 * We can satisfy directly from client buffer if everything
+ 		 * currently in the copy buffer is still in the client buffer.
+ 		 */
+-		if (f->client_total >= f->client_avail + f->avail
+-		    && f->client_avail + f->avail >= min) {
++		if (f->client_next != NULL &&
++		    (size_t)(f->client_next -
++			(const char *)f->client_buff) >= f->avail &&
++		    f->client_avail + f->avail >= min) {
+ 			/* "Roll back" to client buffer. */
+ 			f->client_avail += f->avail;
+ 			f->client_next -= f->avail;

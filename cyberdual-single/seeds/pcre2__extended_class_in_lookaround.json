@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "611ffbd597af22ca70e03c4eefaeb42ade7a2d14",
+  "parent_sha": "611ffbd597af22ca70e03c4eefaeb42ade7a2d14",
+  "project": "pcre2",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/PCRE2Project/pcre2",
+  "repo_url": "https://github.com/PCRE2Project/pcre2",
+  "source": "reuse",
+  "target": "pcre2",
+  "task": "pcre2_compile() with PCRE2_ALT_EXTENDED_CLASS: a fixed-length nested extended class [...[...]] inside a lookbehind/lookaround is wrongly rejected (err 125); feature fix makes it compile.",
+  "task_iid": "pcre2__extended_class_in_lookaround",
+  "vuln_desc": "pcre2_compile() with PCRE2_ALT_EXTENDED_CLASS: a fixed-length nested extended class [...[...]] inside a lookbehind/lookaround is wrongly rejected (err 125); feature fix makes it compile."
+}

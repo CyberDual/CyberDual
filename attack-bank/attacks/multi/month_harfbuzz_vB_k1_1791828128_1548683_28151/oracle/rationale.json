@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "3cf1c637f58312d3f771e991929a477a6e69536d",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\nindex c39583d..2c8ea2e 100644\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1659,11 +1659,12 @@ hb_raster_draw_render (hb_raster_draw_t *draw)\n   /* \u2500\u2500 4. Bucket edges by starting row and rasterize scanlines \u2500\u2500\u2500\u2500 */\n   if (draw->edges.length && ext.width && ext.height)\n   {\n-    if (unlikely (!draw->row_area.resize_dirty (ext.width) ||\n-\t\t  !draw->row_cover.resize_dirty (ext.width)))\n+    unsigned sweep_width = ext.width + 1;\n+    if (unlikely (!draw->row_area.resize_dirty (sweep_width) ||\n+\t\t  !draw->row_cover.resize_dirty (sweep_width)))\n       return nullptr;\n-    hb_memset (draw->row_area.arrayZ,  0, ext.width * sizeof (int32_t));\n-    hb_memset (draw->row_cover.arrayZ, 0, ext.width * sizeof (int16_t));\n+    hb_memset (draw->row_area.arrayZ,  0, sweep_width * sizeof (int32_t));\n+    hb_memset (draw->row_cover.arrayZ, 0, sweep_width * sizeof (int16_t));\n \n     /* Bucket edges by their starting pixel row.\n        Only grow the outer vector; clear inner vectors without freeing. */\n@@ -1708,11 +1709,12 @@ hb_raster_draw_render (hb_raster_draw_t *draw)\n \t  continue;\n \n \tedge_sweep_row (draw->row_area.arrayZ, draw->row_cover.arrayZ,\n-\t\t\text.width, ext.x_origin, y_top, e, x_min, x_max);\n+\t\t\tsweep_width, ext.x_origin, y_top, e, x_min, x_max);\n \tdraw->active_edges.arrayZ[write++] = edge_idx;\n       }\n       draw->active_edges.resize (write);\n \n+      x_max = hb_min (x_max, ext.width - 1);\n       if (x_min <= x_max)\n       {\n \tint32_t cover_accum = sweep_row_to_alpha (image->buffer.arrayZ + row * ext.stride,\n"
+    },
+    {
+      "sha": "8d1d10b12db4df1c385ac83377dc8e4c9cd93789",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1754,10 +1754,10 @@\n \n \tif (unlikely (use_wide))\n \t  edge_sweep_row (draw->row_area_wide.arrayZ, draw->row_cover_wide.arrayZ,\n-\t\t\t  ext.width, ext.x_origin, y_top, e, x_min, x_max);\n+\t\t\t  draw->row_area.length, ext.x_origin, y_top, e, x_min, x_max);\n \telse\n \t  edge_sweep_row (draw->row_area.arrayZ, draw->row_cover.arrayZ,\n-\t\t\t  ext.width, ext.x_origin, y_top, e, x_min, x_max);\n+\t\t\t  draw->row_area.length, ext.x_origin, y_top, e, x_min, x_max);\n \tdraw->active_edges.arrayZ[write++] = edge_idx;\n       }\n       draw->active_edges.resize (write);\n"
+    }
+  ],
+  "coupling": "The clipping commit gives the narrow scanline scratch arrays one extra right-edge column, uses that padded span for edge sweeps, and limits image conversion to visible columns. The accumulator commit then uses the narrow array length as the sweep span for both narrow and wide paths, while allocating the new 64-bit arrays for only ext.width columns. On a dense row with an edge exactly at the right boundary, the wide path accepts column ext.width and accesses one element beyond its allocation. The clipping edit alone has padded storage; the accumulator edit alone sees an unpadded narrow length. Repair requires reconciling the span passed to the edge sweep with the allocation of each accumulator type across the two commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "hb_raster_draw_render via public hb_raster_draw_get_funcs and hb_draw_* callbacks",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

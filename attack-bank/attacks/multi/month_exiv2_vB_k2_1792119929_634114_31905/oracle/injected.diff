@@ -1,0 +1,53 @@
+diff --git a/src/preview.cpp b/src/preview.cpp
+index eda5c1a..f98328a 100644
+--- a/src/preview.cpp
++++ b/src/preview.cpp
+@@ -39,7 +39,7 @@ constexpr size_t maxAi7ThumbnailSize = 256UL * 1024UL * 1024UL;
+ bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize);
+ 
+ /// @brief Decode an Illustrator thumbnail that follows after %AI7_Thumbnail.
+-DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize);
++DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize, size_t width, size_t height);
+ 
+ /// @brief Create a PNM image from raw RGB data.
+ DataBuf makePnm(size_t width, size_t height, const DataBuf& rgb);
+@@ -417,7 +417,7 @@ DataBuf LoaderNative::getData() const {
+       return {};
+     }
+     const DataBuf ai7thumbnail = decodeHex(data + nativePreview_.position_, nativePreview_.size_);
+-    const DataBuf rgb = decodeAi7Thumbnail(ai7thumbnail, expectedSize);
++    const DataBuf rgb = decodeAi7Thumbnail(ai7thumbnail, expectedSize, width_, height_);
+     return makePnm(width_, height_, rgb);
+   }
+   if (nativePreview_.filter_ == "hex-irb") {
+@@ -839,8 +839,9 @@ bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize) {
+   if (pixels > std::numeric_limits<size_t>::max() / bytesPerPixel)
+     return false;
+ 
+-  rgbSize = pixels * bytesPerPixel;
+-  return rgbSize <= maxAi7ThumbnailSize;
++  const size_t bytes = pixels * bytesPerPixel;
++  rgbSize = static_cast<uint32_t>(bytes);
++  return rgbSize != 0 && rgbSize <= maxAi7ThumbnailSize;
+ }
+ 
+ DataBuf decodeHex(const byte* src, size_t srcSize) {
+@@ -918,7 +919,7 @@ DataBuf decodeBase64(const std::string& src) {
+   return dest;
+ }
+ 
+-DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {
++DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize, size_t width, size_t height) {
+   const byte* colorTable = src.c_data();
+   const size_t colorTableSize = 256 * 3;
+   if (src.size() < colorTableSize) {
+@@ -955,7 +956,8 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {
+         value = imageData[i++];
+       }
+     }
+-    Internal::enforce(expectedSize - destPos >= static_cast<size_t>(num) * 3, ErrorCode::kerCorruptedMetadata);
++    const size_t limit = width * height * 3;
++    Internal::enforce(limit - destPos >= static_cast<size_t>(num) * 3, ErrorCode::kerCorruptedMetadata);
+     const auto c0 = colorTable[value * 3];
+     const auto c1 = colorTable[value * 3 + 1];
+     const auto c2 = colorTable[value * 3 + 2];

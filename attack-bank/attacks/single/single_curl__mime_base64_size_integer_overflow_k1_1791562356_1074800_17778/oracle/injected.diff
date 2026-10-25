@@ -1,0 +1,3618 @@
+diff --git a/bld-asan/CPackConfig.cmake b/bld-asan/CPackConfig.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..d2e73cd55c0517df9a5a25781d75e561d12093f3
+--- /dev/null
++++ b/bld-asan/CPackConfig.cmake
+@@ -0,0 +1,69 @@
++# This file will be configured to contain variables for CPack. These variables
++# should be set in the CMake list file of the project before CPack module is
++# included. The list of available CPACK_xxx variables and their associated
++# documentation may be obtained using
++#  cpack --help-variable-list
++#
++# Some variables are common to all generators (e.g. CPACK_PACKAGE_NAME)
++# and some are specific to a generator
++# (e.g. CPACK_NSIS_EXTRA_INSTALL_COMMANDS). The generator specific variables
++# usually begin with CPACK_<GENNAME>_xxxx.
++
++
++set(CPACK_BUILD_SOURCE_DIRS "/work;/work/bld-asan")
++set(CPACK_CMAKE_GENERATOR "Unix Makefiles")
++set(CPACK_COMPONENT_UNSPECIFIED_HIDDEN "TRUE")
++set(CPACK_COMPONENT_UNSPECIFIED_REQUIRED "TRUE")
++set(CPACK_DEFAULT_PACKAGE_DESCRIPTION_FILE "/usr/share/cmake-3.25/Templates/CPack.GenericDescription.txt")
++set(CPACK_DEFAULT_PACKAGE_DESCRIPTION_SUMMARY "CURL built using CMake")
++set(CPACK_GENERATOR "TGZ")
++set(CPACK_INSTALL_CMAKE_PROJECTS "/work/bld-asan;CURL;ALL;/")
++set(CPACK_INSTALL_PREFIX "/usr/local")
++set(CPACK_MODULE_PATH "/work/CMake")
++set(CPACK_NSIS_DISPLAY_NAME "CURL 8.22.0-DEV")
++set(CPACK_NSIS_INSTALLER_ICON_CODE "")
++set(CPACK_NSIS_INSTALLER_MUI_ICON_CODE "")
++set(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES")
++set(CPACK_NSIS_PACKAGE_NAME "CURL 8.22.0-DEV")
++set(CPACK_NSIS_UNINSTALL_NAME "Uninstall")
++set(CPACK_OBJCOPY_EXECUTABLE "/usr/bin/objcopy")
++set(CPACK_OBJDUMP_EXECUTABLE "/usr/bin/objdump")
++set(CPACK_OUTPUT_CONFIG_FILE "/work/bld-asan/CPackConfig.cmake")
++set(CPACK_PACKAGE_DEFAULT_LOCATION "/")
++set(CPACK_PACKAGE_DESCRIPTION_FILE "/usr/share/cmake-3.25/Templates/CPack.GenericDescription.txt")
++set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "CURL built using CMake")
++set(CPACK_PACKAGE_FILE_NAME "CURL-8.22.0-DEV-Linux")
++set(CPACK_PACKAGE_INSTALL_DIRECTORY "CURL 8.22.0-DEV")
++set(CPACK_PACKAGE_INSTALL_REGISTRY_KEY "CURL 8.22.0-DEV")
++set(CPACK_PACKAGE_NAME "CURL")
++set(CPACK_PACKAGE_RELOCATABLE "true")
++set(CPACK_PACKAGE_VENDOR "Humanity")
++set(CPACK_PACKAGE_VERSION "8.22.0-DEV")
++set(CPACK_PACKAGE_VERSION_MAJOR "8")
++set(CPACK_PACKAGE_VERSION_MINOR "22")
++set(CPACK_PACKAGE_VERSION_PATCH "0-DEV")
++set(CPACK_READELF_EXECUTABLE "/usr/bin/readelf")
++set(CPACK_RESOURCE_FILE_LICENSE "/usr/share/cmake-3.25/Templates/CPack.GenericLicense.txt")
++set(CPACK_RESOURCE_FILE_README "/usr/share/cmake-3.25/Templates/CPack.GenericDescription.txt")
++set(CPACK_RESOURCE_FILE_WELCOME "/usr/share/cmake-3.25/Templates/CPack.GenericWelcome.txt")
++set(CPACK_SET_DESTDIR "OFF")
++set(CPACK_SOURCE_GENERATOR "TBZ2;TGZ;TXZ;TZ")
++set(CPACK_SOURCE_OUTPUT_CONFIG_FILE "/work/bld-asan/CPackSourceConfig.cmake")
++set(CPACK_SOURCE_RPM "OFF")
++set(CPACK_SOURCE_TBZ2 "ON")
++set(CPACK_SOURCE_TGZ "ON")
++set(CPACK_SOURCE_TXZ "ON")
++set(CPACK_SOURCE_TZ "ON")
++set(CPACK_SOURCE_ZIP "OFF")
++set(CPACK_SYSTEM_NAME "Linux")
++set(CPACK_THREADS "1")
++set(CPACK_TOPLEVEL_TAG "Linux")
++set(CPACK_WIX_SIZEOF_VOID_P "8")
++
++if(NOT CPACK_PROPERTIES_FILE)
++  set(CPACK_PROPERTIES_FILE "/work/bld-asan/CPackProperties.cmake")
++endif()
++
++if(EXISTS ${CPACK_PROPERTIES_FILE})
++  include(${CPACK_PROPERTIES_FILE})
++endif()
+diff --git a/bld-asan/CPackSourceConfig.cmake b/bld-asan/CPackSourceConfig.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..07ab043fdec631fda5f3479a0b67ca9a26fe88e0
+--- /dev/null
++++ b/bld-asan/CPackSourceConfig.cmake
+@@ -0,0 +1,77 @@
++# This file will be configured to contain variables for CPack. These variables
++# should be set in the CMake list file of the project before CPack module is
++# included. The list of available CPACK_xxx variables and their associated
++# documentation may be obtained using
++#  cpack --help-variable-list
++#
++# Some variables are common to all generators (e.g. CPACK_PACKAGE_NAME)
++# and some are specific to a generator
++# (e.g. CPACK_NSIS_EXTRA_INSTALL_COMMANDS). The generator specific variables
++# usually begin with CPACK_<GENNAME>_xxxx.
++
++
++set(CPACK_BUILD_SOURCE_DIRS "/work;/work/bld-asan")
++set(CPACK_CMAKE_GENERATOR "Unix Makefiles")
++set(CPACK_COMPONENT_UNSPECIFIED_HIDDEN "TRUE")
++set(CPACK_COMPONENT_UNSPECIFIED_REQUIRED "TRUE")
++set(CPACK_DEFAULT_PACKAGE_DESCRIPTION_FILE "/usr/share/cmake-3.25/Templates/CPack.GenericDescription.txt")
++set(CPACK_DEFAULT_PACKAGE_DESCRIPTION_SUMMARY "CURL built using CMake")
++set(CPACK_GENERATOR "TBZ2;TGZ;TXZ;TZ")
++set(CPACK_IGNORE_FILES "/CVS/;/\\.svn/;/\\.bzr/;/\\.hg/;/\\.git/;\\.swp\$;\\.#;/#")
++set(CPACK_INSTALLED_DIRECTORIES "/work;/")
++set(CPACK_INSTALL_CMAKE_PROJECTS "")
++set(CPACK_INSTALL_PREFIX "/usr/local")
++set(CPACK_MODULE_PATH "/work/CMake")
++set(CPACK_NSIS_DISPLAY_NAME "CURL 8.22.0-DEV")
++set(CPACK_NSIS_INSTALLER_ICON_CODE "")
++set(CPACK_NSIS_INSTALLER_MUI_ICON_CODE "")
++set(CPACK_NSIS_INSTALL_ROOT "$PROGRAMFILES")
++set(CPACK_NSIS_PACKAGE_NAME "CURL 8.22.0-DEV")
++set(CPACK_NSIS_UNINSTALL_NAME "Uninstall")
++set(CPACK_OBJCOPY_EXECUTABLE "/usr/bin/objcopy")
++set(CPACK_OBJDUMP_EXECUTABLE "/usr/bin/objdump")
++set(CPACK_OUTPUT_CONFIG_FILE "/work/bld-asan/CPackConfig.cmake")
++set(CPACK_PACKAGE_DEFAULT_LOCATION "/")
++set(CPACK_PACKAGE_DESCRIPTION_FILE "/usr/share/cmake-3.25/Templates/CPack.GenericDescription.txt")
++set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "CURL built using CMake")
++set(CPACK_PACKAGE_FILE_NAME "CURL-8.22.0-DEV-Source")
++set(CPACK_PACKAGE_INSTALL_DIRECTORY "CURL 8.22.0-DEV")
++set(CPACK_PACKAGE_INSTALL_REGISTRY_KEY "CURL 8.22.0-DEV")
++set(CPACK_PACKAGE_NAME "CURL")
++set(CPACK_PACKAGE_RELOCATABLE "true")
++set(CPACK_PACKAGE_VENDOR "Humanity")
++set(CPACK_PACKAGE_VERSION "8.22.0-DEV")
++set(CPACK_PACKAGE_VERSION_MAJOR "8")
++set(CPACK_PACKAGE_VERSION_MINOR "22")
++set(CPACK_PACKAGE_VERSION_PATCH "0-DEV")
++set(CPACK_READELF_EXECUTABLE "/usr/bin/readelf")
++set(CPACK_RESOURCE_FILE_LICENSE "/usr/share/cmake-3.25/Templates/CPack.GenericLicense.txt")
++set(CPACK_RESOURCE_FILE_README "/usr/share/cmake-3.25/Templates/CPack.GenericDescription.txt")
++set(CPACK_RESOURCE_FILE_WELCOME "/usr/share/cmake-3.25/Templates/CPack.GenericWelcome.txt")
++set(CPACK_RPM_PACKAGE_SOURCES "ON")
++set(CPACK_SET_DESTDIR "OFF")
++set(CPACK_SOURCE_GENERATOR "TBZ2;TGZ;TXZ;TZ")
++set(CPACK_SOURCE_IGNORE_FILES "/CVS/;/\\.svn/;/\\.bzr/;/\\.hg/;/\\.git/;\\.swp\$;\\.#;/#")
++set(CPACK_SOURCE_INSTALLED_DIRECTORIES "/work;/")
++set(CPACK_SOURCE_OUTPUT_CONFIG_FILE "/work/bld-asan/CPackSourceConfig.cmake")
++set(CPACK_SOURCE_PACKAGE_FILE_NAME "CURL-8.22.0-DEV-Source")
++set(CPACK_SOURCE_RPM "OFF")
++set(CPACK_SOURCE_TBZ2 "ON")
++set(CPACK_SOURCE_TGZ "ON")
++set(CPACK_SOURCE_TOPLEVEL_TAG "Linux-Source")
++set(CPACK_SOURCE_TXZ "ON")
++set(CPACK_SOURCE_TZ "ON")
++set(CPACK_SOURCE_ZIP "OFF")
++set(CPACK_STRIP_FILES "")
++set(CPACK_SYSTEM_NAME "Linux")
++set(CPACK_THREADS "1")
++set(CPACK_TOPLEVEL_TAG "Linux-Source")
++set(CPACK_WIX_SIZEOF_VOID_P "8")
++
++if(NOT CPACK_PROPERTIES_FILE)
++  set(CPACK_PROPERTIES_FILE "/work/bld-asan/CPackProperties.cmake")
++endif()
++
++if(EXISTS ${CPACK_PROPERTIES_FILE})
++  include(${CPACK_PROPERTIES_FILE})
++endif()
+diff --git a/bld-asan/CURLConfig.cmake b/bld-asan/CURLConfig.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..b52fdf75da9fceb88571d83546440ac58315a3a1
+--- /dev/null
++++ b/bld-asan/CURLConfig.cmake
+@@ -0,0 +1,220 @@
++#***************************************************************************
++#                                  _   _ ____  _
++#  Project                     ___| | | |  _ \| |
++#                             / __| | | | |_) | |
++#                            | (__| |_| |  _ <| |___
++#                             \___|\___/|_| \_\_____|
++#
++# Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
++#
++# This software is licensed as described in the file COPYING, which
++# you should have received as part of this distribution. The terms
++# are also available at https://curl.se/docs/copyright.html.
++#
++# You may opt to use, copy, modify, merge, publish, distribute and/or sell
++# copies of the Software, and permit persons to whom the Software is
++# furnished to do so, under the terms of the COPYING file.
++#
++# This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
++# KIND, either express or implied.
++#
++# SPDX-License-Identifier: curl
++#
++###########################################################################
++
++####### Expanded from @PACKAGE_INIT@ by configure_package_config_file() #######
++####### Any changes to this file will be overwritten by the next CMake run ####
++####### The input file was curl-config.in.cmake                            ########
++
++get_filename_component(PACKAGE_PREFIX_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../" ABSOLUTE)
++
++macro(set_and_check _var _file)
++  set(${_var} "${_file}")
++  if(NOT EXISTS "${_file}")
++    message(FATAL_ERROR "File or directory ${_file} referenced by variable ${_var} does not exist !")
++  endif()
++endmacro()
++
++macro(check_required_components _NAME)
++  foreach(comp ${${_NAME}_FIND_COMPONENTS})
++    if(NOT ${_NAME}_${comp}_FOUND)
++      if(${_NAME}_FIND_REQUIRED_${comp})
++        set(${_NAME}_FOUND FALSE)
++      endif()
++    endif()
++  endforeach()
++endmacro()
++
++####################################################################################
++
++option(CURL_USE_CMAKECONFIG "Enable detecting CURL dependencies via CMake Config. Default: OFF"
++  "OFF")
++option(CURL_USE_PKGCONFIG "Enable pkg-config to detect CURL dependencies. Default: ON"
++  "ON")
++
++if(CMAKE_VERSION VERSION_LESS 3.18)
++  message(STATUS "CURL: CURL-specific Find modules require "
++    "CMake 3.18 or upper, found: ${CMAKE_VERSION}.")
++endif()
++
++include(CMakeFindDependencyMacro)
++
++if("1" OR "")
++  find_dependency(Threads)  # for Threads::Threads
++endif()
++
++if("")
++  if("")
++    find_dependency(OpenSSL "")
++  else()
++    find_dependency(OpenSSL)
++  endif()
++  # Define lib duplicate to fixup lib order for GCC binutils ld in static builds
++  if(TARGET OpenSSL::Crypto AND NOT TARGET CURL::OpenSSL_Crypto)
++    add_library(CURL::OpenSSL_Crypto INTERFACE IMPORTED)
++    set_target_properties(CURL::OpenSSL_Crypto PROPERTIES INTERFACE_LINK_LIBRARIES OpenSSL::Crypto)
++  endif()
++endif()
++if("ON")
++  find_dependency(ZLIB "1")
++  # Define lib duplicate to fixup lib order for GCC binutils ld in static builds
++  if(TARGET ZLIB::ZLIB AND NOT TARGET CURL::ZLIB)
++    add_library(CURL::ZLIB INTERFACE IMPORTED)
++    set_target_properties(CURL::ZLIB PROPERTIES INTERFACE_LINK_LIBRARIES ZLIB::ZLIB)
++  endif()
++endif()
++
++set(_curl_cmake_module_path_save ${CMAKE_MODULE_PATH})
++list(PREPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR})
++
++set(_curl_libs "")
++
++if("ON")
++  find_dependency(Brotli MODULE)
++  list(APPEND _curl_libs CURL::brotli)
++endif()
++if("")
++  find_dependency(Cares MODULE)
++  list(APPEND _curl_libs CURL::cares)
++endif()
++if("")
++  find_dependency(GSS MODULE COMPONENTS "")
++  list(APPEND _curl_libs CURL::gss)
++endif()
++if("")
++  find_dependency(Libbacktrace MODULE)
++  list(APPEND _curl_libs CURL::libbacktrace)
++endif()
++if("")
++  find_dependency(Libgsasl MODULE)
++  list(APPEND _curl_libs CURL::libgsasl)
++endif()
++if(NOT "" AND NOT "ON")
++  find_dependency(LDAP MODULE)
++  list(APPEND _curl_libs CURL::ldap)
++endif()
++if("OFF")
++  find_dependency(Libidn2 MODULE)
++  list(APPEND _curl_libs CURL::libidn2)
++endif()
++if("OFF")
++  find_dependency(Libpsl MODULE)
++  list(APPEND _curl_libs CURL::libpsl)
++endif()
++if("")
++  find_dependency(Libssh MODULE)
++  list(APPEND _curl_libs CURL::libssh)
++endif()
++if("OFF")
++  find_dependency(Libssh2 MODULE)
++  list(APPEND _curl_libs CURL::libssh2)
++endif()
++if("")
++  find_dependency(Libuv MODULE)
++  list(APPEND _curl_libs CURL::libuv)
++endif()
++if("")
++  find_dependency(MbedTLS MODULE)
++  list(APPEND _curl_libs CURL::mbedtls)
++endif()
++if("OFF")
++  find_dependency(NGHTTP2 MODULE)
++  list(APPEND _curl_libs CURL::nghttp2)
++endif()
++if("")
++  find_dependency(NGHTTP3 MODULE)
++  list(APPEND _curl_libs CURL::nghttp3)
++endif()
++if("OFF")
++  find_dependency(NGTCP2 MODULE COMPONENTS "")
++  list(APPEND _curl_libs CURL::ngtcp2)
++endif()
++if("")
++  find_dependency(GnuTLS MODULE)
++  list(APPEND _curl_libs CURL::gnutls)
++  find_dependency(Nettle MODULE)
++  list(APPEND _curl_libs CURL::nettle)
++endif()
++if("OFF")
++  find_dependency(Quiche MODULE)
++  list(APPEND _curl_libs CURL::quiche)
++endif()
++if("")
++  find_dependency(Rustls MODULE)
++  list(APPEND _curl_libs CURL::rustls)
++endif()
++if("")
++  find_dependency(WolfSSL MODULE)
++  list(APPEND _curl_libs CURL::wolfssl)
++endif()
++if("ON")
++  find_dependency(Zstd MODULE)
++  list(APPEND _curl_libs CURL::zstd)
++endif()
++
++set(CMAKE_MODULE_PATH ${_curl_cmake_module_path_save})
++
++# Define lib duplicate to fixup lib order for GCC binutils ld in static builds
++if(WIN32 AND NOT TARGET CURL::win32_winsock)
++  add_library(CURL::win32_winsock INTERFACE IMPORTED)
++  set_target_properties(CURL::win32_winsock PROPERTIES INTERFACE_LINK_LIBRARIES "ws2_32")
++endif()
++
++include("${CMAKE_CURRENT_LIST_DIR}/CURLTargets.cmake")
++
++# Alias for either shared or static library
++if(NOT TARGET CURL::libcurl)
++  add_library(CURL::libcurl ALIAS CURL::libcurl_static)
++endif()
++
++# For compatibility with CMake's FindCURL.cmake
++set(CURL_VERSION_STRING "8.22.0-DEV")
++set(CURL_LIBRARIES CURL::libcurl)
++set(CURL_LIBRARIES_PRIVATE "/usr/lib/x86_64-linux-gnu/libz.so;brotlidec;brotlicommon;zstd;/usr/lib/x86_64-linux-gnu/libz.so")
++set_and_check(CURL_INCLUDE_DIRS "${PACKAGE_PREFIX_DIR}/include")
++
++set(CURL_SUPPORTED_PROTOCOLS "DICT;FILE;FTP;GOPHER;HTTP;IMAP;IPFS;IPNS;MQTT;POP3;RTSP;SMTP;TELNET;TFTP;WS")
++set(CURL_SUPPORTED_FEATURES "alt-svc;AsynchDNS;brotli;IPv6;Largefile;libz;threadsafe;UnixSockets;zstd")
++
++foreach(_curl_item IN LISTS CURL_SUPPORTED_PROTOCOLS CURL_SUPPORTED_FEATURES)
++  set(CURL_SUPPORTS_${_curl_item} TRUE)
++endforeach()
++
++set(_curl_missing_req "")
++foreach(_curl_item IN LISTS CURL_FIND_COMPONENTS)
++  if(CURL_SUPPORTS_${_curl_item})
++    set(CURL_${_curl_item}_FOUND TRUE)
++  elseif(CURL_FIND_REQUIRED_${_curl_item})
++    list(APPEND _curl_missing_req ${_curl_item})
++  endif()
++endforeach()
++
++if(_curl_missing_req)
++  string(REPLACE ";" " " _curl_missing_req "${_curl_missing_req}")
++  if(CURL_FIND_REQUIRED)
++    message(FATAL_ERROR "CURL: missing required components: ${_curl_missing_req}")
++  endif()
++  unset(_curl_missing_req)
++endif()
++
++check_required_components("CURL")
+diff --git a/bld-asan/CURLConfigVersion.cmake b/bld-asan/CURLConfigVersion.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..398f3f8d59a8f6a61573a41aabab71b0a060eb25
+--- /dev/null
++++ b/bld-asan/CURLConfigVersion.cmake
+@@ -0,0 +1,76 @@
++
++    if(NOT PACKAGE_FIND_VERSION_RANGE AND PACKAGE_FIND_VERSION_MAJOR STREQUAL "7")
++      # Version 8 satisfies version 7... requirements
++      set(PACKAGE_FIND_VERSION_MAJOR 8)
++      set(PACKAGE_FIND_VERSION_COUNT 1)
++    endif()
++    # This is a basic version file for the Config-mode of find_package().
++# It is used by write_basic_package_version_file() as input file for configure_file()
++# to create a version-file which can be installed along a config.cmake file.
++#
++# The created file sets PACKAGE_VERSION_EXACT if the current version string and
++# the requested version string are exactly the same and it sets
++# PACKAGE_VERSION_COMPATIBLE if the current version is >= requested version,
++# but only if the requested major version is the same as the current one.
++# The variable CVF_VERSION must be set before calling configure_file().
++
++
++set(PACKAGE_VERSION "8.22.0-DEV")
++
++if(PACKAGE_VERSION VERSION_LESS PACKAGE_FIND_VERSION)
++  set(PACKAGE_VERSION_COMPATIBLE FALSE)
++else()
++
++  if("8.22.0-DEV" MATCHES "^([0-9]+)\\.")
++    set(CVF_VERSION_MAJOR "${CMAKE_MATCH_1}")
++    if(NOT CVF_VERSION_MAJOR VERSION_EQUAL 0)
++      string(REGEX REPLACE "^0+" "" CVF_VERSION_MAJOR "${CVF_VERSION_MAJOR}")
++    endif()
++  else()
++    set(CVF_VERSION_MAJOR "8.22.0-DEV")
++  endif()
++
++  if(PACKAGE_FIND_VERSION_RANGE)
++    # both endpoints of the range must have the expected major version
++    math (EXPR CVF_VERSION_MAJOR_NEXT "${CVF_VERSION_MAJOR} + 1")
++    if (NOT PACKAGE_FIND_VERSION_MIN_MAJOR STREQUAL CVF_VERSION_MAJOR
++        OR ((PACKAGE_FIND_VERSION_RANGE_MAX STREQUAL "INCLUDE" AND NOT PACKAGE_FIND_VERSION_MAX_MAJOR STREQUAL CVF_VERSION_MAJOR)
++          OR (PACKAGE_FIND_VERSION_RANGE_MAX STREQUAL "EXCLUDE" AND NOT PACKAGE_FIND_VERSION_MAX VERSION_LESS_EQUAL CVF_VERSION_MAJOR_NEXT)))
++      set(PACKAGE_VERSION_COMPATIBLE FALSE)
++    elseif(PACKAGE_FIND_VERSION_MIN_MAJOR STREQUAL CVF_VERSION_MAJOR
++        AND ((PACKAGE_FIND_VERSION_RANGE_MAX STREQUAL "INCLUDE" AND PACKAGE_VERSION VERSION_LESS_EQUAL PACKAGE_FIND_VERSION_MAX)
++        OR (PACKAGE_FIND_VERSION_RANGE_MAX STREQUAL "EXCLUDE" AND PACKAGE_VERSION VERSION_LESS PACKAGE_FIND_VERSION_MAX)))
++      set(PACKAGE_VERSION_COMPATIBLE TRUE)
++    else()
++      set(PACKAGE_VERSION_COMPATIBLE FALSE)
++    endif()
++  else()
++    if(PACKAGE_FIND_VERSION_MAJOR STREQUAL CVF_VERSION_MAJOR)
++      set(PACKAGE_VERSION_COMPATIBLE TRUE)
++    else()
++      set(PACKAGE_VERSION_COMPATIBLE FALSE)
++    endif()
++
++    if(PACKAGE_FIND_VERSION STREQUAL PACKAGE_VERSION)
++      set(PACKAGE_VERSION_EXACT TRUE)
++    endif()
++  endif()
++endif()
++
++
++# if the installed project requested no architecture check, don't perform the check
++if("FALSE")
++  return()
++endif()
++
++# if the installed or the using project don't have CMAKE_SIZEOF_VOID_P set, ignore it:
++if("${CMAKE_SIZEOF_VOID_P}" STREQUAL "" OR "8" STREQUAL "")
++  return()
++endif()
++
++# check that the installed version has the same 32/64bit-ness as the one which is currently searching:
++if(NOT CMAKE_SIZEOF_VOID_P STREQUAL "8")
++  math(EXPR installedBits "8 * 8")
++  set(PACKAGE_VERSION "${PACKAGE_VERSION} (${installedBits}bit)")
++  set(PACKAGE_VERSION_UNSUITABLE TRUE)
++endif()
+diff --git a/bld-asan/cmake_install.cmake b/bld-asan/cmake_install.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..1fc061c1e1a2258e1c0df38cbb56e7bb7f17bb6e
+--- /dev/null
++++ b/bld-asan/cmake_install.cmake
+@@ -0,0 +1,137 @@
++# Install script for directory: /work
++
++# Set the install prefix
++if(NOT DEFINED CMAKE_INSTALL_PREFIX)
++  set(CMAKE_INSTALL_PREFIX "/usr/local")
++endif()
++string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
++
++# Set the install configuration name.
++if(NOT DEFINED CMAKE_INSTALL_CONFIG_NAME)
++  if(BUILD_TYPE)
++    string(REGEX REPLACE "^[^A-Za-z0-9_]+" ""
++           CMAKE_INSTALL_CONFIG_NAME "${BUILD_TYPE}")
++  else()
++    set(CMAKE_INSTALL_CONFIG_NAME "Debug")
++  endif()
++  message(STATUS "Install configuration: \"${CMAKE_INSTALL_CONFIG_NAME}\"")
++endif()
++
++# Set the component getting installed.
++if(NOT CMAKE_INSTALL_COMPONENT)
++  if(COMPONENT)
++    message(STATUS "Install component: \"${COMPONENT}\"")
++    set(CMAKE_INSTALL_COMPONENT "${COMPONENT}")
++  else()
++    set(CMAKE_INSTALL_COMPONENT)
++  endif()
++endif()
++
++# Install shared libraries without execute permission?
++if(NOT DEFINED CMAKE_INSTALL_SO_NO_EXE)
++  set(CMAKE_INSTALL_SO_NO_EXE "1")
++endif()
++
++# Is this installation the result of a crosscompile?
++if(NOT DEFINED CMAKE_CROSSCOMPILING)
++  set(CMAKE_CROSSCOMPILING "FALSE")
++endif()
++
++# Set default install directory permissions.
++if(NOT DEFINED CMAKE_OBJDUMP)
++  set(CMAKE_OBJDUMP "/usr/bin/objdump")
++endif()
++
++if(NOT CMAKE_INSTALL_LOCAL_ONLY)
++  # Include the install script for the subdirectory.
++  include("/work/bld-asan/docs/cmake_install.cmake")
++endif()
++
++if(NOT CMAKE_INSTALL_LOCAL_ONLY)
++  # Include the install script for the subdirectory.
++  include("/work/bld-asan/scripts/cmake_install.cmake")
++endif()
++
++if(NOT CMAKE_INSTALL_LOCAL_ONLY)
++  # Include the install script for the subdirectory.
++  include("/work/bld-asan/lib/cmake_install.cmake")
++endif()
++
++if(NOT CMAKE_INSTALL_LOCAL_ONLY)
++  # Include the install script for the subdirectory.
++  include("/work/bld-asan/docs/examples/cmake_install.cmake")
++endif()
++
++if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
++  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/bin" TYPE FILE PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_READ WORLD_EXECUTE FILES "/work/bld-asan/curl-config")
++endif()
++
++if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
++  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/pkgconfig" TYPE FILE FILES "/work/bld-asan/libcurl.pc")
++endif()
++
++if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
++  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/include" TYPE DIRECTORY FILES "/work/include/curl" FILES_MATCHING REGEX "/[^/]*\\.h$")
++endif()
++
++if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
++  if(EXISTS "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/cmake/CURL/CURLTargets.cmake")
++    file(DIFFERENT _cmake_export_file_changed FILES
++         "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/cmake/CURL/CURLTargets.cmake"
++         "/work/bld-asan/CMakeFiles/Export/8e83d16133499b505bf3986f4f209a65/CURLTargets.cmake")
++    if(_cmake_export_file_changed)
++      file(GLOB _cmake_old_config_files "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/cmake/CURL/CURLTargets-*.cmake")
++      if(_cmake_old_config_files)
++        string(REPLACE ";" ", " _cmake_old_config_files_text "${_cmake_old_config_files}")
++        message(STATUS "Old export file \"$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib/cmake/CURL/CURLTargets.cmake\" will be replaced.  Removing files [${_cmake_old_config_files_text}].")
++        unset(_cmake_old_config_files_text)
++        file(REMOVE ${_cmake_old_config_files})
++      endif()
++      unset(_cmake_old_config_files)
++    endif()
++    unset(_cmake_export_file_changed)
++  endif()
++  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/CURL" TYPE FILE FILES "/work/bld-asan/CMakeFiles/Export/8e83d16133499b505bf3986f4f209a65/CURLTargets.cmake")
++  if(CMAKE_INSTALL_CONFIG_NAME MATCHES "^([Dd][Ee][Bb][Uu][Gg])$")
++    file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/CURL" TYPE FILE FILES "/work/bld-asan/CMakeFiles/Export/8e83d16133499b505bf3986f4f209a65/CURLTargets-debug.cmake")
++  endif()
++endif()
++
++if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
++  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/cmake/CURL" TYPE FILE FILES
++    "/work/bld-asan/CURLConfigVersion.cmake"
++    "/work/bld-asan/CURLConfig.cmake"
++    "/work/CMake/FindBrotli.cmake"
++    "/work/CMake/FindCares.cmake"
++    "/work/CMake/FindGSS.cmake"
++    "/work/CMake/FindGnuTLS.cmake"
++    "/work/CMake/FindLDAP.cmake"
++    "/work/CMake/FindLibbacktrace.cmake"
++    "/work/CMake/FindLibgsasl.cmake"
++    "/work/CMake/FindLibidn2.cmake"
++    "/work/CMake/FindLibpsl.cmake"
++    "/work/CMake/FindLibssh.cmake"
++    "/work/CMake/FindLibssh2.cmake"
++    "/work/CMake/FindLibuv.cmake"
++    "/work/CMake/FindMbedTLS.cmake"
++    "/work/CMake/FindNGHTTP2.cmake"
++    "/work/CMake/FindNGHTTP3.cmake"
++    "/work/CMake/FindNGTCP2.cmake"
++    "/work/CMake/FindNettle.cmake"
++    "/work/CMake/FindQuiche.cmake"
++    "/work/CMake/FindRustls.cmake"
++    "/work/CMake/FindWolfSSL.cmake"
++    "/work/CMake/FindZstd.cmake"
++    )
++endif()
++
++if(CMAKE_INSTALL_COMPONENT)
++  set(CMAKE_INSTALL_MANIFEST "install_manifest_${CMAKE_INSTALL_COMPONENT}.txt")
++else()
++  set(CMAKE_INSTALL_MANIFEST "install_manifest.txt")
++endif()
++
++string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
++       "${CMAKE_INSTALL_MANIFEST_FILES}")
++file(WRITE "/work/bld-asan/${CMAKE_INSTALL_MANIFEST}"
++     "${CMAKE_INSTALL_MANIFEST_CONTENT}")
+diff --git a/bld-asan/cmake_uninstall.cmake b/bld-asan/cmake_uninstall.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..0d33d1ad8601309836c72ca13d8d399ef17821d4
+--- /dev/null
++++ b/bld-asan/cmake_uninstall.cmake
+@@ -0,0 +1,48 @@
++#***************************************************************************
++#                                  _   _ ____  _
++#  Project                     ___| | | |  _ \| |
++#                             / __| | | | |_) | |
++#                            | (__| |_| |  _ <| |___
++#                             \___|\___/|_| \_\_____|
++#
++# Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
++#
++# This software is licensed as described in the file COPYING, which
++# you should have received as part of this distribution. The terms
++# are also available at https://curl.se/docs/copyright.html.
++#
++# You may opt to use, copy, modify, merge, publish, distribute and/or sell
++# copies of the Software, and permit persons to whom the Software is
++# furnished to do so, under the terms of the COPYING file.
++#
++# This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
++# KIND, either express or implied.
++#
++# SPDX-License-Identifier: curl
++#
++###########################################################################
++set(_manifest "/work/bld-asan/install_manifest.txt")
++if(NOT EXISTS "${_manifest}")
++  message(FATAL_ERROR "Cannot find install manifest: ${_manifest}")
++endif()
++
++set(_destdir "$ENV{DESTDIR}")
++if(NOT _destdir STREQUAL "")
++  message(STATUS "DESTDIR environment: ${_destdir}")
++endif()
++
++file(READ "${_manifest}" _files)
++string(REGEX REPLACE "\n" ";" _files "${_files}")
++foreach(_file IN LISTS _files)
++  set(_target "${_destdir}${_file}")
++  if(IS_SYMLINK "${_target}" OR EXISTS "${_target}")
++    file(REMOVE "${_target}")
++    if(IS_SYMLINK "${_target}" OR EXISTS "${_target}")
++      message(STATUS "Failed to delete: ${_target}")
++    else()
++      message(STATUS "Uninstalled: ${_target}")
++    endif()
++  else()
++    message(STATUS "File does not exist: ${_target}")
++  endif()
++endforeach()
+diff --git a/bld-asan/docs/cmake_install.cmake b/bld-asan/docs/cmake_install.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..87015c59eade4718aaa95f84ef234e2054cbca74
+--- /dev/null
++++ b/bld-asan/docs/cmake_install.cmake
+@@ -0,0 +1,53 @@
++# Install script for directory: /work/docs
++
++# Set the install prefix
++if(NOT DEFINED CMAKE_INSTALL_PREFIX)
++  set(CMAKE_INSTALL_PREFIX "/usr/local")
++endif()
++string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
++
++# Set the install configuration name.
++if(NOT DEFINED CMAKE_INSTALL_CONFIG_NAME)
++  if(BUILD_TYPE)
++    string(REGEX REPLACE "^[^A-Za-z0-9_]+" ""
++           CMAKE_INSTALL_CONFIG_NAME "${BUILD_TYPE}")
++  else()
++    set(CMAKE_INSTALL_CONFIG_NAME "Debug")
++  endif()
++  message(STATUS "Install configuration: \"${CMAKE_INSTALL_CONFIG_NAME}\"")
++endif()
++
++# Set the component getting installed.
++if(NOT CMAKE_INSTALL_COMPONENT)
++  if(COMPONENT)
++    message(STATUS "Install component: \"${COMPONENT}\"")
++    set(CMAKE_INSTALL_COMPONENT "${COMPONENT}")
++  else()
++    set(CMAKE_INSTALL_COMPONENT)
++  endif()
++endif()
++
++# Install shared libraries without execute permission?
++if(NOT DEFINED CMAKE_INSTALL_SO_NO_EXE)
++  set(CMAKE_INSTALL_SO_NO_EXE "1")
++endif()
++
++# Is this installation the result of a crosscompile?
++if(NOT DEFINED CMAKE_CROSSCOMPILING)
++  set(CMAKE_CROSSCOMPILING "FALSE")
++endif()
++
++# Set default install directory permissions.
++if(NOT DEFINED CMAKE_OBJDUMP)
++  set(CMAKE_OBJDUMP "/usr/bin/objdump")
++endif()
++
++if(NOT CMAKE_INSTALL_LOCAL_ONLY)
++  # Include the install script for the subdirectory.
++  include("/work/bld-asan/docs/libcurl/cmake_install.cmake")
++endif()
++
++if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
++  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/man/man1" TYPE FILE FILES "/work/bld-asan/docs/curl-config.1")
++endif()
++
+diff --git a/bld-asan/docs/examples/Makefile.inc.cmake b/bld-asan/docs/examples/Makefile.inc.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..67b0dae1b863d037adf8c00f6a52634421670b70
+--- /dev/null
++++ b/bld-asan/docs/examples/Makefile.inc.cmake
+@@ -0,0 +1,166 @@
++#***************************************************************************
++#                                  _   _ ____  _
++#  Project                     ___| | | |  _ \| |
++#                             / __| | | | |_) | |
++#                            | (__| |_| |  _ <| |___
++#                             \___|\___/|_| \_\_____|
++#
++# Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
++#
++# This software is licensed as described in the file COPYING, which
++# you should have received as part of this distribution. The terms
++# are also available at https://curl.se/docs/copyright.html.
++#
++# You may opt to use, copy, modify, merge, publish, distribute and/or sell
++# copies of the Software, and permit persons to whom the Software is
++# furnished to do so, under the terms of the COPYING file.
++#
++# This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
++# KIND, either express or implied.
++#
++# SPDX-License-Identifier: curl
++#
++###########################################################################
++# Shared between CMakeLists.txt and Makefile.am
++
++# These are all libcurl example programs to be test compiled
++set(check_PROGRAMS 
++  10-at-a-time 
++  address-scope 
++  altsvc 
++  anyauthput 
++  block_ip 
++  certinfo 
++  chkspeed 
++  connect-to 
++  cookie_interface 
++  debug 
++  default-scheme 
++  externalsocket 
++  fileupload 
++  ftp-delete 
++  ftp-wildcard 
++  ftpget 
++  ftpgetinfo 
++  ftpgetresp 
++  ftpsget 
++  ftpupload 
++  ftpuploadfrommem 
++  ftpuploadresume 
++  getinfo 
++  getinmemory 
++  getredirect 
++  getreferrer 
++  headerapi 
++  hsts-preload 
++  http-options 
++  http-post 
++  http2-download 
++  http2-pushinmemory 
++  http2-serverpush 
++  http2-upload 
++  http3 
++  http3-present 
++  httpcustomheader 
++  httpput 
++  httpput-postfields 
++  https 
++  imap-append 
++  imap-authzid 
++  imap-copy 
++  imap-create 
++  imap-delete 
++  imap-examine 
++  imap-fetch 
++  imap-list 
++  imap-lsub 
++  imap-multi 
++  imap-noop 
++  imap-search 
++  imap-ssl 
++  imap-store 
++  imap-tls 
++  interface 
++  ipv6 
++  keepalive 
++  localport 
++  log_failed_transfers 
++  maxconnects 
++  multi-app 
++  multi-debugcallback 
++  multi-double 
++  multi-formadd 
++  multi-legacy 
++  multi-post 
++  multi-single 
++  netrc 
++  parseurl 
++  persistent 
++  pop3-authzid 
++  pop3-dele 
++  pop3-list 
++  pop3-multi 
++  pop3-noop 
++  pop3-retr 
++  pop3-ssl 
++  pop3-stat 
++  pop3-tls 
++  pop3-top 
++  pop3-uidl 
++  post-callback 
++  postinmemory 
++  postit2 
++  postit2-formadd 
++  progressfunc 
++  protofeats 
++  range 
++  resolve 
++  rtsp-options 
++  sendrecv 
++  sepheaders 
++  sftpget 
++  sftpuploadresume 
++  shared-connection-cache 
++  simple 
++  simplepost 
++  simplessl 
++  smtp-authzid 
++  smtp-expn 
++  smtp-mail 
++  smtp-mime 
++  smtp-multi 
++  smtp-ssl 
++  smtp-tls 
++  smtp-vrfy 
++  sslbackend 
++  synctime 
++  unixsocket 
++  url2file 
++  urlapi 
++  websocket 
++  websocket-cb 
++  websocket-updown)
++
++# These examples require external dependencies that may be available during
++# the build.
++set(COMPLICATED_MAY_BUILD 
++  cacertinmem.c 
++  multi-uv.c 
++  sessioninfo.c 
++  threaded.c 
++  usercertinmem.c)
++
++# These examples require external dependencies that may not be commonly
++# available on POSIX systems, so do not bother attempting to compile them here.
++set(COMPLICATED_EXAMPLES 
++  crawler.c 
++  ephiperfifo.c 
++  evhiperfifo.c 
++  ghiper.c 
++  hiperfifo.c 
++  htmltidy.c 
++  htmltitle.cpp 
++  multi-event.c 
++  smooth-gtk-thread.c 
++  version-check.pl 
++  xmlstream.c)
+diff --git a/bld-asan/docs/examples/cmake_install.cmake b/bld-asan/docs/examples/cmake_install.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..a820a688ab184d1f6c22354f6801f881028ab146
+--- /dev/null
++++ b/bld-asan/docs/examples/cmake_install.cmake
+@@ -0,0 +1,44 @@
++# Install script for directory: /work/docs/examples
++
++# Set the install prefix
++if(NOT DEFINED CMAKE_INSTALL_PREFIX)
++  set(CMAKE_INSTALL_PREFIX "/usr/local")
++endif()
++string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
++
++# Set the install configuration name.
++if(NOT DEFINED CMAKE_INSTALL_CONFIG_NAME)
++  if(BUILD_TYPE)
++    string(REGEX REPLACE "^[^A-Za-z0-9_]+" ""
++           CMAKE_INSTALL_CONFIG_NAME "${BUILD_TYPE}")
++  else()
++    set(CMAKE_INSTALL_CONFIG_NAME "Debug")
++  endif()
++  message(STATUS "Install configuration: \"${CMAKE_INSTALL_CONFIG_NAME}\"")
++endif()
++
++# Set the component getting installed.
++if(NOT CMAKE_INSTALL_COMPONENT)
++  if(COMPONENT)
++    message(STATUS "Install component: \"${COMPONENT}\"")
++    set(CMAKE_INSTALL_COMPONENT "${COMPONENT}")
++  else()
++    set(CMAKE_INSTALL_COMPONENT)
++  endif()
++endif()
++
++# Install shared libraries without execute permission?
++if(NOT DEFINED CMAKE_INSTALL_SO_NO_EXE)
++  set(CMAKE_INSTALL_SO_NO_EXE "1")
++endif()
++
++# Is this installation the result of a crosscompile?
++if(NOT DEFINED CMAKE_CROSSCOMPILING)
++  set(CMAKE_CROSSCOMPILING "FALSE")
++endif()
++
++# Set default install directory permissions.
++if(NOT DEFINED CMAKE_OBJDUMP)
++  set(CMAKE_OBJDUMP "/usr/bin/objdump")
++endif()
++
+diff --git a/bld-asan/docs/libcurl/Makefile.inc.cmake b/bld-asan/docs/libcurl/Makefile.inc.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..0b4bd364212f8f3b99cad6f7ce1f37d25df3438b
+--- /dev/null
++++ b/bld-asan/docs/libcurl/Makefile.inc.cmake
+@@ -0,0 +1,130 @@
++#***************************************************************************
++#                                  _   _ ____  _
++#  Project                     ___| | | |  _ \| |
++#                             / __| | | | |_) | |
++#                            | (__| |_| |  _ <| |___
++#                             \___|\___/|_| \_\_____|
++#
++# Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
++#
++# This software is licensed as described in the file COPYING, which
++# you should have received as part of this distribution. The terms
++# are also available at https://curl.se/docs/copyright.html.
++#
++# You may opt to use, copy, modify, merge, publish, distribute and/or sell
++# copies of the Software, and permit persons to whom the Software is
++# furnished to do so, under the terms of the COPYING file.
++#
++# This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
++# KIND, either express or implied.
++#
++# SPDX-License-Identifier: curl
++#
++###########################################################################
++# Shared between CMakeLists.txt and Makefile.am
++
++set(man_MANS 
++  curl_easy_cleanup.3 
++  curl_easy_duphandle.3 
++  curl_easy_escape.3 
++  curl_easy_getinfo.3 
++  curl_easy_header.3 
++  curl_easy_init.3 
++  curl_easy_nextheader.3 
++  curl_easy_option_by_id.3 
++  curl_easy_option_by_name.3 
++  curl_easy_option_next.3 
++  curl_easy_pause.3 
++  curl_easy_perform.3 
++  curl_easy_recv.3 
++  curl_easy_reset.3 
++  curl_easy_send.3 
++  curl_easy_setopt.3 
++  curl_easy_ssls_export.3 
++  curl_easy_ssls_import.3 
++  curl_easy_strerror.3 
++  curl_easy_unescape.3 
++  curl_easy_upkeep.3 
++  curl_escape.3 
++  curl_formadd.3 
++  curl_formfree.3 
++  curl_formget.3 
++  curl_free.3 
++  curl_getdate.3 
++  curl_getenv.3 
++  curl_global_cleanup.3 
++  curl_global_init.3 
++  curl_global_init_mem.3 
++  curl_global_sslset.3 
++  curl_global_trace.3 
++  curl_mime_addpart.3 
++  curl_mime_data.3 
++  curl_mime_data_cb.3 
++  curl_mime_encoder.3 
++  curl_mime_filedata.3 
++  curl_mime_filename.3 
++  curl_mime_free.3 
++  curl_mime_headers.3 
++  curl_mime_init.3 
++  curl_mime_name.3 
++  curl_mime_subparts.3 
++  curl_mime_type.3 
++  curl_mprintf.3 
++  curl_multi_add_handle.3 
++  curl_multi_assign.3 
++  curl_multi_cleanup.3 
++  curl_multi_fdset.3 
++  curl_multi_get_handles.3 
++  curl_multi_get_offt.3 
++  curl_multi_info_read.3 
++  curl_multi_init.3 
++  curl_multi_notify_disable.3 
++  curl_multi_notify_enable.3 
++  curl_multi_perform.3 
++  curl_multi_poll.3 
++  curl_multi_remove_handle.3 
++  curl_multi_setopt.3 
++  curl_multi_socket.3 
++  curl_multi_socket_action.3 
++  curl_multi_socket_all.3 
++  curl_multi_strerror.3 
++  curl_multi_timeout.3 
++  curl_multi_wait.3 
++  curl_multi_waitfds.3 
++  curl_multi_wakeup.3 
++  curl_pushheader_byname.3 
++  curl_pushheader_bynum.3 
++  curl_share_cleanup.3 
++  curl_share_init.3 
++  curl_share_setopt.3 
++  curl_share_strerror.3 
++  curl_slist_append.3 
++  curl_slist_free_all.3 
++  curl_strequal.3 
++  curl_strnequal.3 
++  curl_unescape.3 
++  curl_url.3 
++  curl_url_cleanup.3 
++  curl_url_dup.3 
++  curl_url_get.3 
++  curl_url_set.3 
++  curl_url_strerror.3 
++  curl_version.3 
++  curl_version_info.3 
++  curl_ws_meta.3 
++  curl_ws_recv.3 
++  curl_ws_send.3 
++  curl_ws_start_frame.3 
++  libcurl-easy.3 
++  libcurl-env-dbg.3 
++  libcurl-env.3 
++  libcurl-errors.3 
++  libcurl-multi.3 
++  libcurl-security.3 
++  libcurl-share.3 
++  libcurl-symbols.3 
++  libcurl-thread.3 
++  libcurl-tutorial.3 
++  libcurl-url.3 
++  libcurl-ws.3 
++  libcurl.3)
+diff --git a/bld-asan/docs/libcurl/cmake_install.cmake b/bld-asan/docs/libcurl/cmake_install.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..2a04cc83615d87e5771da05a42df9ca5cac10ee6
+--- /dev/null
++++ b/bld-asan/docs/libcurl/cmake_install.cmake
+@@ -0,0 +1,158 @@
++# Install script for directory: /work/docs/libcurl
++
++# Set the install prefix
++if(NOT DEFINED CMAKE_INSTALL_PREFIX)
++  set(CMAKE_INSTALL_PREFIX "/usr/local")
++endif()
++string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
++
++# Set the install configuration name.
++if(NOT DEFINED CMAKE_INSTALL_CONFIG_NAME)
++  if(BUILD_TYPE)
++    string(REGEX REPLACE "^[^A-Za-z0-9_]+" ""
++           CMAKE_INSTALL_CONFIG_NAME "${BUILD_TYPE}")
++  else()
++    set(CMAKE_INSTALL_CONFIG_NAME "Debug")
++  endif()
++  message(STATUS "Install configuration: \"${CMAKE_INSTALL_CONFIG_NAME}\"")
++endif()
++
++# Set the component getting installed.
++if(NOT CMAKE_INSTALL_COMPONENT)
++  if(COMPONENT)
++    message(STATUS "Install component: \"${COMPONENT}\"")
++    set(CMAKE_INSTALL_COMPONENT "${COMPONENT}")
++  else()
++    set(CMAKE_INSTALL_COMPONENT)
++  endif()
++endif()
++
++# Install shared libraries without execute permission?
++if(NOT DEFINED CMAKE_INSTALL_SO_NO_EXE)
++  set(CMAKE_INSTALL_SO_NO_EXE "1")
++endif()
++
++# Is this installation the result of a crosscompile?
++if(NOT DEFINED CMAKE_CROSSCOMPILING)
++  set(CMAKE_CROSSCOMPILING "FALSE")
++endif()
++
++# Set default install directory permissions.
++if(NOT DEFINED CMAKE_OBJDUMP)
++  set(CMAKE_OBJDUMP "/usr/bin/objdump")
++endif()
++
++if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
++  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/man/man3" TYPE FILE FILES
++    "/work/bld-asan/docs/libcurl/curl_easy_cleanup.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_duphandle.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_escape.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_getinfo.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_header.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_init.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_nextheader.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_option_by_id.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_option_by_name.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_option_next.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_pause.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_perform.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_recv.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_reset.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_send.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_setopt.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_ssls_export.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_ssls_import.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_strerror.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_unescape.3"
++    "/work/bld-asan/docs/libcurl/curl_easy_upkeep.3"
++    "/work/bld-asan/docs/libcurl/curl_escape.3"
++    "/work/bld-asan/docs/libcurl/curl_formadd.3"
++    "/work/bld-asan/docs/libcurl/curl_formfree.3"
++    "/work/bld-asan/docs/libcurl/curl_formget.3"
++    "/work/bld-asan/docs/libcurl/curl_free.3"
++    "/work/bld-asan/docs/libcurl/curl_getdate.3"
++    "/work/bld-asan/docs/libcurl/curl_getenv.3"
++    "/work/bld-asan/docs/libcurl/curl_global_cleanup.3"
++    "/work/bld-asan/docs/libcurl/curl_global_init.3"
++    "/work/bld-asan/docs/libcurl/curl_global_init_mem.3"
++    "/work/bld-asan/docs/libcurl/curl_global_sslset.3"
++    "/work/bld-asan/docs/libcurl/curl_global_trace.3"
++    "/work/bld-asan/docs/libcurl/curl_mime_addpart.3"
++    "/work/bld-asan/docs/libcurl/curl_mime_data.3"
++    "/work/bld-asan/docs/libcurl/curl_mime_data_cb.3"
++    "/work/bld-asan/docs/libcurl/curl_mime_encoder.3"
++    "/work/bld-asan/docs/libcurl/curl_mime_filedata.3"
++    "/work/bld-asan/docs/libcurl/curl_mime_filename.3"
++    "/work/bld-asan/docs/libcurl/curl_mime_free.3"
++    "/work/bld-asan/docs/libcurl/curl_mime_headers.3"
++    "/work/bld-asan/docs/libcurl/curl_mime_init.3"
++    "/work/bld-asan/docs/libcurl/curl_mime_name.3"
++    "/work/bld-asan/docs/libcurl/curl_mime_subparts.3"
++    "/work/bld-asan/docs/libcurl/curl_mime_type.3"
++    "/work/bld-asan/docs/libcurl/curl_mprintf.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_add_handle.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_assign.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_cleanup.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_fdset.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_get_handles.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_get_offt.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_info_read.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_init.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_notify_disable.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_notify_enable.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_perform.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_poll.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_remove_handle.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_setopt.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_socket.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_socket_action.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_socket_all.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_strerror.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_timeout.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_wait.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_waitfds.3"
++    "/work/bld-asan/docs/libcurl/curl_multi_wakeup.3"
++    "/work/bld-asan/docs/libcurl/curl_pushheader_byname.3"
++    "/work/bld-asan/docs/libcurl/curl_pushheader_bynum.3"
++    "/work/bld-asan/docs/libcurl/curl_share_cleanup.3"
++    "/work/bld-asan/docs/libcurl/curl_share_init.3"
++    "/work/bld-asan/docs/libcurl/curl_share_setopt.3"
++    "/work/bld-asan/docs/libcurl/curl_share_strerror.3"
++    "/work/bld-asan/docs/libcurl/curl_slist_append.3"
++    "/work/bld-asan/docs/libcurl/curl_slist_free_all.3"
++    "/work/bld-asan/docs/libcurl/curl_strequal.3"
++    "/work/bld-asan/docs/libcurl/curl_strnequal.3"
++    "/work/bld-asan/docs/libcurl/curl_unescape.3"
++    "/work/bld-asan/docs/libcurl/curl_url.3"
++    "/work/bld-asan/docs/libcurl/curl_url_cleanup.3"
++    "/work/bld-asan/docs/libcurl/curl_url_dup.3"
++    "/work/bld-asan/docs/libcurl/curl_url_get.3"
++    "/work/bld-asan/docs/libcurl/curl_url_set.3"
++    "/work/bld-asan/docs/libcurl/curl_url_strerror.3"
++    "/work/bld-asan/docs/libcurl/curl_version.3"
++    "/work/bld-asan/docs/libcurl/curl_version_info.3"
++    "/work/bld-asan/docs/libcurl/curl_ws_meta.3"
++    "/work/bld-asan/docs/libcurl/curl_ws_recv.3"
++    "/work/bld-asan/docs/libcurl/curl_ws_send.3"
++    "/work/bld-asan/docs/libcurl/curl_ws_start_frame.3"
++    "/work/bld-asan/docs/libcurl/libcurl-easy.3"
++    "/work/bld-asan/docs/libcurl/libcurl-env-dbg.3"
++    "/work/bld-asan/docs/libcurl/libcurl-env.3"
++    "/work/bld-asan/docs/libcurl/libcurl-errors.3"
++    "/work/bld-asan/docs/libcurl/libcurl-multi.3"
++    "/work/bld-asan/docs/libcurl/libcurl-security.3"
++    "/work/bld-asan/docs/libcurl/libcurl-share.3"
++    "/work/bld-asan/docs/libcurl/libcurl-symbols.3"
++    "/work/bld-asan/docs/libcurl/libcurl-thread.3"
++    "/work/bld-asan/docs/libcurl/libcurl-tutorial.3"
++    "/work/bld-asan/docs/libcurl/libcurl-url.3"
++    "/work/bld-asan/docs/libcurl/libcurl-ws.3"
++    "/work/bld-asan/docs/libcurl/libcurl.3"
++    )
++endif()
++
++if(NOT CMAKE_INSTALL_LOCAL_ONLY)
++  # Include the install script for the subdirectory.
++  include("/work/bld-asan/docs/libcurl/opts/cmake_install.cmake")
++endif()
++
+diff --git a/bld-asan/docs/libcurl/opts/Makefile.inc.cmake b/bld-asan/docs/libcurl/opts/Makefile.inc.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..c10c4d9de1069dcafc1a4bc8227606d66b5bd62e
+--- /dev/null
++++ b/bld-asan/docs/libcurl/opts/Makefile.inc.cmake
+@@ -0,0 +1,444 @@
++#***************************************************************************
++#                                  _   _ ____  _
++#  Project                     ___| | | |  _ \| |
++#                             / __| | | | |_) | |
++#                            | (__| |_| |  _ <| |___
++#                             \___|\___/|_| \_\_____|
++#
++# Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
++#
++# This software is licensed as described in the file COPYING, which
++# you should have received as part of this distribution. The terms
++# are also available at https://curl.se/docs/copyright.html.
++#
++# You may opt to use, copy, modify, merge, publish, distribute and/or sell
++# copies of the Software, and permit persons to whom the Software is
++# furnished to do so, under the terms of the COPYING file.
++#
++# This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
++# KIND, either express or implied.
++#
++# SPDX-License-Identifier: curl
++#
++###########################################################################
++# Shared between CMakeLists.txt and Makefile.am
++
++set(man_MANS 
++  CURLINFO_ACTIVESOCKET.3                       
++  CURLINFO_APPCONNECT_TIME.3                    
++  CURLINFO_APPCONNECT_TIME_T.3                  
++  CURLINFO_CAINFO.3                             
++  CURLINFO_CAPATH.3                             
++  CURLINFO_CERTINFO.3                           
++  CURLINFO_CONDITION_UNMET.3                    
++  CURLINFO_CONNECT_TIME.3                       
++  CURLINFO_CONN_ID.3                            
++  CURLINFO_CONNECT_TIME_T.3                     
++  CURLINFO_CONTENT_LENGTH_DOWNLOAD.3            
++  CURLINFO_CONTENT_LENGTH_DOWNLOAD_T.3          
++  CURLINFO_CONTENT_LENGTH_UPLOAD.3              
++  CURLINFO_CONTENT_LENGTH_UPLOAD_T.3            
++  CURLINFO_CONTENT_TYPE.3                       
++  CURLINFO_COOKIELIST.3                         
++  CURLINFO_EARLYDATA_SENT_T.3                   
++  CURLINFO_EFFECTIVE_METHOD.3                   
++  CURLINFO_EFFECTIVE_URL.3                      
++  CURLINFO_FILETIME.3                           
++  CURLINFO_FILETIME_T.3                         
++  CURLINFO_FTP_ENTRY_PATH.3                     
++  CURLINFO_HEADER_SIZE.3                        
++  CURLINFO_HTTP_CONNECTCODE.3                   
++  CURLINFO_HTTP_VERSION.3                       
++  CURLINFO_HTTPAUTH_AVAIL.3                     
++  CURLINFO_HTTPAUTH_USED.3                      
++  CURLINFO_LASTSOCKET.3                         
++  CURLINFO_LOCAL_IP.3                           
++  CURLINFO_LOCAL_PORT.3                         
++  CURLINFO_NAMELOOKUP_TIME.3                    
++  CURLINFO_NAMELOOKUP_TIME_T.3                  
++  CURLINFO_NUM_CONNECTS.3                       
++  CURLINFO_OS_ERRNO.3                           
++  CURLINFO_PRETRANSFER_TIME.3                   
++  CURLINFO_PRETRANSFER_TIME_T.3                 
++  CURLINFO_POSTTRANSFER_TIME_T.3                
++  CURLINFO_PRIMARY_IP.3                         
++  CURLINFO_PRIMARY_PORT.3                       
++  CURLINFO_PRIVATE.3                            
++  CURLINFO_PROTOCOL.3                           
++  CURLINFO_PROXY_ERROR.3                        
++  CURLINFO_PROXY_SSL_VERIFYRESULT.3             
++  CURLINFO_PROXYAUTH_AVAIL.3                    
++  CURLINFO_PROXYAUTH_USED.3                     
++  CURLINFO_QUEUE_TIME_T.3                       
++  CURLINFO_REDIRECT_COUNT.3                     
++  CURLINFO_REDIRECT_TIME.3                      
++  CURLINFO_REDIRECT_TIME_T.3                    
++  CURLINFO_REDIRECT_URL.3                       
++  CURLINFO_REFERER.3                            
++  CURLINFO_REQUEST_SIZE.3                       
++  CURLINFO_RESPONSE_CODE.3                      
++  CURLINFO_RETRY_AFTER.3                        
++  CURLINFO_RTSP_CLIENT_CSEQ.3                   
++  CURLINFO_RTSP_CSEQ_RECV.3                     
++  CURLINFO_RTSP_SERVER_CSEQ.3                   
++  CURLINFO_RTSP_SESSION_ID.3                    
++  CURLINFO_SCHEME.3                             
++  CURLINFO_SIZE_DELIVERED.3                     
++  CURLINFO_SIZE_DOWNLOAD.3                      
++  CURLINFO_SIZE_DOWNLOAD_T.3                    
++  CURLINFO_SIZE_UPLOAD.3                        
++  CURLINFO_SIZE_UPLOAD_T.3                      
++  CURLINFO_SPEED_DOWNLOAD.3                     
++  CURLINFO_SPEED_DOWNLOAD_T.3                   
++  CURLINFO_SPEED_UPLOAD.3                       
++  CURLINFO_SPEED_UPLOAD_T.3                     
++  CURLINFO_SSL_ENGINES.3                        
++  CURLINFO_SSL_VERIFYRESULT.3                   
++  CURLINFO_STARTTRANSFER_TIME.3                 
++  CURLINFO_STARTTRANSFER_TIME_T.3               
++  CURLINFO_TLS_SESSION.3                        
++  CURLINFO_TLS_SSL_PTR.3                        
++  CURLINFO_TOTAL_TIME.3                         
++  CURLINFO_TOTAL_TIME_T.3                       
++  CURLINFO_USED_PROXY.3                         
++  CURLINFO_XFER_ID.3                            
++  CURLMINFO_XFERS_ADDED.3                       
++  CURLMINFO_XFERS_CURRENT.3                     
++  CURLMINFO_XFERS_DONE.3                        
++  CURLMINFO_XFERS_PENDING.3                     
++  CURLMINFO_XFERS_RUNNING.3                     
++  CURLMOPT_CHUNK_LENGTH_PENALTY_SIZE.3          
++  CURLMOPT_CONTENT_LENGTH_PENALTY_SIZE.3        
++  CURLMOPT_MAX_CONCURRENT_STREAMS.3             
++  CURLMOPT_MAX_HOST_CONNECTIONS.3               
++  CURLMOPT_MAX_PIPELINE_LENGTH.3                
++  CURLMOPT_MAX_TOTAL_CONNECTIONS.3              
++  CURLMOPT_MAXCONNECTS.3                        
++  CURLMOPT_NETWORK_CHANGED.3                    
++  CURLMOPT_NOTIFYDATA.3                           
++  CURLMOPT_NOTIFYFUNCTION.3                       
++  CURLMOPT_PIPELINING.3                         
++  CURLMOPT_PIPELINING_SERVER_BL.3               
++  CURLMOPT_PIPELINING_SITE_BL.3                 
++  CURLMOPT_PUSHDATA.3                           
++  CURLMOPT_PUSHFUNCTION.3                       
++  CURLMOPT_QUICK_EXIT.3                         
++  CURLMOPT_RESOLVE_THREADS_MAX.3                
++  CURLMOPT_SOCKETDATA.3                         
++  CURLMOPT_SOCKETFUNCTION.3                     
++  CURLMOPT_TIMERDATA.3                          
++  CURLMOPT_TIMERFUNCTION.3                      
++  CURLOPT_ABSTRACT_UNIX_SOCKET.3                
++  CURLOPT_ACCEPT_ENCODING.3                     
++  CURLOPT_ACCEPTTIMEOUT_MS.3                    
++  CURLOPT_ADDRESS_SCOPE.3                       
++  CURLOPT_ALTSVC.3                              
++  CURLOPT_ALTSVC_CTRL.3                         
++  CURLOPT_APPEND.3                              
++  CURLOPT_AUTOREFERER.3                         
++  CURLOPT_AWS_SIGV4.3                           
++  CURLOPT_BUFFERSIZE.3                          
++  CURLOPT_CAINFO.3                              
++  CURLOPT_CAINFO_BLOB.3                         
++  CURLOPT_CAPATH.3                              
++  CURLOPT_CA_CACHE_TIMEOUT.3                    
++  CURLOPT_CERTINFO.3                            
++  CURLOPT_CHUNK_BGN_FUNCTION.3                  
++  CURLOPT_CHUNK_DATA.3                          
++  CURLOPT_CHUNK_END_FUNCTION.3                  
++  CURLOPT_CLOSESOCKETDATA.3                     
++  CURLOPT_CLOSESOCKETFUNCTION.3                 
++  CURLOPT_CONNECT_ONLY.3                        
++  CURLOPT_CONNECT_TO.3                          
++  CURLOPT_CONNECTTIMEOUT.3                      
++  CURLOPT_CONNECTTIMEOUT_MS.3                   
++  CURLOPT_CONV_FROM_NETWORK_FUNCTION.3          
++  CURLOPT_CONV_FROM_UTF8_FUNCTION.3             
++  CURLOPT_CONV_TO_NETWORK_FUNCTION.3            
++  CURLOPT_COOKIE.3                              
++  CURLOPT_COOKIEFILE.3                          
++  CURLOPT_COOKIEJAR.3                           
++  CURLOPT_COOKIELIST.3                          
++  CURLOPT_COOKIESESSION.3                       
++  CURLOPT_COPYPOSTFIELDS.3                      
++  CURLOPT_CRLF.3                                
++  CURLOPT_CRLFILE.3                             
++  CURLOPT_CURLU.3                               
++  CURLOPT_CUSTOMREQUEST.3                       
++  CURLOPT_DEBUGDATA.3                           
++  CURLOPT_DEBUGFUNCTION.3                       
++  CURLOPT_DEFAULT_PROTOCOL.3                    
++  CURLOPT_DIRLISTONLY.3                         
++  CURLOPT_DISALLOW_USERNAME_IN_URL.3            
++  CURLOPT_DNS_CACHE_TIMEOUT.3                   
++  CURLOPT_DNS_INTERFACE.3                       
++  CURLOPT_DNS_LOCAL_IP4.3                       
++  CURLOPT_DNS_LOCAL_IP6.3                       
++  CURLOPT_DNS_SERVERS.3                         
++  CURLOPT_DNS_SHUFFLE_ADDRESSES.3               
++  CURLOPT_DNS_USE_GLOBAL_CACHE.3                
++  CURLOPT_DOH_SSL_VERIFYHOST.3                  
++  CURLOPT_DOH_SSL_VERIFYPEER.3                  
++  CURLOPT_DOH_SSL_VERIFYSTATUS.3                
++  CURLOPT_DOH_URL.3                             
++  CURLOPT_ECH.3                                 
++  CURLOPT_EGDSOCKET.3                           
++  CURLOPT_ERRORBUFFER.3                         
++  CURLOPT_EXPECT_100_TIMEOUT_MS.3               
++  CURLOPT_FAILONERROR.3                         
++  CURLOPT_FILETIME.3                            
++  CURLOPT_FNMATCH_DATA.3                        
++  CURLOPT_FNMATCH_FUNCTION.3                    
++  CURLOPT_FOLLOWLOCATION.3                      
++  CURLOPT_FORBID_REUSE.3                        
++  CURLOPT_FRESH_CONNECT.3                       
++  CURLOPT_FTP_ACCOUNT.3                         
++  CURLOPT_FTP_ALTERNATIVE_TO_USER.3             
++  CURLOPT_FTP_CREATE_MISSING_DIRS.3             
++  CURLOPT_FTP_FILEMETHOD.3                      
++  CURLOPT_FTP_SKIP_PASV_IP.3                    
++  CURLOPT_FTP_SSL_CCC.3                         
++  CURLOPT_FTP_USE_EPRT.3                        
++  CURLOPT_FTP_USE_EPSV.3                        
++  CURLOPT_FTP_USE_PRET.3                        
++  CURLOPT_FTPPORT.3                             
++  CURLOPT_FTPSSLAUTH.3                          
++  CURLOPT_GSSAPI_DELEGATION.3                   
++  CURLOPT_HAPPY_EYEBALLS_TIMEOUT_MS.3           
++  CURLOPT_HAPROXYPROTOCOL.3                     
++  CURLOPT_HAPROXY_CLIENT_IP.3                   
++  CURLOPT_HEADER.3                              
++  CURLOPT_HEADERDATA.3                          
++  CURLOPT_HEADERFUNCTION.3                      
++  CURLOPT_HEADEROPT.3                           
++  CURLOPT_HSTS.3                                
++  CURLOPT_HSTS_CTRL.3                           
++  CURLOPT_HSTSREADDATA.3                        
++  CURLOPT_HSTSREADFUNCTION.3                    
++  CURLOPT_HSTSWRITEDATA.3                       
++  CURLOPT_HSTSWRITEFUNCTION.3                   
++  CURLOPT_HTTP09_ALLOWED.3                      
++  CURLOPT_HTTP200ALIASES.3                      
++  CURLOPT_HTTP_CONTENT_DECODING.3               
++  CURLOPT_HTTP_TRANSFER_DECODING.3              
++  CURLOPT_HTTP_VERSION.3                        
++  CURLOPT_HTTPAUTH.3                            
++  CURLOPT_HTTPGET.3                             
++  CURLOPT_HTTPHEADER.3                          
++  CURLOPT_HTTPPOST.3                            
++  CURLOPT_HTTPPROXYTUNNEL.3                     
++  CURLOPT_IGNORE_CONTENT_LENGTH.3               
++  CURLOPT_INFILESIZE.3                          
++  CURLOPT_INFILESIZE_LARGE.3                    
++  CURLOPT_INTERFACE.3                           
++  CURLOPT_INTERLEAVEDATA.3                      
++  CURLOPT_INTERLEAVEFUNCTION.3                  
++  CURLOPT_IOCTLDATA.3                           
++  CURLOPT_IOCTLFUNCTION.3                       
++  CURLOPT_IPRESOLVE.3                           
++  CURLOPT_ISSUERCERT.3                          
++  CURLOPT_ISSUERCERT_BLOB.3                     
++  CURLOPT_KEEP_SENDING_ON_ERROR.3               
++  CURLOPT_KEYPASSWD.3                           
++  CURLOPT_KRBLEVEL.3                            
++  CURLOPT_LOCALPORT.3                           
++  CURLOPT_LOCALPORTRANGE.3                      
++  CURLOPT_LOGIN_OPTIONS.3                       
++  CURLOPT_LOW_SPEED_LIMIT.3                     
++  CURLOPT_LOW_SPEED_TIME.3                      
++  CURLOPT_MAIL_AUTH.3                           
++  CURLOPT_MAIL_FROM.3                           
++  CURLOPT_MAIL_RCPT.3                           
++  CURLOPT_MAIL_RCPT_ALLOWFAILS.3                
++  CURLOPT_MAX_RECV_SPEED_LARGE.3                
++  CURLOPT_MAX_SEND_SPEED_LARGE.3                
++  CURLOPT_MAXAGE_CONN.3                         
++  CURLOPT_MAXCONNECTS.3                         
++  CURLOPT_MAXFILESIZE.3                         
++  CURLOPT_MAXFILESIZE_LARGE.3                   
++  CURLOPT_MAXLIFETIME_CONN.3                    
++  CURLOPT_MAXREDIRS.3                           
++  CURLOPT_MIME_OPTIONS.3                        
++  CURLOPT_MIMEPOST.3                            
++  CURLOPT_NETRC.3                               
++  CURLOPT_NETRC_FILE.3                          
++  CURLOPT_NEW_DIRECTORY_PERMS.3                 
++  CURLOPT_NEW_FILE_PERMS.3                      
++  CURLOPT_NOBODY.3                              
++  CURLOPT_NOPROGRESS.3                          
++  CURLOPT_NOPROXY.3                             
++  CURLOPT_NOSIGNAL.3                            
++  CURLOPT_OPENSOCKETDATA.3                      
++  CURLOPT_OPENSOCKETFUNCTION.3                  
++  CURLOPT_PASSWORD.3                            
++  CURLOPT_PATH_AS_IS.3                          
++  CURLOPT_PINNEDPUBLICKEY.3                     
++  CURLOPT_PIPEWAIT.3                            
++  CURLOPT_PORT.3                                
++  CURLOPT_POST.3                                
++  CURLOPT_POSTFIELDS.3                          
++  CURLOPT_POSTFIELDSIZE.3                       
++  CURLOPT_POSTFIELDSIZE_LARGE.3                 
++  CURLOPT_POSTQUOTE.3                           
++  CURLOPT_POSTREDIR.3                           
++  CURLOPT_PRE_PROXY.3                           
++  CURLOPT_PREQUOTE.3                            
++  CURLOPT_PREREQDATA.3                          
++  CURLOPT_PREREQFUNCTION.3                      
++  CURLOPT_PRIVATE.3                             
++  CURLOPT_PROGRESSDATA.3                        
++  CURLOPT_PROGRESSFUNCTION.3                    
++  CURLOPT_PROTOCOLS.3                           
++  CURLOPT_PROTOCOLS_STR.3                       
++  CURLOPT_PROXY.3                               
++  CURLOPT_PROXY_CAINFO.3                        
++  CURLOPT_PROXY_CAINFO_BLOB.3                   
++  CURLOPT_PROXY_CAPATH.3                        
++  CURLOPT_PROXY_CRLFILE.3                       
++  CURLOPT_PROXY_ISSUERCERT.3                    
++  CURLOPT_PROXY_ISSUERCERT_BLOB.3               
++  CURLOPT_PROXY_KEYPASSWD.3                     
++  CURLOPT_PROXY_PINNEDPUBLICKEY.3               
++  CURLOPT_PROXY_SERVICE_NAME.3                  
++  CURLOPT_PROXY_SSL_CIPHER_LIST.3               
++  CURLOPT_PROXY_SSL_OPTIONS.3                   
++  CURLOPT_PROXY_SSL_VERIFYHOST.3                
++  CURLOPT_PROXY_SSL_VERIFYPEER.3                
++  CURLOPT_PROXY_SSLCERT.3                       
++  CURLOPT_PROXY_SSLCERT_BLOB.3                  
++  CURLOPT_PROXY_SSLCERTTYPE.3                   
++  CURLOPT_PROXY_SSLKEY.3                        
++  CURLOPT_PROXY_SSLKEY_BLOB.3                   
++  CURLOPT_PROXY_SSLKEYTYPE.3                    
++  CURLOPT_PROXY_SSLVERSION.3                    
++  CURLOPT_PROXY_TLS13_CIPHERS.3                 
++  CURLOPT_PROXY_TLSAUTH_PASSWORD.3              
++  CURLOPT_PROXY_TLSAUTH_TYPE.3                  
++  CURLOPT_PROXY_TLSAUTH_USERNAME.3              
++  CURLOPT_PROXY_TRANSFER_MODE.3                 
++  CURLOPT_PROXYAUTH.3                           
++  CURLOPT_PROXYHEADER.3                         
++  CURLOPT_PROXYPASSWORD.3                       
++  CURLOPT_PROXYPORT.3                           
++  CURLOPT_PROXYTYPE.3                           
++  CURLOPT_PROXYUSERNAME.3                       
++  CURLOPT_PROXYUSERPWD.3                        
++  CURLOPT_PUT.3                                 
++  CURLOPT_QUICK_EXIT.3                          
++  CURLOPT_QUOTE.3                               
++  CURLOPT_RANDOM_FILE.3                         
++  CURLOPT_RANGE.3                               
++  CURLOPT_READDATA.3                            
++  CURLOPT_READFUNCTION.3                        
++  CURLOPT_REDIR_PROTOCOLS.3                     
++  CURLOPT_REDIR_PROTOCOLS_STR.3                 
++  CURLOPT_REFERER.3                             
++  CURLOPT_REQUEST_TARGET.3                      
++  CURLOPT_RESOLVE.3                             
++  CURLOPT_RESOLVER_START_DATA.3                 
++  CURLOPT_RESOLVER_START_FUNCTION.3             
++  CURLOPT_RESUME_FROM.3                         
++  CURLOPT_RESUME_FROM_LARGE.3                   
++  CURLOPT_RTSP_CLIENT_CSEQ.3                    
++  CURLOPT_RTSP_REQUEST.3                        
++  CURLOPT_RTSP_SERVER_CSEQ.3                    
++  CURLOPT_RTSP_SESSION_ID.3                     
++  CURLOPT_RTSP_STREAM_URI.3                     
++  CURLOPT_RTSP_TRANSPORT.3                      
++  CURLOPT_SASL_AUTHZID.3                        
++  CURLOPT_SASL_IR.3                             
++  CURLOPT_SEEKDATA.3                            
++  CURLOPT_SEEKFUNCTION.3                        
++  CURLOPT_SERVER_RESPONSE_TIMEOUT.3             
++  CURLOPT_SERVER_RESPONSE_TIMEOUT_MS.3          
++  CURLOPT_SERVICE_NAME.3                        
++  CURLOPT_SHARE.3                               
++  CURLOPT_SOCKOPTDATA.3                         
++  CURLOPT_SOCKOPTFUNCTION.3                     
++  CURLOPT_SOCKS5_AUTH.3                         
++  CURLOPT_SOCKS5_GSSAPI_NEC.3                   
++  CURLOPT_SOCKS5_GSSAPI_SERVICE.3               
++  CURLOPT_SSH_AUTH_TYPES.3                      
++  CURLOPT_SSH_COMPRESSION.3                     
++  CURLOPT_SSH_HOSTKEYDATA.3                     
++  CURLOPT_SSH_HOSTKEYFUNCTION.3                 
++  CURLOPT_SSH_HOST_PUBLIC_KEY_MD5.3             
++  CURLOPT_SSH_HOST_PUBLIC_KEY_SHA256.3          
++  CURLOPT_SSH_KEYDATA.3                         
++  CURLOPT_SSH_KEYFUNCTION.3                     
++  CURLOPT_SSH_KNOWNHOSTS.3                      
++  CURLOPT_SSH_PRIVATE_KEYFILE.3                 
++  CURLOPT_SSH_PUBLIC_KEYFILE.3                  
++  CURLOPT_SSL_CIPHER_LIST.3                     
++  CURLOPT_SSL_CTX_DATA.3                        
++  CURLOPT_SSL_CTX_FUNCTION.3                    
++  CURLOPT_SSL_EC_CURVES.3                       
++  CURLOPT_SSL_ENABLE_ALPN.3                     
++  CURLOPT_SSL_ENABLE_NPN.3                      
++  CURLOPT_SSL_FALSESTART.3                      
++  CURLOPT_SSL_OPTIONS.3                         
++  CURLOPT_SSL_SESSIONID_CACHE.3                 
++  CURLOPT_SSL_SIGNATURE_ALGORITHMS.3            
++  CURLOPT_SSL_VERIFYHOST.3                      
++  CURLOPT_SSL_VERIFYPEER.3                      
++  CURLOPT_SSL_VERIFYSTATUS.3                    
++  CURLOPT_SSLCERT.3                             
++  CURLOPT_SSLCERT_BLOB.3                        
++  CURLOPT_SSLCERTTYPE.3                         
++  CURLOPT_SSLENGINE.3                           
++  CURLOPT_SSLENGINE_DEFAULT.3                   
++  CURLOPT_SSLKEY.3                              
++  CURLOPT_SSLKEY_BLOB.3                         
++  CURLOPT_SSLKEYTYPE.3                          
++  CURLOPT_SSLVERSION.3                          
++  CURLOPT_STDERR.3                              
++  CURLOPT_STREAM_DEPENDS.3                      
++  CURLOPT_STREAM_DEPENDS_E.3                    
++  CURLOPT_STREAM_WEIGHT.3                       
++  CURLOPT_SUPPRESS_CONNECT_HEADERS.3            
++  CURLOPT_TCP_FASTOPEN.3                        
++  CURLOPT_TCP_KEEPALIVE.3                       
++  CURLOPT_TCP_KEEPIDLE.3                        
++  CURLOPT_TCP_KEEPINTVL.3                       
++  CURLOPT_TCP_KEEPCNT.3                         
++  CURLOPT_TCP_NODELAY.3                         
++  CURLOPT_TELNETOPTIONS.3                       
++  CURLOPT_TFTP_BLKSIZE.3                        
++  CURLOPT_TFTP_NO_OPTIONS.3                     
++  CURLOPT_TIMECONDITION.3                       
++  CURLOPT_TIMEOUT.3                             
++  CURLOPT_TIMEOUT_MS.3                          
++  CURLOPT_TIMEVALUE.3                           
++  CURLOPT_TIMEVALUE_LARGE.3                     
++  CURLOPT_TLS13_CIPHERS.3                       
++  CURLOPT_TLSAUTH_PASSWORD.3                    
++  CURLOPT_TLSAUTH_TYPE.3                        
++  CURLOPT_TLSAUTH_USERNAME.3                    
++  CURLOPT_TRAILERDATA.3                         
++  CURLOPT_TRAILERFUNCTION.3                     
++  CURLOPT_TRANSFER_ENCODING.3                   
++  CURLOPT_TRANSFERTEXT.3                        
++  CURLOPT_UNIX_SOCKET_PATH.3                    
++  CURLOPT_UNRESTRICTED_AUTH.3                   
++  CURLOPT_UPKEEP_INTERVAL_MS.3                  
++  CURLOPT_UPLOAD.3                              
++  CURLOPT_UPLOAD_BUFFERSIZE.3                   
++  CURLOPT_UPLOAD_FLAGS.3                        
++  CURLOPT_URL.3                                 
++  CURLOPT_USE_SSL.3                             
++  CURLOPT_USERAGENT.3                           
++  CURLOPT_USERNAME.3                            
++  CURLOPT_USERPWD.3                             
++  CURLOPT_VERBOSE.3                             
++  CURLOPT_WILDCARDMATCH.3                       
++  CURLOPT_WRITEDATA.3                           
++  CURLOPT_WRITEFUNCTION.3                       
++  CURLOPT_WS_OPTIONS.3                          
++  CURLOPT_XFERINFODATA.3                        
++  CURLOPT_XFERINFOFUNCTION.3                    
++  CURLOPT_XOAUTH2_BEARER.3                      
++  CURLSHOPT_LOCKFUNC.3                          
++  CURLSHOPT_SHARE.3                             
++  CURLSHOPT_UNLOCKFUNC.3                        
++  CURLSHOPT_UNSHARE.3                           
++  CURLSHOPT_USERDATA.3)
+diff --git a/bld-asan/docs/libcurl/opts/cmake_install.cmake b/bld-asan/docs/libcurl/opts/cmake_install.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..58172f4759421d4b40ec478becbcc433f5f7b577
+--- /dev/null
++++ b/bld-asan/docs/libcurl/opts/cmake_install.cmake
+@@ -0,0 +1,467 @@
++# Install script for directory: /work/docs/libcurl/opts
++
++# Set the install prefix
++if(NOT DEFINED CMAKE_INSTALL_PREFIX)
++  set(CMAKE_INSTALL_PREFIX "/usr/local")
++endif()
++string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
++
++# Set the install configuration name.
++if(NOT DEFINED CMAKE_INSTALL_CONFIG_NAME)
++  if(BUILD_TYPE)
++    string(REGEX REPLACE "^[^A-Za-z0-9_]+" ""
++           CMAKE_INSTALL_CONFIG_NAME "${BUILD_TYPE}")
++  else()
++    set(CMAKE_INSTALL_CONFIG_NAME "Debug")
++  endif()
++  message(STATUS "Install configuration: \"${CMAKE_INSTALL_CONFIG_NAME}\"")
++endif()
++
++# Set the component getting installed.
++if(NOT CMAKE_INSTALL_COMPONENT)
++  if(COMPONENT)
++    message(STATUS "Install component: \"${COMPONENT}\"")
++    set(CMAKE_INSTALL_COMPONENT "${COMPONENT}")
++  else()
++    set(CMAKE_INSTALL_COMPONENT)
++  endif()
++endif()
++
++# Install shared libraries without execute permission?
++if(NOT DEFINED CMAKE_INSTALL_SO_NO_EXE)
++  set(CMAKE_INSTALL_SO_NO_EXE "1")
++endif()
++
++# Is this installation the result of a crosscompile?
++if(NOT DEFINED CMAKE_CROSSCOMPILING)
++  set(CMAKE_CROSSCOMPILING "FALSE")
++endif()
++
++# Set default install directory permissions.
++if(NOT DEFINED CMAKE_OBJDUMP)
++  set(CMAKE_OBJDUMP "/usr/bin/objdump")
++endif()
++
++if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
++  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/share/man/man3" TYPE FILE FILES
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_ACTIVESOCKET.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_APPCONNECT_TIME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_APPCONNECT_TIME_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_CAINFO.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_CAPATH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_CERTINFO.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_CONDITION_UNMET.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_CONNECT_TIME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_CONN_ID.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_CONNECT_TIME_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_CONTENT_LENGTH_DOWNLOAD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_CONTENT_LENGTH_DOWNLOAD_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_CONTENT_LENGTH_UPLOAD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_CONTENT_LENGTH_UPLOAD_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_CONTENT_TYPE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_COOKIELIST.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_EARLYDATA_SENT_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_EFFECTIVE_METHOD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_EFFECTIVE_URL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_FILETIME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_FILETIME_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_FTP_ENTRY_PATH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_HEADER_SIZE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_HTTP_CONNECTCODE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_HTTP_VERSION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_HTTPAUTH_AVAIL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_HTTPAUTH_USED.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_LASTSOCKET.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_LOCAL_IP.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_LOCAL_PORT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_NAMELOOKUP_TIME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_NAMELOOKUP_TIME_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_NUM_CONNECTS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_OS_ERRNO.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_PRETRANSFER_TIME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_PRETRANSFER_TIME_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_POSTTRANSFER_TIME_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_PRIMARY_IP.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_PRIMARY_PORT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_PRIVATE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_PROTOCOL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_PROXY_ERROR.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_PROXY_SSL_VERIFYRESULT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_PROXYAUTH_AVAIL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_PROXYAUTH_USED.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_QUEUE_TIME_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_REDIRECT_COUNT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_REDIRECT_TIME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_REDIRECT_TIME_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_REDIRECT_URL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_REFERER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_REQUEST_SIZE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_RESPONSE_CODE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_RETRY_AFTER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_RTSP_CLIENT_CSEQ.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_RTSP_CSEQ_RECV.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_RTSP_SERVER_CSEQ.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_RTSP_SESSION_ID.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_SCHEME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_SIZE_DELIVERED.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_SIZE_DOWNLOAD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_SIZE_DOWNLOAD_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_SIZE_UPLOAD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_SIZE_UPLOAD_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_SPEED_DOWNLOAD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_SPEED_DOWNLOAD_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_SPEED_UPLOAD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_SPEED_UPLOAD_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_SSL_ENGINES.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_SSL_VERIFYRESULT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_STARTTRANSFER_TIME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_STARTTRANSFER_TIME_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_TLS_SESSION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_TLS_SSL_PTR.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_TOTAL_TIME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_TOTAL_TIME_T.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_USED_PROXY.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLINFO_XFER_ID.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMINFO_XFERS_ADDED.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMINFO_XFERS_CURRENT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMINFO_XFERS_DONE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMINFO_XFERS_PENDING.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMINFO_XFERS_RUNNING.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_CHUNK_LENGTH_PENALTY_SIZE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_CONTENT_LENGTH_PENALTY_SIZE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_MAX_CONCURRENT_STREAMS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_MAX_HOST_CONNECTIONS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_MAX_PIPELINE_LENGTH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_MAX_TOTAL_CONNECTIONS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_MAXCONNECTS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_NETWORK_CHANGED.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_NOTIFYDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_NOTIFYFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_PIPELINING.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_PIPELINING_SERVER_BL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_PIPELINING_SITE_BL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_PUSHDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_PUSHFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_QUICK_EXIT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_RESOLVE_THREADS_MAX.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_SOCKETDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_SOCKETFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_TIMERDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLMOPT_TIMERFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_ABSTRACT_UNIX_SOCKET.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_ACCEPT_ENCODING.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_ACCEPTTIMEOUT_MS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_ADDRESS_SCOPE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_ALTSVC.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_ALTSVC_CTRL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_APPEND.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_AUTOREFERER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_AWS_SIGV4.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_BUFFERSIZE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CAINFO.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CAINFO_BLOB.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CAPATH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CA_CACHE_TIMEOUT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CERTINFO.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CHUNK_BGN_FUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CHUNK_DATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CHUNK_END_FUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CLOSESOCKETDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CLOSESOCKETFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CONNECT_ONLY.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CONNECT_TO.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CONNECTTIMEOUT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CONNECTTIMEOUT_MS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CONV_FROM_NETWORK_FUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CONV_FROM_UTF8_FUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CONV_TO_NETWORK_FUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_COOKIE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_COOKIEFILE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_COOKIEJAR.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_COOKIELIST.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_COOKIESESSION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_COPYPOSTFIELDS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CRLF.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CRLFILE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CURLU.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_CUSTOMREQUEST.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DEBUGDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DEBUGFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DEFAULT_PROTOCOL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DIRLISTONLY.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DISALLOW_USERNAME_IN_URL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DNS_CACHE_TIMEOUT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DNS_INTERFACE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DNS_LOCAL_IP4.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DNS_LOCAL_IP6.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DNS_SERVERS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DNS_SHUFFLE_ADDRESSES.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DNS_USE_GLOBAL_CACHE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DOH_SSL_VERIFYHOST.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DOH_SSL_VERIFYPEER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DOH_SSL_VERIFYSTATUS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_DOH_URL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_ECH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_EGDSOCKET.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_ERRORBUFFER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_EXPECT_100_TIMEOUT_MS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FAILONERROR.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FILETIME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FNMATCH_DATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FNMATCH_FUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FOLLOWLOCATION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FORBID_REUSE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FRESH_CONNECT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FTP_ACCOUNT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FTP_ALTERNATIVE_TO_USER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FTP_CREATE_MISSING_DIRS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FTP_FILEMETHOD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FTP_SKIP_PASV_IP.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FTP_SSL_CCC.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FTP_USE_EPRT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FTP_USE_EPSV.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FTP_USE_PRET.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FTPPORT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_FTPSSLAUTH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_GSSAPI_DELEGATION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HAPPY_EYEBALLS_TIMEOUT_MS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HAPROXYPROTOCOL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HAPROXY_CLIENT_IP.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HEADER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HEADERDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HEADERFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HEADEROPT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HSTS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HSTS_CTRL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HSTSREADDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HSTSREADFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HSTSWRITEDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HSTSWRITEFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HTTP09_ALLOWED.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HTTP200ALIASES.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HTTP_CONTENT_DECODING.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HTTP_TRANSFER_DECODING.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HTTP_VERSION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HTTPAUTH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HTTPGET.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HTTPHEADER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HTTPPOST.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_HTTPPROXYTUNNEL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_IGNORE_CONTENT_LENGTH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_INFILESIZE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_INFILESIZE_LARGE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_INTERFACE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_INTERLEAVEDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_INTERLEAVEFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_IOCTLDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_IOCTLFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_IPRESOLVE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_ISSUERCERT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_ISSUERCERT_BLOB.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_KEEP_SENDING_ON_ERROR.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_KEYPASSWD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_KRBLEVEL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_LOCALPORT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_LOCALPORTRANGE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_LOGIN_OPTIONS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_LOW_SPEED_LIMIT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_LOW_SPEED_TIME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MAIL_AUTH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MAIL_FROM.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MAIL_RCPT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MAIL_RCPT_ALLOWFAILS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MAX_RECV_SPEED_LARGE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MAX_SEND_SPEED_LARGE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MAXAGE_CONN.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MAXCONNECTS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MAXFILESIZE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MAXFILESIZE_LARGE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MAXLIFETIME_CONN.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MAXREDIRS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MIME_OPTIONS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_MIMEPOST.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_NETRC.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_NETRC_FILE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_NEW_DIRECTORY_PERMS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_NEW_FILE_PERMS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_NOBODY.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_NOPROGRESS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_NOPROXY.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_NOSIGNAL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_OPENSOCKETDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_OPENSOCKETFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PASSWORD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PATH_AS_IS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PINNEDPUBLICKEY.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PIPEWAIT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PORT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_POST.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_POSTFIELDS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_POSTFIELDSIZE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_POSTFIELDSIZE_LARGE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_POSTQUOTE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_POSTREDIR.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PRE_PROXY.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PREQUOTE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PREREQDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PREREQFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PRIVATE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROGRESSDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROGRESSFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROTOCOLS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROTOCOLS_STR.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_CAINFO.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_CAINFO_BLOB.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_CAPATH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_CRLFILE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_ISSUERCERT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_ISSUERCERT_BLOB.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_KEYPASSWD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_PINNEDPUBLICKEY.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_SERVICE_NAME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_SSL_CIPHER_LIST.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_SSL_OPTIONS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_SSL_VERIFYHOST.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_SSL_VERIFYPEER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_SSLCERT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_SSLCERT_BLOB.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_SSLCERTTYPE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_SSLKEY.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_SSLKEY_BLOB.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_SSLKEYTYPE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_SSLVERSION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_TLS13_CIPHERS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_TLSAUTH_PASSWORD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_TLSAUTH_TYPE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_TLSAUTH_USERNAME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXY_TRANSFER_MODE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXYAUTH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXYHEADER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXYPASSWORD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXYPORT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXYTYPE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXYUSERNAME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PROXYUSERPWD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_PUT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_QUICK_EXIT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_QUOTE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RANDOM_FILE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RANGE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_READDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_READFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_REDIR_PROTOCOLS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_REDIR_PROTOCOLS_STR.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_REFERER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_REQUEST_TARGET.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RESOLVE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RESOLVER_START_DATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RESOLVER_START_FUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RESUME_FROM.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RESUME_FROM_LARGE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RTSP_CLIENT_CSEQ.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RTSP_REQUEST.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RTSP_SERVER_CSEQ.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RTSP_SESSION_ID.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RTSP_STREAM_URI.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_RTSP_TRANSPORT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SASL_AUTHZID.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SASL_IR.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SEEKDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SEEKFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SERVER_RESPONSE_TIMEOUT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SERVER_RESPONSE_TIMEOUT_MS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SERVICE_NAME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SHARE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SOCKOPTDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SOCKOPTFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SOCKS5_AUTH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SOCKS5_GSSAPI_NEC.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SOCKS5_GSSAPI_SERVICE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSH_AUTH_TYPES.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSH_COMPRESSION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSH_HOSTKEYDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSH_HOSTKEYFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSH_HOST_PUBLIC_KEY_MD5.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSH_HOST_PUBLIC_KEY_SHA256.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSH_KEYDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSH_KEYFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSH_KNOWNHOSTS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSH_PRIVATE_KEYFILE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSH_PUBLIC_KEYFILE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_CIPHER_LIST.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_CTX_DATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_CTX_FUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_EC_CURVES.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_ENABLE_ALPN.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_ENABLE_NPN.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_FALSESTART.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_OPTIONS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_SESSIONID_CACHE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_SIGNATURE_ALGORITHMS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_VERIFYHOST.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_VERIFYPEER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSL_VERIFYSTATUS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSLCERT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSLCERT_BLOB.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSLCERTTYPE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSLENGINE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSLENGINE_DEFAULT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSLKEY.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSLKEY_BLOB.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSLKEYTYPE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SSLVERSION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_STDERR.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_STREAM_DEPENDS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_STREAM_DEPENDS_E.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_STREAM_WEIGHT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_SUPPRESS_CONNECT_HEADERS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TCP_FASTOPEN.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TCP_KEEPALIVE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TCP_KEEPIDLE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TCP_KEEPINTVL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TCP_KEEPCNT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TCP_NODELAY.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TELNETOPTIONS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TFTP_BLKSIZE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TFTP_NO_OPTIONS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TIMECONDITION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TIMEOUT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TIMEOUT_MS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TIMEVALUE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TIMEVALUE_LARGE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TLS13_CIPHERS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TLSAUTH_PASSWORD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TLSAUTH_TYPE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TLSAUTH_USERNAME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TRAILERDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TRAILERFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TRANSFER_ENCODING.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_TRANSFERTEXT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_UNIX_SOCKET_PATH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_UNRESTRICTED_AUTH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_UPKEEP_INTERVAL_MS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_UPLOAD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_UPLOAD_BUFFERSIZE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_UPLOAD_FLAGS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_URL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_USE_SSL.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_USERAGENT.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_USERNAME.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_USERPWD.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_VERBOSE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_WILDCARDMATCH.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_WRITEDATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_WRITEFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_WS_OPTIONS.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_XFERINFODATA.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_XFERINFOFUNCTION.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLOPT_XOAUTH2_BEARER.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLSHOPT_LOCKFUNC.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLSHOPT_SHARE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLSHOPT_UNLOCKFUNC.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLSHOPT_UNSHARE.3"
++    "/work/bld-asan/docs/libcurl/opts/CURLSHOPT_USERDATA.3"
++    )
++endif()
++
+diff --git a/bld-asan/lib/Makefile.inc.cmake b/bld-asan/lib/Makefile.inc.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..dd201c8d32ca44811e51f2fde480e4fe87ea4542
+--- /dev/null
++++ b/bld-asan/lib/Makefile.inc.cmake
+@@ -0,0 +1,430 @@
++#***************************************************************************
++#                                  _   _ ____  _
++#  Project                     ___| | | |  _ \| |
++#                             / __| | | | |_) | |
++#                            | (__| |_| |  _ <| |___
++#                             \___|\___/|_| \_\_____|
++#
++# Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
++#
++# This software is licensed as described in the file COPYING, which
++# you should have received as part of this distribution. The terms
++# are also available at https://curl.se/docs/copyright.html.
++#
++# You may opt to use, copy, modify, merge, publish, distribute and/or sell
++# copies of the Software, and permit persons to whom the Software is
++# furnished to do so, under the terms of the COPYING file.
++#
++# This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
++# KIND, either express or implied.
++#
++# SPDX-License-Identifier: curl
++#
++###########################################################################
++# Shared between CMakeLists.txt and Makefile.am
++
++set(LIB_CURLX_CFILES 
++  curlx/base64.c        
++  curlx/basename.c      
++  curlx/dynbuf.c        
++  curlx/fopen.c         
++  curlx/inet_ntop.c     
++  curlx/inet_pton.c     
++  curlx/multibyte.c     
++  curlx/nonblock.c      
++  curlx/snprintf.c      
++  curlx/strcopy.c       
++  curlx/strdup.c        
++  curlx/strerr.c        
++  curlx/strparse.c      
++  curlx/timediff.c      
++  curlx/timeval.c       
++  curlx/version_win32.c 
++  curlx/wait.c          
++  curlx/warnless.c      
++  curlx/winapi.c)
++
++set(LIB_CURLX_HFILES 
++  curlx/base64.h        
++  curlx/basename.h      
++  curlx/dynbuf.h        
++  curlx/fopen.h         
++  curlx/inet_ntop.h     
++  curlx/inet_pton.h     
++  curlx/multibyte.h     
++  curlx/nonblock.h      
++  curlx/snprintf.h      
++  curlx/strcopy.h       
++  curlx/strdup.h        
++  curlx/strerr.h        
++  curlx/strparse.h      
++  curlx/timediff.h      
++  curlx/timeval.h       
++  curlx/version_win32.h 
++  curlx/wait.h          
++  curlx/warnless.h      
++  curlx/winapi.h)
++
++set(LIB_VAUTH_CFILES 
++  vauth/cleartext.c     
++  vauth/cram.c          
++  vauth/digest.c        
++  vauth/digest_sspi.c   
++  vauth/gsasl.c         
++  vauth/krb5_gssapi.c   
++  vauth/krb5_sspi.c     
++  vauth/ntlm.c          
++  vauth/ntlm_sspi.c     
++  vauth/oauth2.c        
++  vauth/spnego_gssapi.c 
++  vauth/spnego_sspi.c   
++  vauth/vauth.c)
++
++set(LIB_VAUTH_HFILES 
++  vauth/digest.h        
++  vauth/vauth.h)
++
++set(LIB_VTLS_CFILES 
++  vtls/apple.c              
++  vtls/cipher_suite.c       
++  vtls/gtls.c               
++  vtls/hostcheck.c          
++  vtls/keylog.c             
++  vtls/mbedtls.c            
++  vtls/openssl.c            
++  vtls/rustls.c             
++  vtls/schannel.c           
++  vtls/schannel_verify.c    
++  vtls/vtls.c               
++  vtls/vtls_config.c        
++  vtls/vtls_scache.c        
++  vtls/vtls_spack.c         
++  vtls/wolfssl.c            
++  vtls/x509asn1.c)
++
++set(LIB_VTLS_HFILES 
++  vtls/apple.h              
++  vtls/cipher_suite.h       
++  vtls/gtls.h               
++  vtls/hostcheck.h          
++  vtls/keylog.h             
++  vtls/mbedtls.h            
++  vtls/openssl.h            
++  vtls/rustls.h             
++  vtls/schannel.h           
++  vtls/schannel_int.h       
++  vtls/vtls.h               
++  vtls/vtls_config.h        
++  vtls/vtls_int.h           
++  vtls/vtls_scache.h        
++  vtls/vtls_spack.h         
++  vtls/wolfssl.h            
++  vtls/x509asn1.h)
++
++set(LIB_VQUIC_CFILES 
++  vquic/capsule.c           
++  vquic/cf-capsule.c        
++  vquic/cf-ngtcp2.c         
++  vquic/cf-ngtcp2-cmn.c     
++  vquic/cf-ngtcp2-proxy.c   
++  vquic/cf-quiche.c         
++  vquic/vquic.c             
++  vquic/vquic-tls.c)
++
++set(LIB_VQUIC_HFILES 
++  vquic/capsule.h           
++  vquic/cf-capsule.h        
++  vquic/cf-ngtcp2.h         
++  vquic/cf-ngtcp2-cmn.h     
++  vquic/cf-ngtcp2-proxy.h   
++  vquic/cf-quiche.h         
++  vquic/vquic.h             
++  vquic/vquic_int.h         
++  vquic/vquic-tls.h)
++
++set(LIB_VSSH_CFILES 
++  vssh/libssh.c      
++  vssh/libssh2.c     
++  vssh/vssh.c)
++
++set(LIB_VSSH_HFILES 
++  vssh/vssh.h        
++  vssh/ssh.h)
++
++set(LIB_CFILES 
++  altsvc.c           
++  amigaos.c          
++  asyn-ares.c        
++  asyn-base.c        
++  asyn-thrdd.c       
++  bufq.c             
++  bufref.c           
++  cf-dns.c           
++  cf-h1-proxy.c      
++  cf-h2-proxy.c      
++  cf-haproxy.c       
++  cf-https-connect.c 
++  cf-ip-happy.c      
++  cf-recvbuf.c       
++  cf-setup.c         
++  cf-socket.c        
++  cfilters.c         
++  conncache.c        
++  connect.c          
++  content_encoding.c 
++  cookie.c           
++  creds.c            
++  cshutdn.c          
++  curl_addrinfo.c    
++  curl_endian.c      
++  curl_fnmatch.c     
++  curl_fopen.c       
++  curl_get_line.c    
++  curl_gethostname.c 
++  curl_gssapi.c      
++  curl_memrchr.c     
++  curl_ntlm_core.c   
++  curl_range.c       
++  curl_sasl.c        
++  curl_sha512_256.c  
++  curl_share.c       
++  curl_sspi.c        
++  curl_threads.c     
++  curl_trc.c         
++  cw-out.c           
++  cw-pause.c         
++  dict.c             
++  dnscache.c         
++  doh.c              
++  dynhds.c           
++  easy.c             
++  easygetopt.c       
++  easyoptions.c      
++  escape.c           
++  fake_addrinfo.c    
++  file.c             
++  fileinfo.c         
++  formdata.c         
++  ftp.c              
++  ftplistparser.c    
++  getenv.c           
++  getinfo.c          
++  gopher.c           
++  hash.c             
++  headers.c          
++  hmac.c             
++  hostip.c           
++  hostip4.c          
++  hostip6.c          
++  hsts.c             
++  http.c             
++  http1.c            
++  http2.c            
++  http_aws_sigv4.c   
++  http_chunks.c      
++  http_digest.c      
++  http_negotiate.c   
++  http_ntlm.c        
++  http_proxy.c       
++  httpsrr.c          
++  idn.c              
++  if2ip.c            
++  imap.c             
++  ldap.c             
++  llist.c            
++  macos.c            
++  md4.c              
++  md5.c              
++  memdebug.c         
++  mime.c             
++  mprintf.c          
++  mqtt.c             
++  multi.c            
++  multi_ev.c         
++  multi_ntfy.c       
++  netrc.c            
++  openldap.c         
++  parsedate.c        
++  peer.c             
++  pingpong.c         
++  pop3.c             
++  progress.c         
++  protocol.c         
++  proxy.c            
++  psl.c              
++  rand.c             
++  ratelimit.c        
++  request.c          
++  rtsp.c             
++  select.c           
++  sendf.c            
++  setopt.c           
++  sha256.c           
++  slist.c            
++  smb.c              
++  smtp.c             
++  socketpair.c       
++  socks.c            
++  socks_gssapi.c     
++  socks_sspi.c       
++  splay.c            
++  strcase.c          
++  strequal.c         
++  strerror.c         
++  system_win32.c     
++  telnet.c           
++  tftp.c             
++  thrdpool.c         
++  thrdqueue.c        
++  transfer.c         
++  uint-bset.c        
++  uint-hash.c        
++  uint-spbset.c      
++  uint-table.c       
++  url.c              
++  urlapi.c           
++  version.c          
++  ws.c)
++
++set(LIB_HFILES 
++  altsvc.h           
++  amigaos.h          
++  arpa_telnet.h      
++  asyn.h             
++  bufq.h             
++  bufref.h           
++  cf-dns.h           
++  cf-h1-proxy.h      
++  cf-h2-proxy.h      
++  cf-haproxy.h       
++  cf-https-connect.h 
++  cf-ip-happy.h      
++  cf-recvbuf.h       
++  cf-setup.h         
++  cf-socket.h        
++  cfilters.h         
++  conncache.h        
++  cshutdn.h          
++  connect.h          
++  content_encoding.h 
++  cookie.h           
++  creds.h            
++  curl_addrinfo.h    
++  curl_ctype.h       
++  curl_endian.h      
++  curl_fnmatch.h     
++  curl_fopen.h       
++  curl_get_line.h    
++  curl_gethostname.h 
++  curl_gssapi.h      
++  curl_hmac.h        
++  curl_ldap.h        
++  curl_md4.h         
++  curl_md5.h         
++  curl_memrchr.h     
++  curl_ntlm_core.h   
++  curl_printf.h      
++  curl_range.h       
++  curl_sasl.h        
++  curl_setup.h       
++  curl_sha256.h      
++  curl_sha512_256.h  
++  curl_share.h       
++  curl_sspi.h        
++  curl_threads.h     
++  curl_trc.h         
++  cw-out.h           
++  cw-pause.h         
++  dict.h             
++  dnscache.h         
++  doh.h              
++  dynhds.h           
++  easy_lock.h        
++  easyif.h           
++  easyoptions.h      
++  escape.h           
++  fake_addrinfo.h    
++  file.h             
++  fileinfo.h         
++  formdata.h         
++  ftp.h              
++  ftp-int.h          
++  ftplistparser.h    
++  functypes.h        
++  getinfo.h          
++  gopher.h           
++  hash.h             
++  headers.h          
++  hostip.h           
++  hsts.h             
++  http.h             
++  http1.h            
++  http2.h            
++  http_aws_sigv4.h   
++  http_chunks.h      
++  http_digest.h      
++  http_negotiate.h   
++  http_ntlm.h        
++  http_proxy.h       
++  httpsrr.h          
++  idn.h              
++  if2ip.h            
++  imap.h             
++  llist.h            
++  macos.h            
++  mime.h             
++  mqtt.h             
++  multihandle.h      
++  multi_ev.h         
++  multi_ntfy.h       
++  multiif.h          
++  netrc.h            
++  parsedate.h        
++  peer.h             
++  pingpong.h         
++  pop3.h             
++  progress.h         
++  protocol.h         
++  proxy.h            
++  psl.h              
++  rand.h             
++  ratelimit.h        
++  request.h          
++  rtsp.h             
++  select.h           
++  sendf.h            
++  setopt.h           
++  setup-os400.h      
++  setup-vms.h        
++  setup-win32.h      
++  sigpipe.h          
++  slist.h            
++  smb.h              
++  smtp.h             
++  sockaddr.h         
++  socketpair.h       
++  socks.h            
++  splay.h            
++  strcase.h          
++  strerror.h         
++  system_win32.h     
++  telnet.h           
++  tftp.h             
++  thrdpool.h         
++  thrdqueue.h        
++  transfer.h         
++  uint-bset.h        
++  uint-hash.h        
++  uint-spbset.h      
++  uint-table.h       
++  url.h              
++  urlapi-int.h       
++  urldata.h          
++  ws.h)
++
++set(LIB_RCFILES libcurl.rc)
++
++set(CSOURCES ${LIB_CFILES} ${LIB_VAUTH_CFILES} ${LIB_VTLS_CFILES} 
++  ${LIB_VQUIC_CFILES} ${LIB_VSSH_CFILES} ${LIB_CURLX_CFILES})
++set(HHEADERS ${LIB_HFILES} ${LIB_VAUTH_HFILES} ${LIB_VTLS_HFILES} 
++  ${LIB_VQUIC_HFILES} ${LIB_VSSH_HFILES} ${LIB_CURLX_HFILES})
+diff --git a/bld-asan/lib/cmake_install.cmake b/bld-asan/lib/cmake_install.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..6c1aced439bd5d04379a2302abb4ca6c6586e30e
+--- /dev/null
++++ b/bld-asan/lib/cmake_install.cmake
+@@ -0,0 +1,48 @@
++# Install script for directory: /work/lib
++
++# Set the install prefix
++if(NOT DEFINED CMAKE_INSTALL_PREFIX)
++  set(CMAKE_INSTALL_PREFIX "/usr/local")
++endif()
++string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
++
++# Set the install configuration name.
++if(NOT DEFINED CMAKE_INSTALL_CONFIG_NAME)
++  if(BUILD_TYPE)
++    string(REGEX REPLACE "^[^A-Za-z0-9_]+" ""
++           CMAKE_INSTALL_CONFIG_NAME "${BUILD_TYPE}")
++  else()
++    set(CMAKE_INSTALL_CONFIG_NAME "Debug")
++  endif()
++  message(STATUS "Install configuration: \"${CMAKE_INSTALL_CONFIG_NAME}\"")
++endif()
++
++# Set the component getting installed.
++if(NOT CMAKE_INSTALL_COMPONENT)
++  if(COMPONENT)
++    message(STATUS "Install component: \"${COMPONENT}\"")
++    set(CMAKE_INSTALL_COMPONENT "${COMPONENT}")
++  else()
++    set(CMAKE_INSTALL_COMPONENT)
++  endif()
++endif()
++
++# Install shared libraries without execute permission?
++if(NOT DEFINED CMAKE_INSTALL_SO_NO_EXE)
++  set(CMAKE_INSTALL_SO_NO_EXE "1")
++endif()
++
++# Is this installation the result of a crosscompile?
++if(NOT DEFINED CMAKE_CROSSCOMPILING)
++  set(CMAKE_CROSSCOMPILING "FALSE")
++endif()
++
++# Set default install directory permissions.
++if(NOT DEFINED CMAKE_OBJDUMP)
++  set(CMAKE_OBJDUMP "/usr/bin/objdump")
++endif()
++
++if(CMAKE_INSTALL_COMPONENT STREQUAL "Unspecified" OR NOT CMAKE_INSTALL_COMPONENT)
++  file(INSTALL DESTINATION "${CMAKE_INSTALL_PREFIX}/lib" TYPE STATIC_LIBRARY FILES "/work/bld-asan/lib/libcurl-d.a")
++endif()
++
+diff --git a/bld-asan/lib/curl_config.h b/bld-asan/lib/curl_config.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..805e1cdba80d2e3ecaa3088797aefe078efcbd8f
+--- /dev/null
++++ b/bld-asan/lib/curl_config.h
+@@ -0,0 +1,786 @@
++/***************************************************************************
++ *                                  _   _ ____  _
++ *  Project                     ___| | | |  _ \| |
++ *                             / __| | | | |_) | |
++ *                            | (__| |_| |  _ <| |___
++ *                             \___|\___/|_| \_\_____|
++ *
++ * Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
++ *
++ * This software is licensed as described in the file COPYING, which
++ * you should have received as part of this distribution. The terms
++ * are also available at https://curl.se/docs/copyright.html.
++ *
++ * You may opt to use, copy, modify, merge, publish, distribute and/or sell
++ * copies of the Software, and permit persons to whom the Software is
++ * furnished to do so, under the terms of the COPYING file.
++ *
++ * This software is distributed on an "AS IS" basis, WITHOUT WARRANTY OF ANY
++ * KIND, either express or implied.
++ *
++ * SPDX-License-Identifier: curl
++ *
++ ***************************************************************************/
++
++/* Location of default CA bundle */
++/* #undef CURL_CA_BUNDLE */
++
++/* define "1" to use built-in CA store of TLS backend */
++/* #undef CURL_CA_FALLBACK */
++
++/* Location of default CA path */
++/* #undef CURL_CA_PATH */
++
++/* Default SSL backend */
++/* #undef CURL_DEFAULT_SSL_BACKEND */
++
++/* Use native CA store */
++/* #undef CURL_CA_NATIVE */
++
++/* disables alt-svc */
++/* #undef CURL_DISABLE_ALTSVC */
++
++/* disables cookies support */
++/* #undef CURL_DISABLE_COOKIES */
++
++/* disables Basic authentication */
++/* #undef CURL_DISABLE_BASIC_AUTH */
++
++/* disables Bearer authentication */
++/* #undef CURL_DISABLE_BEARER_AUTH */
++
++/* disables Digest authentication */
++/* #undef CURL_DISABLE_DIGEST_AUTH */
++
++/* disables Kerberos authentication */
++/* #undef CURL_DISABLE_KERBEROS_AUTH */
++
++/* disables negotiate authentication */
++/* #undef CURL_DISABLE_NEGOTIATE_AUTH */
++
++/* disables aws-sigv4 */
++/* #undef CURL_DISABLE_AWS */
++
++/* disables DICT */
++/* #undef CURL_DISABLE_DICT */
++
++/* disables DNS-over-HTTPS */
++/* #undef CURL_DISABLE_DOH */
++
++/* disables FILE */
++/* #undef CURL_DISABLE_FILE */
++
++/* disables form api */
++/* #undef CURL_DISABLE_FORM_API */
++
++/* disables FTP */
++/* #undef CURL_DISABLE_FTP */
++
++/* disables curl_easy_options API for existing options to curl_easy_setopt */
++/* #undef CURL_DISABLE_GETOPTIONS */
++
++/* disables GOPHER */
++/* #undef CURL_DISABLE_GOPHER */
++
++/* disables headers-api support */
++/* #undef CURL_DISABLE_HEADERS_API */
++
++/* disables HSTS support */
++#define CURL_DISABLE_HSTS 1
++
++/* disables HTTP */
++/* #undef CURL_DISABLE_HTTP */
++
++/* disabled all HTTP authentication methods */
++/* #undef CURL_DISABLE_HTTP_AUTH */
++
++/* disables IMAP */
++/* #undef CURL_DISABLE_IMAP */
++
++/* disables LDAP */
++#define CURL_DISABLE_LDAP 1
++
++/* disables LDAPS */
++#define CURL_DISABLE_LDAPS 1
++
++/* disables --libcurl option from the curl tool */
++/* #undef CURL_DISABLE_LIBCURL_OPTION */
++
++/* disables MIME support */
++/* #undef CURL_DISABLE_MIME */
++
++/* disables local binding support */
++/* #undef CURL_DISABLE_BINDLOCAL */
++
++/* disables MQTT */
++/* #undef CURL_DISABLE_MQTT */
++
++/* disables netrc parser */
++/* #undef CURL_DISABLE_NETRC */
++
++/* enables NTLM support */
++/* #undef CURL_ENABLE_NTLM */
++
++/* disables date parsing */
++/* #undef CURL_DISABLE_PARSEDATE */
++
++/* disables POP3 */
++/* #undef CURL_DISABLE_POP3 */
++
++/* disables built-in progress meter */
++/* #undef CURL_DISABLE_PROGRESS_METER */
++
++/* disables proxies */
++/* #undef CURL_DISABLE_PROXY */
++
++/* disables IPFS from the curl tool */
++/* #undef CURL_DISABLE_IPFS */
++
++/* disables RTSP */
++/* #undef CURL_DISABLE_RTSP */
++
++/* disables SHA-512/256 hash algorithm */
++/* #undef CURL_DISABLE_SHA512_256 */
++
++/* disabled shuffle DNS feature */
++/* #undef CURL_DISABLE_SHUFFLE_DNS */
++
++/* disables SMB */
++/* #undef CURL_ENABLE_SMB */
++
++/* disables SMTP */
++/* #undef CURL_DISABLE_SMTP */
++
++/* disabled WebSocket */
++/* #undef CURL_DISABLE_WEBSOCKETS */
++
++/* disables use of socketpair for curl_multi_poll() */
++/* #undef CURL_DISABLE_SOCKETPAIR */
++
++/* disables TELNET */
++/* #undef CURL_DISABLE_TELNET */
++
++/* disables TFTP */
++/* #undef CURL_DISABLE_TFTP */
++
++/* disables verbose strings */
++/* #undef CURL_DISABLE_VERBOSE_STRINGS */
++
++/* disables unsafe CA bundle search on Windows from the curl tool */
++/* #undef CURL_DISABLE_CA_SEARCH */
++
++/* safe CA bundle search (within the curl tool directory) on Windows */
++/* #undef CURL_CA_SEARCH_SAFE */
++
++/* to make a symbol visible */
++#define CURL_EXTERN_SYMBOL __attribute__((__visibility__("default")))
++/* Ensure using CURL_EXTERN_SYMBOL is possible */
++#ifndef CURL_EXTERN_SYMBOL
++#define CURL_EXTERN_SYMBOL
++#endif
++
++/* Allow SMB to work on Windows */
++/* #undef USE_WIN32_CRYPTO */
++
++/* Use Windows LDAP implementation */
++/* #undef USE_WIN32_LDAP */
++
++/* Define if you want to enable IPv6 support */
++#define USE_IPV6 1
++
++/* Define to 1 if you have the alarm function. */
++#define HAVE_ALARM 1
++
++/* Define to 1 if you have the arc4random function. */
++#define HAVE_ARC4RANDOM 1
++
++/* Define to 1 if you have the <arpa/inet.h> header file. */
++#define HAVE_ARPA_INET_H 1
++
++/* Define to 1 if you have _Atomic support. */
++#define HAVE_ATOMIC 1
++
++/* Define to 1 if you have the `accept4' function. */
++#define HAVE_ACCEPT4 1
++
++/* Define to 1 if you have the `fnmatch' function. */
++#define HAVE_FNMATCH 1
++
++/* Define to 1 if you have the `basename' function. */
++#define HAVE_BASENAME 1
++
++/* Define to 1 if bool is an available type. */
++#define HAVE_BOOL_T 1
++
++/* Define to 1 if you have the __builtin_available function. */
++/* #undef HAVE_BUILTIN_AVAILABLE */
++
++/* Define to 1 if you have the clock_gettime function and monotonic timer. */
++#define HAVE_CLOCK_GETTIME_MONOTONIC 1
++
++/* Define to 1 if you have the clock_gettime function and raw monotonic timer.
++   */
++#define HAVE_CLOCK_GETTIME_MONOTONIC_RAW 1
++
++/* Define to 1 if you have the `closesocket' function. */
++/* #undef HAVE_CLOSESOCKET */
++
++/* Define to 1 if you have the `CloseSocket' function. */
++/* #undef HAVE_CLOSESOCKET_CAMEL */
++
++/* Define to 1 if you have the <dirent.h> header file. */
++#define HAVE_DIRENT_H 1
++
++/* Define to 1 if you have the `opendir' function. */
++#define HAVE_OPENDIR 1
++
++/* Define to 1 if you have the memset_explicit (C23) function. */
++/* #undef HAVE_MEMSET_EXPLICIT */
++
++/* Define to 1 if you have the memset_s (C11) function. */
++/* #undef HAVE_MEMSET_S */
++
++/* Define to 1 if you have the fcntl function. */
++#define HAVE_FCNTL 1
++
++/* Define to 1 if you have the <fcntl.h> header file. */
++#define HAVE_FCNTL_H 1
++
++/* Define to 1 if you have a working fcntl O_NONBLOCK function. */
++#define HAVE_FCNTL_O_NONBLOCK 1
++
++/* Define to 1 if you have the freeaddrinfo function. */
++#define HAVE_FREEADDRINFO 1
++
++/* Define to 1 if you have the fseeko function. */
++#define HAVE_FSEEKO 1
++
++/* Define to 1 if you have the fseeko declaration. */
++#define HAVE_DECL_FSEEKO 1
++
++/* Define to 1 if you have a working getaddrinfo function. */
++#define HAVE_GETADDRINFO 1
++
++/* Define to 1 if the getaddrinfo function is thread-safe. */
++#define HAVE_GETADDRINFO_THREADSAFE 1
++
++/* Define to 1 if you have the `geteuid' function. */
++#define HAVE_GETEUID 1
++
++/* Define to 1 if you have the `getppid' function. */
++#define HAVE_GETPPID 1
++
++/* Define to 1 if you have the gethostbyname_r function. */
++#define HAVE_GETHOSTBYNAME_R 1
++
++/* gethostbyname_r() takes 3 args */
++/* #undef HAVE_GETHOSTBYNAME_R_3 */
++
++/* gethostbyname_r() takes 5 args */
++/* #undef HAVE_GETHOSTBYNAME_R_5 */
++
++/* gethostbyname_r() takes 6 args */
++#define HAVE_GETHOSTBYNAME_R_6 1
++
++/* Define to 1 if you have the gethostname function. */
++#define HAVE_GETHOSTNAME 1
++
++/* Define to 1 if you have a working getifaddrs function. */
++#define HAVE_GETIFADDRS 1
++
++/* Define to 1 if you have the `getpass_r' function. */
++/* #undef HAVE_GETPASS_R */
++
++/* Define to 1 if you have the `getpeername' function. */
++#define HAVE_GETPEERNAME 1
++
++/* Define to 1 if you have the `getsockname' function. */
++#define HAVE_GETSOCKNAME 1
++
++/* Define to 1 if you have the `if_nametoindex' function. */
++#define HAVE_IF_NAMETOINDEX 1
++
++/* Define to 1 if you have the `getpwuid' function. */
++#define HAVE_GETPWUID 1
++
++/* Define to 1 if you have the `getpwuid_r' function. */
++#define HAVE_GETPWUID_R 1
++
++/* Define to 1 if you have the `getrlimit' function. */
++#define HAVE_GETRLIMIT 1
++
++/* Define to 1 if you have the `gettimeofday' function. */
++#define HAVE_GETTIMEOFDAY 1
++
++/* Define to 1 if you have a working glibc-style strerror_r function. */
++#define HAVE_GLIBC_STRERROR_R 1
++
++/* Define to 1 if you have a working gmtime_r function. */
++#define HAVE_GMTIME_R 1
++
++/* if you have the gssapi libraries */
++/* #undef HAVE_GSSAPI */
++
++/* if you have Apple GSS */
++/* #undef HAVE_GSSAPPLE */
++
++/* if you have the GNU gssapi libraries */
++/* #undef HAVE_GSSGNU */
++
++/* MIT Kerberos version */
++/* #undef CURL_KRB5_VERSION */
++
++/* BoringSSL version */
++/* #undef CURL_BORINGSSL_VERSION */
++
++/* Patch stamp */
++/* #undef CURL_PATCHSTAMP */
++
++/* Define to 1 if you have the <ifaddrs.h> header file. */
++#define HAVE_IFADDRS_H 1
++
++/* Define to 1 if symbol `sa_family_t' exists */
++#define HAVE_SA_FAMILY_T 1
++
++/* Define to 1 if you have the ioctlsocket function. */
++/* #undef HAVE_IOCTLSOCKET */
++
++/* Define to 1 if you have the IoctlSocket camel case function. */
++/* #undef HAVE_IOCTLSOCKET_CAMEL */
++
++/* Define to 1 if you have a working IoctlSocket camel case FIONBIO function.
++   */
++/* #undef HAVE_IOCTLSOCKET_CAMEL_FIONBIO */
++
++/* Define to 1 if you have a working ioctlsocket FIONBIO function. */
++/* #undef HAVE_IOCTLSOCKET_FIONBIO */
++
++/* Define to 1 if you have a working ioctl FIONBIO function. */
++#define HAVE_IOCTL_FIONBIO 1
++
++/* Define to 1 if you have a working ioctl SIOCGIFADDR function. */
++#define HAVE_IOCTL_SIOCGIFADDR 1
++
++/* Define to 1 if you have the <io.h> header file. */
++/* #undef HAVE_IO_H */
++
++/* Define to 1 if you have the lber.h header file. */
++/* #undef HAVE_LBER_H */
++
++/* Use LDAPS implementation */
++/* #undef HAVE_LDAP_SSL */
++
++/* Define to 1 if you have the ldap_ssl.h header file. */
++/* #undef HAVE_LDAP_SSL_H */
++
++/* Define to 1 if you have the `ldap_url_parse' function. */
++/* #undef HAVE_LDAP_URL_PARSE */
++
++/* Define to 1 if you have the <libgen.h> header file. */
++#define HAVE_LIBGEN_H 1
++
++/* Define to 1 if you have the `idn2' library (-lidn2). */
++/* #undef HAVE_LIBIDN2 */
++
++/* Define to 1 if you have the idn2.h header file. */
++/* #undef HAVE_IDN2_H */
++
++/* if zlib is available */
++#define HAVE_LIBZ 1
++
++/* if brotli is available */
++#define HAVE_BROTLI 1
++
++/* if zstd is available */
++#define HAVE_ZSTD 1
++
++/* Define to 1 if you have the <locale.h> header file. */
++#define HAVE_LOCALE_H 1
++
++/* Define to 1 if you have a working localtime_r function. */
++#define HAVE_LOCALTIME_R 1
++
++/* Define to 1 if you have the 'suseconds_t' data type. */
++#define HAVE_SUSECONDS_T 1
++
++/* Define to 1 if you have the <netdb.h> header file. */
++#define HAVE_NETDB_H 1
++
++/* Define to 1 if you have the <netinet/in.h> header file. */
++#define HAVE_NETINET_IN_H 1
++
++/* Define to 1 if you have the <netinet/in6.h> header file. */
++/* #undef HAVE_NETINET_IN6_H */
++
++/* Define to 1 if you have the <netinet/tcp.h> header file. */
++#define HAVE_NETINET_TCP_H 1
++
++/* Define to 1 if you have the <netinet/udp.h> header file. */
++#define HAVE_NETINET_UDP_H 1
++
++/* Define to 1 if you have the <linux/tcp.h> header file. */
++#define HAVE_LINUX_TCP_H 1
++
++/* Define to 1 if you have the <net/if.h> header file. */
++#define HAVE_NET_IF_H 1
++
++/* Define to 1 if you have the `pipe' function. */
++#define HAVE_PIPE 1
++
++/* Define to 1 if you have the `pipe2' function. */
++#define HAVE_PIPE2 1
++
++/* Define to 1 if you have the `eventfd' function. */
++#define HAVE_EVENTFD 1
++
++/* If you have poll */
++#define HAVE_POLL 1
++
++/* If you have realpath */
++#define HAVE_REALPATH 1
++
++/* Define to 1 if you have the <poll.h> header file. */
++#define HAVE_POLL_H 1
++
++/* Define to 1 if you have a working POSIX-style strerror_r function. */
++/* #undef HAVE_POSIX_STRERROR_R */
++
++/* Define to 1 if you have the <pwd.h> header file. */
++#define HAVE_PWD_H 1
++
++/* Define to 1 if OpenSSL has the `SSL_set0_wbio` function. */
++/* #undef HAVE_SSL_SET0_WBIO */
++
++/* Define to 1 if you have the recv function. */
++#define HAVE_RECV 1
++
++/* Define to 1 if you have the select function. */
++#define HAVE_SELECT 1
++
++/* Define to 1 if you have the sched_yield function. */
++#define HAVE_SCHED_YIELD 1
++
++/* Define to 1 if you have the send function. */
++#define HAVE_SEND 1
++
++/* Define to 1 if you have the sendmsg function. */
++#define HAVE_SENDMSG 1
++
++/* Define to 1 if you have the sendmmsg function. */
++#define HAVE_SENDMMSG 1
++
++/* Define to 1 if you have the 'fsetxattr' function. */
++#define HAVE_FSETXATTR 1
++
++/* fsetxattr() takes 5 args */
++#define HAVE_FSETXATTR_5 1
++
++/* fsetxattr() takes 6 args */
++/* #undef HAVE_FSETXATTR_6 */
++
++/* Define to 1 if you have the `setlocale' function. */
++#define HAVE_SETLOCALE 1
++
++/* Define to 1 if you have the `setrlimit' function. */
++#define HAVE_SETRLIMIT 1
++
++/* Define to 1 if you have a working setsockopt SO_NONBLOCK function. */
++/* #undef HAVE_SETSOCKOPT_SO_NONBLOCK */
++
++/* Define to 1 if you have the sigaction function. */
++#define HAVE_SIGACTION 1
++
++/* Define to 1 if you have the siginterrupt function. */
++#define HAVE_SIGINTERRUPT 1
++
++/* Define to 1 if you have the signal function. */
++#define HAVE_SIGNAL 1
++
++/* Define to 1 if you have the sigsetjmp function or macro. */
++#define HAVE_SIGSETJMP 1
++
++/* Define to 1 if struct sockaddr_in6 has the sin6_scope_id member */
++#define HAVE_SOCKADDR_IN6_SIN6_SCOPE_ID 1
++
++/* Define to 1 if you have the `socket' function. */
++#define HAVE_SOCKET 1
++
++/* Define to 1 if you have the <proto/bsdsocket.h> header file. */
++/* #undef HAVE_PROTO_BSDSOCKET_H */
++
++/* Define to 1 if you have the socketpair function. */
++#define HAVE_SOCKETPAIR 1
++
++/* Define to 1 if you have the <stdatomic.h> header file. */
++#define HAVE_STDATOMIC_H 1
++
++/* Define to 1 if you have the <stdbool.h> header file. */
++#define HAVE_STDBOOL_H 1
++
++/* Define to 1 if you have the strcasecmp function. */
++#define HAVE_STRCASECMP 1
++
++/* Define to 1 if you have the strcmpi function. */
++/* #undef HAVE_STRCMPI */
++
++/* Define to 1 if you have the strerror_r function. */
++#define HAVE_STRERROR_R 1
++
++/* Define to 1 if you have the stricmp function. */
++/* #undef HAVE_STRICMP */
++
++/* Define to 1 if you have the <strings.h> header file. */
++#define HAVE_STRINGS_H 1
++
++/* Define to 1 if you have the <stropts.h> header file. */
++/* #undef HAVE_STROPTS_H */
++
++/* Define to 1 if you have the memrchr function. */
++#define HAVE_MEMRCHR 1
++
++/* if struct sockaddr_storage is defined */
++#define HAVE_STRUCT_SOCKADDR_STORAGE 1
++
++/* Define to 1 if you have the timeval struct. */
++#define HAVE_STRUCT_TIMEVAL 1
++
++/* Define to 1 if you have the <sys/eventfd.h> header file. */
++#define HAVE_SYS_EVENTFD_H 1
++
++/* Define to 1 if you have the <sys/filio.h> header file. */
++/* #undef HAVE_SYS_FILIO_H */
++
++/* Define to 1 if you have the <sys/ioctl.h> header file. */
++#define HAVE_SYS_IOCTL_H 1
++
++/* Define to 1 if you have the <sys/param.h> header file. */
++#define HAVE_SYS_PARAM_H 1
++
++/* Define to 1 if you have the <sys/poll.h> header file. */
++#define HAVE_SYS_POLL_H 1
++
++/* Define to 1 if you have the <sys/resource.h> header file. */
++#define HAVE_SYS_RESOURCE_H 1
++
++/* Define to 1 if you have the <sys/select.h> header file. */
++#define HAVE_SYS_SELECT_H 1
++
++/* Define to 1 if you have the <sys/sockio.h> header file. */
++/* #undef HAVE_SYS_SOCKIO_H */
++
++/* Define to 1 if you have the <sys/types.h> header file. */
++#define HAVE_SYS_TYPES_H 1
++
++/* Define to 1 if you have the <sys/un.h> header file. */
++#define HAVE_SYS_UN_H 1
++
++/* Define to 1 if you have the <sys/utime.h> header file. */
++/* #undef HAVE_SYS_UTIME_H */
++
++/* Define to 1 if you have the <termios.h> header file. */
++#define HAVE_TERMIOS_H 1
++
++/* Define to 1 if you have the <termio.h> header file. */
++#define HAVE_TERMIO_H 1
++
++/* Define to 1 if you have the <unistd.h> header file. */
++#define HAVE_UNISTD_H 1
++
++/* Define to 1 if you have the `utime' function. */
++#define HAVE_UTIME 1
++
++/* Define to 1 if you have the `utimes' function. */
++#define HAVE_UTIMES 1
++
++/* Define to 1 if you have the <utime.h> header file. */
++#define HAVE_UTIME_H 1
++
++/* Define this symbol if your OS supports changing the contents of argv */
++#define HAVE_WRITABLE_ARGV 1
++
++/* Define this if time_t is unsigned */
++/* #undef HAVE_TIME_T_UNSIGNED */
++
++/* Define to 1 if _REENTRANT preprocessor symbol must be defined. */
++/* #undef NEED_REENTRANT */
++
++/* cpu-machine-OS */
++#define CURL_OS "Linux"
++
++/*
++  Note: SIZEOF_* variables are fetched with CMake through check_type_size().
++  As per CMake documentation on CheckTypeSize, C preprocessor code is
++  generated by CMake into SIZEOF_*_CODE. This is what we use in the
++  following statements.
++
++  Reference: https://cmake.org/cmake/help/latest/module/CheckTypeSize.html
++*/
++
++/* The size of `int', as computed by sizeof. */
++#define SIZEOF_INT 4
++
++/* The size of `long', as computed by sizeof. */
++#define SIZEOF_LONG 8
++
++/* The size of `off_t', as computed by sizeof. */
++#define SIZEOF_OFF_T 8
++
++/* The size of `curl_off_t', as computed by sizeof. */
++#define SIZEOF_CURL_OFF_T 8
++
++/* The size of `curl_socket_t', as computed by sizeof. */
++#define SIZEOF_CURL_SOCKET_T 4
++
++/* The size of `size_t', as computed by sizeof. */
++#define SIZEOF_SIZE_T 8
++
++/* The size of `time_t', as computed by sizeof. */
++#define SIZEOF_TIME_T 8
++
++/* Define if you have POSIX pthreads */
++#define HAVE_THREADS_POSIX 1
++
++/* Define if you want to enable c-ares support */
++/* #undef USE_ARES */
++
++/* Define if you want to enable c-ares DNS lookup */
++/* #undef USE_RESOLV_ARES */
++
++/* Define if you want to enable threaded DNS lookup */
++#define USE_RESOLV_THREADED 1
++
++/* if GnuTLS is enabled */
++/* #undef USE_GNUTLS */
++
++/* if SSL session export support is available */
++/* #undef USE_SSLS_EXPORT */
++
++/* if mbedTLS is enabled */
++/* #undef USE_MBEDTLS */
++
++/* if mbedTLS <4 has the mbedtls_des_crypt_ecb function. */
++/* #undef HAVE_MBEDTLS_DES_CRYPT_ECB */
++
++/* if Rustls is enabled */
++/* #undef USE_RUSTLS */
++
++/* if wolfSSL is enabled */
++/* #undef USE_WOLFSSL */
++
++/* if wolfSSL has the wolfSSL_get_peer_certificate function. */
++/* #undef HAVE_WOLFSSL_GET_PEER_CERTIFICATE */
++
++/* if wolfSSL has the wolfSSL_UseALPN function. */
++/* #undef HAVE_WOLFSSL_USEALPN */
++
++/* if wolfSSL has the wolfSSL_BIO_new function. */
++/* #undef HAVE_WOLFSSL_BIO_NEW */
++
++/* if wolfSSL has the wolfSSL_BIO_set_shutdown function. */
++/* #undef HAVE_WOLFSSL_BIO_SET_SHUTDOWN */
++
++/* if wolfSSL has the wc_Des_EcbEncrypt function. */
++/* #undef HAVE_WC_DES_ECBENCRYPT */
++
++/* if libssh is in use */
++/* #undef USE_LIBSSH */
++
++/* if libssh2 is in use */
++/* #undef USE_LIBSSH2 */
++
++/* if libpsl is in use */
++/* #undef USE_LIBPSL */
++
++/* if you want to use OpenLDAP code instead of legacy ldap implementation */
++/* #undef USE_OPENLDAP */
++
++/* if OpenSSL is in use */
++/* #undef USE_OPENSSL */
++
++/* if AmiSSL is in use */
++/* #undef USE_AMISSL */
++
++/* if GSASL is in use */
++/* #undef USE_GSASL */
++
++/* if libuv is in use */
++/* #undef USE_LIBUV */
++
++/* if HTTP/3 proxy support is available */
++/* #undef USE_PROXY_HTTP3 */
++
++/* Define to 1 if you have the <uv.h> header file. */
++/* #undef HAVE_UV_H */
++
++/* if libbacktrace is in use */
++/* #undef USE_BACKTRACE */
++
++/* Define to 1 if you do not want the OpenSSL configuration to be loaded
++   automatically */
++/* #undef CURL_DISABLE_OPENSSL_AUTO_LOAD_CONFIG */
++
++/* to enable NGHTTP2 */
++/* #undef USE_NGHTTP2 */
++
++/* to enable NGTCP2 */
++/* #undef USE_NGTCP2 */
++
++/* to enable NGHTTP3 */
++/* #undef USE_NGHTTP3 */
++
++/* to enable quiche */
++/* #undef USE_QUICHE */
++
++/* to enable openssl + ngtcp2 + nghttp3 */
++/* #undef OPENSSL_QUIC_API2 */
++
++/* Define to 1 if you have the quiche_conn_set_qlog_fd function. */
++/* #undef HAVE_QUICHE_CONN_SET_QLOG_FD */
++
++/* if Unix domain sockets are enabled */
++#define USE_UNIX_SOCKETS 1
++
++/* to enable SSPI support */
++/* #undef USE_WINDOWS_SSPI */
++
++/* to enable Windows SSL */
++/* #undef USE_SCHANNEL */
++
++/* if Watt-32 is in use */
++/* #undef USE_WATT32 */
++
++/* enable multiple SSL backends */
++/* #undef CURL_WITH_MULTI_SSL */
++
++/* Number of bits in a file offset, on hosts where this is settable. */
++#define _FILE_OFFSET_BITS 64
++
++/* the signed version of size_t */
++/* #undef ssize_t */
++
++/* Define to 1 if you have the mach_absolute_time function. */
++/* #undef HAVE_MACH_ABSOLUTE_TIME */
++
++/* to enable Windows IDN */
++/* #undef USE_WIN32_IDN */
++
++/* to enable Apple IDN */
++/* #undef USE_APPLE_IDN */
++
++/* to enable Apple OS-native certificate verification */
++/* #undef USE_APPLE_SECTRUST */
++
++/* Define to 1 to query for HTTPSRR when using DoH */
++/* #undef USE_HTTPSRR */
++
++/* if ECH support is available */
++/* #undef USE_ECH */
++
++/* Define to 1 if you have the wolfSSL_CTX_GenerateEchConfig function. */
++/* #undef HAVE_WOLFSSL_CTX_GENERATEECHCONFIG */
++
++/* Define to 1 if you have the SSL_set1_ech_config_list function. */
++/* #undef HAVE_SSL_SET1_ECH_CONFIG_LIST */
++
++/* Define to 1 if OpenSSL has the DES_ecb_encrypt function. */
++/* #undef HAVE_DES_ECB_ENCRYPT */
+diff --git a/bld-asan/libcurl-target.cmake b/bld-asan/libcurl-target.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..689ec7d2f9d66989ca550896d44fa5270c0ac59d
+--- /dev/null
++++ b/bld-asan/libcurl-target.cmake
+@@ -0,0 +1,70 @@
++# Generated by CMake
++
++if("${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}" LESS 2.8)
++   message(FATAL_ERROR "CMake >= 2.8.0 required")
++endif()
++if(CMAKE_VERSION VERSION_LESS "2.8.3")
++   message(FATAL_ERROR "CMake >= 2.8.3 required")
++endif()
++cmake_policy(PUSH)
++cmake_policy(VERSION 2.8.3...3.23)
++#----------------------------------------------------------------
++# Generated CMake target import file.
++#----------------------------------------------------------------
++
++# Commands may need to know the format version.
++set(CMAKE_IMPORT_FILE_VERSION 1)
++
++# Protect against multiple inclusion, which would fail when already imported targets are added once more.
++set(_cmake_targets_defined "")
++set(_cmake_targets_not_defined "")
++set(_cmake_expected_targets "")
++foreach(_cmake_expected_target IN ITEMS CURL::libcurl_static)
++  list(APPEND _cmake_expected_targets "${_cmake_expected_target}")
++  if(TARGET "${_cmake_expected_target}")
++    list(APPEND _cmake_targets_defined "${_cmake_expected_target}")
++  else()
++    list(APPEND _cmake_targets_not_defined "${_cmake_expected_target}")
++  endif()
++endforeach()
++unset(_cmake_expected_target)
++if(_cmake_targets_defined STREQUAL _cmake_expected_targets)
++  unset(_cmake_targets_defined)
++  unset(_cmake_targets_not_defined)
++  unset(_cmake_expected_targets)
++  unset(CMAKE_IMPORT_FILE_VERSION)
++  cmake_policy(POP)
++  return()
++endif()
++if(NOT _cmake_targets_defined STREQUAL "")
++  string(REPLACE ";" ", " _cmake_targets_defined_text "${_cmake_targets_defined}")
++  string(REPLACE ";" ", " _cmake_targets_not_defined_text "${_cmake_targets_not_defined}")
++  message(FATAL_ERROR "Some (but not all) targets in this export set were already defined.\nTargets Defined: ${_cmake_targets_defined_text}\nTargets not yet defined: ${_cmake_targets_not_defined_text}\n")
++endif()
++unset(_cmake_targets_defined)
++unset(_cmake_targets_not_defined)
++unset(_cmake_expected_targets)
++
++
++# Create imported target CURL::libcurl_static
++add_library(CURL::libcurl_static STATIC IMPORTED)
++
++set_target_properties(CURL::libcurl_static PROPERTIES
++  INTERFACE_COMPILE_DEFINITIONS "CURL_STATICLIB"
++  INTERFACE_INCLUDE_DIRECTORIES "/work/include"
++  INTERFACE_LINK_LIBRARIES "\$<LINK_ONLY:ZLIB::ZLIB>;\$<LINK_ONLY:CURL::brotli>;\$<LINK_ONLY:CURL::zstd>;\$<LINK_ONLY:Threads::Threads>;\$<LINK_ONLY:CURL::ZLIB>"
++)
++
++# Import target "CURL::libcurl_static" for configuration "Debug"
++set_property(TARGET CURL::libcurl_static APPEND PROPERTY IMPORTED_CONFIGURATIONS DEBUG)
++set_target_properties(CURL::libcurl_static PROPERTIES
++  IMPORTED_LINK_INTERFACE_LANGUAGES_DEBUG "C"
++  IMPORTED_LOCATION_DEBUG "/work/bld-asan/lib/libcurl-d.a"
++  )
++
++# This file does not depend on other imported targets which have
++# been exported from the same project but in a separate export set.
++
++# Commands beyond this point should not need to know the version.
++set(CMAKE_IMPORT_FILE_VERSION)
++cmake_policy(POP)
+diff --git a/bld-asan/scripts/cmake_install.cmake b/bld-asan/scripts/cmake_install.cmake
+new file mode 100644
+index 0000000000000000000000000000000000000000..e4aa115f964daabb54842401033316568244c1ef
+--- /dev/null
++++ b/bld-asan/scripts/cmake_install.cmake
+@@ -0,0 +1,44 @@
++# Install script for directory: /work/scripts
++
++# Set the install prefix
++if(NOT DEFINED CMAKE_INSTALL_PREFIX)
++  set(CMAKE_INSTALL_PREFIX "/usr/local")
++endif()
++string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
++
++# Set the install configuration name.
++if(NOT DEFINED CMAKE_INSTALL_CONFIG_NAME)
++  if(BUILD_TYPE)
++    string(REGEX REPLACE "^[^A-Za-z0-9_]+" ""
++           CMAKE_INSTALL_CONFIG_NAME "${BUILD_TYPE}")
++  else()
++    set(CMAKE_INSTALL_CONFIG_NAME "Debug")
++  endif()
++  message(STATUS "Install configuration: \"${CMAKE_INSTALL_CONFIG_NAME}\"")
++endif()
++
++# Set the component getting installed.
++if(NOT CMAKE_INSTALL_COMPONENT)
++  if(COMPONENT)
++    message(STATUS "Install component: \"${COMPONENT}\"")
++    set(CMAKE_INSTALL_COMPONENT "${COMPONENT}")
++  else()
++    set(CMAKE_INSTALL_COMPONENT)
++  endif()
++endif()
++
++# Install shared libraries without execute permission?
++if(NOT DEFINED CMAKE_INSTALL_SO_NO_EXE)
++  set(CMAKE_INSTALL_SO_NO_EXE "1")
++endif()
++
++# Is this installation the result of a crosscompile?
++if(NOT DEFINED CMAKE_CROSSCOMPILING)
++  set(CMAKE_CROSSCOMPILING "FALSE")
++endif()
++
++# Set default install directory permissions.
++if(NOT DEFINED CMAKE_OBJDUMP)
++  set(CMAKE_OBJDUMP "/usr/bin/objdump")
++endif()
++
+diff --git a/lib/mime.c b/lib/mime.c
+index 11eb66207de747a24d7ca5e8d4b69882377938ba..511686b4f63df0aa773548ba7ab803000dbf5c6a 100644
+--- a/lib/mime.c
++++ b/lib/mime.c
+@@ -345,6 +345,7 @@ static size_t encoder_base64_read(char *buffer, size_t size, bool ateof,
+ {
+   struct mime_encoder_state *st = &part->encstate;
+   size_t cursize = 0;
++  size_t groups = size / 4;   /* number of base64 groups the buffer holds */
+   int i;
+   char *ptr = buffer;
+ 
+@@ -365,7 +366,7 @@ static size_t encoder_base64_read(char *buffer, size_t size, bool ateof,
+     }
+ 
+     /* Be sure there is enough space and input data for a base64 group. */
+-    if(size < 4) {
++    if(!groups) {
+       if(!cursize)
+         return STOP_FILLING;
+       break;
+@@ -383,7 +384,7 @@ static size_t encoder_base64_read(char *buffer, size_t size, bool ateof,
+     *ptr++ = curlx_base64encdec[i & 0x3F];
+     cursize += 4;
+     st->pos += 4;
+-    size -= 4;
++    groups--;
+   }
+ 
+   /* If at eof, we have to flush the buffered data. */
+@@ -426,6 +427,12 @@ static curl_off_t encoder_base64_size(curl_mimepart *part)
+   if(size <= 0)
+     return size;    /* Unknown size or no data. */
+ 
++  /* The base64 character count plus its CRLFs must still be representable as
++     a curl_off_t. Report an unknown size rather than returning an overflowed
++     value for data too large to encode within that range. */
++  if(size > CURL_OFF_T_MAX / 2)
++    return -1;
++
+   /* Compute base64 character count. */
+   size = 4 * (1 + ((size - 1) / 3));
+ 

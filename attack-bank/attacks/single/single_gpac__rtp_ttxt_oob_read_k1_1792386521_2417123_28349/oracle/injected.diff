@@ -1,0 +1,31 @@
+diff --git a/src/ietf/rtp_depacketizer.c b/src/ietf/rtp_depacketizer.c
+index 20ff803c53c4ccd3c73df6b15288a1f6d0af6336..bca1a8dfd16bfd30caa00fa60764b9f3e2efbacf 100644
+--- a/src/ietf/rtp_depacketizer.c
++++ b/src/ietf/rtp_depacketizer.c
+@@ -510,6 +510,8 @@ static void gf_rtp_parse_ttxt(GF_RTPDepacketizer *rtp, GF_RTPHeader *hdr, u8 *pa
+ 		type = gf_bs_read_int(bs, 3);
+ 		ttu_len = gf_bs_read_u16(bs);
+ 		if (ttu_len<2) break;
++		/*the advertised TTU length shall fit in the payload*/
++		if (pay_start + 1 + ttu_len > size) break;
+ 
+ 		if (type==1) {
+ 			/*flush any existing packet*/
+@@ -565,7 +567,7 @@ static void gf_rtp_parse_ttxt(GF_RTPDepacketizer *rtp, GF_RTPHeader *hdr, u8 *pa
+ 
+ 			/*we don't reorder - RTP reordering is done at lower level, if this is out of order too bad*/
+ 			rtp->cur_txt_frag = cur_frag;
+-			gf_bs_write_data(rtp->inter_bs, payload+10, txt_size);
++			gf_bs_write_data(rtp->inter_bs, payload + pay_start + 10, txt_size);
+ 			gf_bs_skip_bytes(bs, txt_size);
+ 
+ 			rtp->sl_hdr.au_duration = duration;
+@@ -592,7 +594,7 @@ static void gf_rtp_parse_ttxt(GF_RTPDepacketizer *rtp, GF_RTPHeader *hdr, u8 *pa
+ 			}
+ 			gf_bs_read_int(bs, 4);  /*cur_frag, ignore*/
+ 			rtp->sl_hdr.au_duration = gf_bs_read_u24(bs);
+-			gf_bs_write_data(rtp->inter_bs, payload+7, ttu_len-6);
++			gf_bs_write_data(rtp->inter_bs, payload + pay_start + 7, ttu_len-6);
+ 			gf_bs_skip_bytes(bs, ttu_len-6);
+ 
+ 			/*done*/

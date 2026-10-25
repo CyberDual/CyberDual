@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "1fba0aab6e092b36406e642901e759b7c1749aa0",
+      "edited_message": null,
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 6947b3d..5e37abb 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -281,11 +281,19 @@\n         if ( error )\n           goto Fail;\n \n-        if ( tag != 0x8002U )\n+        if ( tag != 0x8002U || size > stream->size - stream->pos )\n           break;\n \n-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||\n-             FT_STREAM_READ( priv_dict + priv_len, size )        )\n+        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) )\n+          goto Fail;\n+\n+        if ( !stream->read )\n+        {\n+          FT_MEM_COPY( priv_dict + priv_len, stream->base + stream->pos,\n+                       size );\n+          stream->pos += size;\n+        }\n+        else if ( FT_STREAM_READ( priv_dict + priv_len, size ) )\n           goto Fail;\n \n         priv_len += size;\n"
+    },
+    {
+      "sha": "68227f568d2fb14a1a3bd7770a21b54a97a8c887",
+      "edited_message": null,
+      "patch": "--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -281,7 +281,7 @@\n         if ( error )\n           break;\n \n-        if ( tag != 0x8002U || size > stream->size - stream->pos )\n+        if ( tag != 0x8002U || size > stream->size - stream->pos + 1 )\n           break;\n \n         if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||\n"
+    }
+  ],
+  "coupling": "The segment-merging commit adds a checked direct copy for memory streams: its exact remaining-byte bound keeps the copy safe. The later size-check commit accepts a segment whose declared length exceeds the remaining bytes by one. On the original reader that discrepancy is stopped by FT_STREAM_READ, and with the earlier exact bound it is rejected before the direct copy. In combination, the widened bound feeds the direct copy one byte past the memory face buffer. The repair must make the size check and memory-stream copy obey the same bound.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "FT_New_Memory_Face",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

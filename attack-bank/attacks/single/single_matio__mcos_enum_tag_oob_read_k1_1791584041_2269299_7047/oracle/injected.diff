@@ -1,0 +1,37 @@
+diff --git a/src/mcos.c b/src/mcos.c
+index 5b7582866920c4b9ada50d1488fe8312baaab62a..79f86b90ee589e08cd5879e23b6d8cbd5ee4ca29 100644
+--- a/src/mcos.c
++++ b/src/mcos.c
+@@ -1559,15 +1559,30 @@ static int
+ IsEnumStruct(const matvar_t *matvar)
+ {
+     const matvar_t *tag;
++    const mat_uint32_t *data;
++    size_t i, n;
+ 
+     if ( matvar == NULL || matvar->class_type != MAT_C_STRUCT )
+         return 0;
+ 
+     tag = Mat_VarGetStructFieldByName(matvar, "EnumerationInstanceTag", 0);
+-    if ( tag == NULL || tag->class_type != MAT_C_UINT32 || tag->data == NULL )
++    if ( tag == NULL || tag->class_type != MAT_C_UINT32 || tag->data == NULL ||
++         tag->nbytes < sizeof(mat_uint32_t) )
+         return 0;
+ 
+-    return ((const mat_uint32_t *)tag->data)[0] == MCOS_REF_VALUE;
++    data = (const mat_uint32_t *)tag->data;
++    if ( data[0] == MCOS_REF_VALUE )
++        return 1;
++
++    /* Some encoders carry extra reserved words after the marker; scan them too. */
++    n = tag->nbytes / sizeof(mat_uint32_t);
++    if ( n > 1 ) {
++        for ( i = 1; i <= n; i++ )
++            if ( data[i] == MCOS_REF_VALUE )
++                return 1;
++    }
++
++    return 0;
+ }
+ 
+ /** @brief Recursively check for a nested enumeration instance struct

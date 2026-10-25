@@ -1,0 +1,29 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index b758e0eff234b2233567ff901fc7458a3f975b8d..fe70f5b747767585188475a10ab62d9770edd78e 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -667,7 +667,7 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+             char hostbuf[256];
+ 
+             /* make sure we do not overflow the buffer */
+-            if(namelen >= sizeof(hostbuf) - 1)
++            if(namelen > sizeof(hostbuf))
+                 return ssh2_err(hosts->session,
+                                 LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                                 "Failed to parse known_hosts line "
+diff --git a/src/openssl.c b/src/openssl.c
+index 6a38b55b91440c1c188472dde05a9770ea3a3f73..81107a388201c86ca8c23a7c4f1582926bcef485 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -953,6 +953,11 @@ int ssh2_cipher_crypt(ssh2_cipher_ctx *ctx, SSH2_CIPHER_T(algo), int encrypt,
+     assert(blocksize <= sizeof(buf));
+     assert(cryptlen >= 0);
+ 
++    /* The incoming block and length fields are peer-controlled, so do not
++       trust them to fit the fixed bounce buffer. */
++    if(blocksize > sizeof(buf) || cryptlen < 0)
++        return 1;
++
+ #if LIBSSH2_AES_GCM
+     /* First block */
+     if(IS_FIRST(firstlast)) {

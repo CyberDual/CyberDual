@@ -1,0 +1,87 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 9726ba2b9bd6c8e0b690100e98a46b3b961e60d9..0dc5064de5590c84a7c0b5c9dc515abc047cd489 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -3601,15 +3601,15 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                 if ( byteswap )
+                     (void)Mat_uint32Swap(tag);
+                 packed_type = TYPE_FROM_TAG(tag[0]);
++                err = Read(tag + 1, 4, 1, (FILE *)mat->fp, &bytesread);
++                if ( err ) {
++                    break;
++                }
+                 if ( tag[0] & 0xffff0000 ) { /* Data is in the tag */
+                     data_in_tag = 1;
+                     matvar->nbytes = (tag[0] & 0xffff0000) >> 16;
+                 } else {
+                     data_in_tag = 0;
+-                    err = Read(tag + 1, 4, 1, (FILE *)mat->fp, &bytesread);
+-                    if ( err ) {
+-                        break;
+-                    }
+                     if ( byteswap )
+                         (void)Mat_uint32Swap(tag + 1);
+                     matvar->nbytes = tag[1];
+@@ -3644,26 +3644,26 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+             }
+             if ( matvar->compression == MAT_COMPRESSION_NONE ) {
+                 size_t nBytes;
+-                err = ReadCharData(mat, matvar->data, matvar->data_type, nelems);
+-                if ( err ) {
+-                    free(matvar->data);
+-                    matvar->data = NULL;
+-                    matvar->nbytes = 0;
+-                    break;
+-                }
+-                err = Mul(&nBytes, nelems, Mat_SizeOf(matvar->data_type));
+-                if ( err ) {
+-                    free(matvar->data);
+-                    matvar->data = NULL;
+-                    matvar->nbytes = 0;
+-                    break;
++                if ( data_in_tag ) {
++                    /* Data is stored in the tag */
++                    memcpy(matvar->data, tag + 1, matvar->nbytes);
++                    nBytes = 8;
++                } else {
++                    err = ReadCharData(mat, matvar->data, matvar->data_type, nelems);
++                    if ( err ) {
++                        free(matvar->data);
++                        matvar->data = NULL;
++                        matvar->nbytes = 0;
++                        break;
++                    }
++                    err = Mul(&nBytes, nelems, Mat_SizeOf(matvar->data_type));
++                    if ( err ) {
++                        free(matvar->data);
++                        matvar->data = NULL;
++                        matvar->nbytes = 0;
++                        break;
++                    }
+                 }
+-                /*
+-                 * If the data was in the tag we started on a 4-byte
+-                 * boundary so add 4 to make it an 8-byte
+-                 */
+-                if ( data_in_tag )
+-                    nBytes += 4;
+                 if ( (nBytes % 8) != 0 )
+                     (void)fseeko((FILE *)mat->fp, 8 - (nBytes % 8), SEEK_CUR);
+ #if HAVE_ZLIB
+@@ -3677,6 +3677,16 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                     matvar->nbytes = 0;
+                     break;
+                 }
++                if ( matvar->data_type == MAT_T_UTF8 && 0 != matvar->internal->z->avail_out ) {
++                    /* The compressed stream ended before the declared data was read */
++                    free(matvar->data);
++                    matvar->data = NULL;
++                    matvar->nbytes = 0;
++                    err = MATIO_E_FILE_FORMAT_VIOLATION;
++                    Mat_Critical("Mat_VarRead5: Truncated UTF-8 char data of variable %s",
++                                 matvar->name);
++                    break;
++                }
+                 err = Mul(&nBytes, nelems, Mat_SizeOf(matvar->data_type));
+                 if ( err ) {
+                     free(matvar->data);

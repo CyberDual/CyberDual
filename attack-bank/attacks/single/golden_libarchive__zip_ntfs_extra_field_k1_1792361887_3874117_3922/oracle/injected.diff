@@ -1,0 +1,1142 @@
+diff --git a/Makefile.am b/Makefile.am
+index aed0da9918bd27d803295d8369dbaf2577cba12a..9f10eb66fc4dbb8a01c8c9f54a22b5732cb21373 100644
+--- a/Makefile.am
++++ b/Makefile.am
+@@ -612,6 +612,7 @@ libarchive_test_SOURCES= \
+ 	libarchive/test/test_read_format_zip_7075_utf8_paths.c \
+ 	libarchive/test/test_read_format_zip_ambiguous_timestamps.c \
+ 	libarchive/test/test_read_format_zip_comment_stored.c \
++	libarchive/test/test_read_format_zip_dos_mtime_precedence.c \
+ 	libarchive/test/test_read_format_zip_empty.c \
+ 	libarchive/test/test_read_format_zip_encryption_data.c \
+ 	libarchive/test/test_read_format_zip_encryption_partially.c \
+@@ -626,6 +627,8 @@ libarchive_test_SOURCES= \
+ 	libarchive/test/test_read_format_zip_negative_timestamps.c \
+ 	libarchive/test/test_read_format_zip_nested.c \
+ 	libarchive/test/test_read_format_zip_nofiletype.c \
++	libarchive/test/test_read_format_zip_ntfs_precedence.c \
++	libarchive/test/test_read_format_zip_ntfs_timestamp.c \
+ 	libarchive/test/test_read_format_zip_padded.c \
+ 	libarchive/test/test_read_format_zip_sfx.c \
+ 	libarchive/test/test_read_format_zip_size_exceeds_declared.c \
+diff --git a/libarchive/archive_read_support_format_zip.c b/libarchive/archive_read_support_format_zip.c
+index 7fa0f52bec6c5503c669f4b8211e95c63a7ed6ad..1a7540d43555f19b94467f625d6397b59557d0c6 100644
+--- a/libarchive/archive_read_support_format_zip.c
++++ b/libarchive/archive_read_support_format_zip.c
+@@ -97,6 +97,12 @@ struct zip_entry {
+ 	time_t			mtime;
+ 	time_t			atime;
+ 	time_t			ctime;
++	/* File creation time, from an NTFS extra field only */
++	time_t			btime;
++	/* Nanosecond precision, from an NTFS extra field only */
++	uint32_t		mtime_ns;
++	uint32_t		atime_ns;
++	uint32_t		btime_ns;
+ 	uint32_t		crc32;
+ 	uint16_t		mode;
+ 	uint16_t		zip_flags; /* From GP Flags Field */
+@@ -136,6 +142,10 @@ struct trad_enc_ctx {
+ /* Bits used in flags. */
+ #define LA_USED_ZIP64	(1 << 0)
+ #define LA_FROM_CENTRAL_DIRECTORY (1 << 1)
++#define LA_MTIME_FROM_EXTRA (1 << 2)
++#define LA_NTFS_MTIME (1 << 3)
++#define LA_NTFS_ATIME (1 << 4)
++#define LA_NTFS_BTIME (1 << 5)
+ 
+ /*
+  * See "WinZip - AES Encryption Information"
+@@ -776,15 +786,99 @@ process_extra(struct archive_read *a, struct archive_entry *entry,
+ 			 * on which file starts, but we don't handle
+ 			 * multi-volume Zip files. */
+ 			break;
++		case 0x000a:
++		{
++			/* NTFS Extra Field: 4 reserved bytes, then one or
++			 * more Tag(2)/Size(2)/Data(Size) attribute blocks.
++			 * Only Tag 1 is defined (Size 24: Mtime, Atime and
++			 * Ctime, each an 8-byte Windows FILETIME); skip any
++			 * other tag, per spec. Unlike every other ZIP
++			 * timestamp source, FILETIME has no negative or
++			 * pre-epoch ambiguity (it's unsigned 100ns ticks
++			 * since 1601), so it also supplies mtime_ns and
++			 * atime_ns. "Ctime" here is the Windows creation
++			 * time, not POSIX ctime, so it maps to btime. */
++			unsigned sub_offset = offset;
++			unsigned sub_remaining = datasize;
++
++			if (sub_remaining < 4)
++				break;
++			sub_offset += 4;
++			sub_remaining -= 4;
++
++			while (sub_remaining >= 4) {
++				unsigned short tag =
++				    archive_le16dec(p + sub_offset);
++				unsigned short size =
++				    archive_le16dec(p + sub_offset + 2);
++
++				/* Skip any attribute block that would
++				 * reach past the end of the extra
++				 * field. */
++				if (size > sub_remaining)
++					break;
++				sub_offset += 4;
++				sub_remaining -= 4;
++
++				if (tag == 1 && size == 24) {
++					/* A raw FILETIME of 0 marks a slot
++					 * the writer didn't have a value
++					 * for; treat it as absent rather
++					 * than decoding it as 1601-01-01.
++					 */
++					uint64_t raw;
++					int64_t secs;
++					uint32_t nsecs;
++
++					raw = archive_le64dec(p + sub_offset);
++					if (raw != 0) {
++						__archive_ntfs_to_unix(raw,
++						    &secs, &nsecs);
++						zip_entry->mtime = (time_t)secs;
++						zip_entry->mtime_ns = nsecs;
++						zip_entry->flags |= LA_NTFS_MTIME;
++						zip_entry->flags |= LA_MTIME_FROM_EXTRA;
++					}
++
++					raw = archive_le64dec(p + sub_offset + 8);
++					if (raw != 0) {
++						__archive_ntfs_to_unix(raw,
++						    &secs, &nsecs);
++						zip_entry->atime = (time_t)secs;
++						zip_entry->atime_ns = nsecs;
++						zip_entry->flags |= LA_NTFS_ATIME;
++					}
++
++					raw = archive_le64dec(p + sub_offset + 16);
++					if (raw != 0) {
++						__archive_ntfs_to_unix(raw,
++						    &secs, &nsecs);
++						zip_entry->btime = (time_t)secs;
++						zip_entry->btime_ns = nsecs;
++						zip_entry->flags |= LA_NTFS_BTIME;
++					}
++				}
++				sub_offset += size;
++				sub_remaining -= size;
++			}
++			break;
++		}
+ 		case 0x000d:
+ 			/* PKWARE Unix Extra Field fixed metadata. */
+ 			if (datasize >= 12) {
+ 				/* atime/mtime are signed 32-bit Unix
+ 				 * time, to allow pre-1970 dates. */
+-				zip_entry->atime =
+-				    to_time_t(archive_le32dec(p + offset));
+-				zip_entry->mtime =
+-				    to_time_t(archive_le32dec(p + offset + 4));
++				if (!(zip_entry->flags & LA_NTFS_ATIME)) {
++					zip_entry->atime =
++					    to_time_t(archive_le32dec(p + offset));
++					zip_entry->atime_ns = 0;
++				}
++				if (!(zip_entry->flags & LA_NTFS_MTIME)) {
++					zip_entry->mtime =
++					    to_time_t(archive_le32dec(p + offset + 4));
++					zip_entry->mtime_ns = 0;
++					zip_entry->flags |= LA_MTIME_FROM_EXTRA;
++				}
+ 				zip_entry->uid =
+ 				    archive_le16dec(p + offset + 8);
+ 				zip_entry->gid =
+@@ -837,8 +931,12 @@ process_extra(struct archive_read *a, struct archive_entry *entry,
+ 					break;
+ 				/* Signed 32-bit Unix time, to allow
+ 				 * pre-1970 dates. */
+-				zip_entry->mtime =
+-				    to_time_t(archive_le32dec(p + offset));
++				if (!(zip_entry->flags & LA_NTFS_MTIME)) {
++					zip_entry->mtime =
++					    to_time_t(archive_le32dec(p + offset));
++					zip_entry->mtime_ns = 0;
++					zip_entry->flags |= LA_MTIME_FROM_EXTRA;
++				}
+ 				offset += 4;
+ 				datasize -= 4;
+ 			}
+@@ -846,8 +944,11 @@ process_extra(struct archive_read *a, struct archive_entry *entry,
+ 			{
+ 				if (datasize < 4)
+ 					break;
+-				zip_entry->atime =
+-				    to_time_t(archive_le32dec(p + offset));
++				if (!(zip_entry->flags & LA_NTFS_ATIME)) {
++					zip_entry->atime =
++					    to_time_t(archive_le32dec(p + offset));
++					zip_entry->atime_ns = 0;
++				}
+ 				offset += 4;
+ 				datasize -= 4;
+ 			}
+@@ -868,10 +969,17 @@ process_extra(struct archive_read *a, struct archive_entry *entry,
+ 			if (datasize >= 8) {
+ 				/* Signed 32-bit Unix time, to allow
+ 				 * pre-1970 dates. */
+-				zip_entry->atime =
+-				    to_time_t(archive_le32dec(p + offset));
+-				zip_entry->mtime =
+-				    to_time_t(archive_le32dec(p + offset + 4));
++				if (!(zip_entry->flags & LA_NTFS_ATIME)) {
++					zip_entry->atime =
++					    to_time_t(archive_le32dec(p + offset));
++					zip_entry->atime_ns = 0;
++				}
++				if (!(zip_entry->flags & LA_NTFS_MTIME)) {
++					zip_entry->mtime =
++					    to_time_t(archive_le32dec(p + offset + 4));
++					zip_entry->mtime_ns = 0;
++					zip_entry->flags |= LA_MTIME_FROM_EXTRA;
++				}
+ 			}
+ 			if (datasize >= 12) {
+ 				zip_entry->uid =
+@@ -1186,7 +1294,16 @@ zip_read_local_file_header(struct archive_read *a, struct archive_entry *entry,
+ 	}
+ 	zip->init_decryption = (zip_entry->zip_flags & ZIP_ENCRYPTED);
+ 	zip_entry->compression = (char)archive_le16dec(p + 8);
+-	zip_entry->mtime = __archive_dos_to_unix(archive_le32dec(p + 10));
++	/* The DOS timestamp in the Local Header carries no sub-second
++	 * precision and no information a Central Directory prescan
++	 * wouldn't already have, so only use it (and reset mtime_ns to
++	 * match, since it has none) as a fallback default rather than
++	 * unconditionally overriding a more precise value an extra field
++	 * has already established. */
++	if (!(zip_entry->flags & LA_MTIME_FROM_EXTRA)) {
++		zip_entry->mtime = __archive_dos_to_unix(archive_le32dec(p + 10));
++		zip_entry->mtime_ns = 0;
++	}
+ 	zip_entry->crc32 = archive_le32dec(p + 14);
+ 	if (zip_entry->zip_flags & ZIP_LENGTH_AT_END)
+ 		zip_entry->decdat = p[11];
+@@ -1381,9 +1498,12 @@ zip_read_local_file_header(struct archive_read *a, struct archive_entry *entry,
+ 	archive_entry_set_mode(entry, zip_entry->mode);
+ 	archive_entry_set_uid(entry, zip_entry->uid);
+ 	archive_entry_set_gid(entry, zip_entry->gid);
+-	archive_entry_set_mtime(entry, zip_entry->mtime, 0);
++	archive_entry_set_mtime(entry, zip_entry->mtime, zip_entry->mtime_ns);
+ 	archive_entry_set_ctime(entry, zip_entry->ctime, 0);
+-	archive_entry_set_atime(entry, zip_entry->atime, 0);
++	archive_entry_set_atime(entry, zip_entry->atime, zip_entry->atime_ns);
++	if (zip_entry->flags & LA_NTFS_BTIME)
++		archive_entry_set_birthtime(entry, zip_entry->btime,
++		    zip_entry->btime_ns);
+ 
+ 	if ((zip->entry->mode & AE_IFMT) == AE_IFLNK) {
+ 		size_t linkname_length;
+diff --git a/libarchive/test/CMakeLists.txt b/libarchive/test/CMakeLists.txt
+index 7e9b69bca629b145d150c2e967d35dd4ba1d54bc..a4ba74cf5964566bc1647b4a3efd9caf1e6ade1a 100644
+--- a/libarchive/test/CMakeLists.txt
++++ b/libarchive/test/CMakeLists.txt
+@@ -238,6 +238,7 @@ IF(ENABLE_TEST)
+     test_read_format_zip_7075_utf8_paths.c
+     test_read_format_zip_ambiguous_timestamps.c
+     test_read_format_zip_comment_stored.c
++    test_read_format_zip_dos_mtime_precedence.c
+     test_read_format_zip_empty.c
+     test_read_format_zip_encryption_data.c
+     test_read_format_zip_encryption_header.c
+@@ -252,6 +253,8 @@ IF(ENABLE_TEST)
+     test_read_format_zip_negative_timestamps.c
+     test_read_format_zip_nested.c
+     test_read_format_zip_nofiletype.c
++    test_read_format_zip_ntfs_precedence.c
++    test_read_format_zip_ntfs_timestamp.c
+     test_read_format_zip_padded.c
+     test_read_format_zip_sfx.c
+     test_read_format_zip_size_exceeds_declared.c
+diff --git a/libarchive/test/test_read_format_zip_dos_mtime_precedence.c b/libarchive/test/test_read_format_zip_dos_mtime_precedence.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..9274cee86e9a3be00b73150e9c627936162ae211
+--- /dev/null
++++ b/libarchive/test/test_read_format_zip_dos_mtime_precedence.c
+@@ -0,0 +1,365 @@
++/*-
++ * Copyright (c) 2026 François Degros
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR(S) ``AS IS'' AND ANY EXPRESS OR
++ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
++ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
++ * IN NO EVENT SHALL THE AUTHOR(S) BE LIABLE FOR ANY DIRECT, INDIRECT,
++ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
++ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
++ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++#include "test.h"
++
++/*
++ * Regression tests for the Local Header's legacy DOS mtime NOT clobbering
++ * a more precise mtime already established from an extra field. Unlike
++ * test_read_format_zip_ntfs_precedence.c (which places the winning extra
++ * field in the Local Header, alongside a losing coarser one), each archive
++ * here places its timestamp extra field *only* in the Central Directory -
++ * a Local Header is allowed to omit an extra field the Central Directory
++ * carries. That means the seekable reader's second, redundant call to
++ * process_extra() on the Local Header's own (here absent) extra data can't
++ * mask a broken guard by re-deriving the correct mtime a second time: this
++ * is the one scenario where the DOS-clobber guard at
++ * zip_read_local_file_header() actually does the work, so it's the one
++ * that must be tested directly.
++ *
++ * Each archive's Local Header carries a deliberately-wrong DOS time/date
++ * (DOS_MIN_TIME, 1980-01-01) that must NOT end up as the entry's mtime;
++ * the Central-Directory-only extra field gives the correct value:
++ *   mtime = 1700000000 (with .100000000 sub-second precision for NTFS)
++ */
++
++/* 0x000A "NTFS", Central Directory only. */
++static const unsigned char archive_dos_mtime_precedence_ntfs[] = {
++/* --- local file header --- */
++	0x50, 0x4b, 0x03, 0x04, /* local file header signature */
++	0x14, 0x00,             /* version needed to extract: 2.0 */
++	0x00, 0x00,             /* general purpose bit flag */
++	0x00, 0x00,             /* compression method: stored */
++	0x00, 0x00,             /* last mod file time (wrong-on-purpose: DOS_MIN_TIME) */
++	0x21, 0x00,             /* last mod file date (wrong-on-purpose: DOS_MIN_TIME) */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,             /* file name length = 8 */
++	0x00, 0x00,             /* extra field length = 0 (no extra field here) */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x000a "NTFS" placed in the Central Directory ONLY -
++ * the Local Header above has none: this is the scenario the
++ * DOS-clobber guard exists for. */
++	0x68, 0x69, 0x0a,       /* "hi\n" */
++/* --- central directory header --- */
++	0x50, 0x4b, 0x01, 0x02, /* central directory header signature */
++	0x14, 0x00,             /* version made by: 2.0, MS-DOS */
++	0x14, 0x00,             /* version needed to extract: 2.0 */
++	0x00, 0x00,             /* general purpose bit flag */
++	0x00, 0x00,             /* compression method: stored */
++	0x00, 0x00,             /* last mod file time (unused: 0x000a "NTFS" wins) */
++	0x21, 0x00,             /* last mod file date (unused: 0x000a "NTFS" wins) */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,             /* file name length = 8 */
++	0x24, 0x00,             /* extra field length = 36 */
++	0x00, 0x00,             /* file comment length */
++	0x00, 0x00,             /* disk number start */
++	0x00, 0x00,             /* internal file attributes */
++	0x00, 0x00, 0xa4, 0x81, /* external file attributes: -rw-r--r-- */
++	0x00, 0x00, 0x00, 0x00, /* relative offset of local header = 0 */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x000a "NTFS" (only copy: must set mtime) */
++	0x0a, 0x00,             /* extra field ID = 0x000a */
++	0x20, 0x00,             /* extra field size = 32 */
++	0x00, 0x00, 0x00, 0x00, /* reserved */
++	0x01, 0x00,             /* NTFS attribute tag 1 */
++	0x18, 0x00,             /* NTFS attribute 1 size */
++	0x40, 0x42, 0x7c, 0xc6, 0x47, 0x17, 0xda, 0x01, /* Mtime -> 1700000000.100000000 */
++	0x80, 0x4e, 0x26, 0x02, 0x48, 0x17, 0xda, 0x01, /* Atime -> 1700000100.200000000 */
++	0xc0, 0x5a, 0xd0, 0x3d, 0x48, 0x17, 0xda, 0x01, /* Ctime -> 1700000200.300000000 (-> birthtime) */
++/* --- end of central directory record --- */
++	0x50, 0x4b, 0x05, 0x06, /* end of central directory signature */
++	0x00, 0x00,             /* number of this disk */
++	0x00, 0x00,             /* disk with start of central directory */
++	0x01, 0x00,             /* central directory entries on this disk */
++	0x01, 0x00,             /* total central directory entries */
++	0x5a, 0x00, 0x00, 0x00, /* size of central directory = 90 */
++	0x29, 0x00, 0x00, 0x00, /* offset of central directory = 41 */
++	0x00, 0x00,             /* .ZIP file comment length */
++};
++
++DEFINE_TEST(test_read_format_zip_dos_mtime_precedence_ntfs)
++{
++	struct archive *a;
++	struct archive_entry *ae;
++
++	assert((a = archive_read_new()) != NULL);
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_support_format_zip_seekable(a));
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_open_memory(a, archive_dos_mtime_precedence_ntfs,
++		sizeof(archive_dos_mtime_precedence_ntfs)));
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_next_header(a, &ae));
++
++	assertEqualString("test.txt", archive_entry_pathname(ae));
++	assertEqualInt(1700000000LL, archive_entry_mtime(ae));
++	assertEqualInt(100000000L, archive_entry_mtime_nsec(ae));
++	assertEqualInt(1700000100LL, archive_entry_atime(ae));
++	assertEqualInt(200000000L, archive_entry_atime_nsec(ae));
++	assert(archive_entry_birthtime_is_set(ae));
++	assertEqualInt(1700000200LL, archive_entry_birthtime(ae));
++	assertEqualInt(300000000L, archive_entry_birthtime_nsec(ae));
++
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_close(a));
++	assertEqualInt(ARCHIVE_OK, archive_read_free(a));
++}
++
++/* 0x000D "PKWARE Unix", Central Directory only. */
++static const unsigned char archive_dos_mtime_precedence_pkware_unix[] = {
++/* --- local file header --- */
++	0x50, 0x4b, 0x03, 0x04, /* local file header signature */
++	0x14, 0x00,             /* version needed to extract: 2.0 */
++	0x00, 0x00,             /* general purpose bit flag */
++	0x00, 0x00,             /* compression method: stored */
++	0x00, 0x00,             /* last mod file time (wrong-on-purpose: DOS_MIN_TIME) */
++	0x21, 0x00,             /* last mod file date (wrong-on-purpose: DOS_MIN_TIME) */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,             /* file name length = 8 */
++	0x00, 0x00,             /* extra field length = 0 (no extra field here) */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x000d "PKWARE Unix" placed in the Central Directory ONLY -
++ * the Local Header above has none: this is the scenario the
++ * DOS-clobber guard exists for. */
++	0x68, 0x69, 0x0a,       /* "hi\n" */
++/* --- central directory header --- */
++	0x50, 0x4b, 0x01, 0x02, /* central directory header signature */
++	0x14, 0x00,             /* version made by: 2.0, MS-DOS */
++	0x14, 0x00,             /* version needed to extract: 2.0 */
++	0x00, 0x00,             /* general purpose bit flag */
++	0x00, 0x00,             /* compression method: stored */
++	0x00, 0x00,             /* last mod file time (unused: 0x000d "PKWARE Unix" wins) */
++	0x21, 0x00,             /* last mod file date (unused: 0x000d "PKWARE Unix" wins) */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,             /* file name length = 8 */
++	0x10, 0x00,             /* extra field length = 16 */
++	0x00, 0x00,             /* file comment length */
++	0x00, 0x00,             /* disk number start */
++	0x00, 0x00,             /* internal file attributes */
++	0x00, 0x00, 0xa4, 0x81, /* external file attributes: -rw-r--r-- */
++	0x00, 0x00, 0x00, 0x00, /* relative offset of local header = 0 */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x000d "PKWARE Unix" (only copy: must set mtime) */
++	0x0d, 0x00,             /* extra field ID = 0x000d */
++	0x0c, 0x00,             /* extra field size = 12 */
++	0x64, 0xf1, 0x53, 0x65, /* atime -> 1700000100 */
++	0x00, 0xf1, 0x53, 0x65, /* mtime -> 1700000000 */
++	0xe9, 0x03,             /* uid = 1001 */
++	0xea, 0x03,             /* gid = 1002 */
++/* --- end of central directory record --- */
++	0x50, 0x4b, 0x05, 0x06, /* end of central directory signature */
++	0x00, 0x00,             /* number of this disk */
++	0x00, 0x00,             /* disk with start of central directory */
++	0x01, 0x00,             /* central directory entries on this disk */
++	0x01, 0x00,             /* total central directory entries */
++	0x46, 0x00, 0x00, 0x00, /* size of central directory = 70 */
++	0x29, 0x00, 0x00, 0x00, /* offset of central directory = 41 */
++	0x00, 0x00,             /* .ZIP file comment length */
++};
++
++DEFINE_TEST(test_read_format_zip_dos_mtime_precedence_pkware_unix)
++{
++	struct archive *a;
++	struct archive_entry *ae;
++
++	assert((a = archive_read_new()) != NULL);
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_support_format_zip_seekable(a));
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_open_memory(a, archive_dos_mtime_precedence_pkware_unix,
++		sizeof(archive_dos_mtime_precedence_pkware_unix)));
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_next_header(a, &ae));
++
++	assertEqualString("test.txt", archive_entry_pathname(ae));
++	assertEqualInt(1700000000LL, archive_entry_mtime(ae));
++	assertEqualInt(1700000100LL, archive_entry_atime(ae));
++	assertEqualInt(1001, archive_entry_uid(ae));
++	assertEqualInt(1002, archive_entry_gid(ae));
++
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_close(a));
++	assertEqualInt(ARCHIVE_OK, archive_read_free(a));
++}
++
++/* 0x5455 "UT", Central Directory only. */
++static const unsigned char archive_dos_mtime_precedence_ut[] = {
++/* --- local file header --- */
++	0x50, 0x4b, 0x03, 0x04, /* local file header signature */
++	0x14, 0x00,             /* version needed to extract: 2.0 */
++	0x00, 0x00,             /* general purpose bit flag */
++	0x00, 0x00,             /* compression method: stored */
++	0x00, 0x00,             /* last mod file time (wrong-on-purpose: DOS_MIN_TIME) */
++	0x21, 0x00,             /* last mod file date (wrong-on-purpose: DOS_MIN_TIME) */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,             /* file name length = 8 */
++	0x00, 0x00,             /* extra field length = 0 (no extra field here) */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x5455 "UT" placed in the Central Directory ONLY -
++ * the Local Header above has none: this is the scenario the
++ * DOS-clobber guard exists for. */
++	0x68, 0x69, 0x0a,       /* "hi\n" */
++/* --- central directory header --- */
++	0x50, 0x4b, 0x01, 0x02, /* central directory header signature */
++	0x14, 0x00,             /* version made by: 2.0, MS-DOS */
++	0x14, 0x00,             /* version needed to extract: 2.0 */
++	0x00, 0x00,             /* general purpose bit flag */
++	0x00, 0x00,             /* compression method: stored */
++	0x00, 0x00,             /* last mod file time (unused: 0x5455 "UT" wins) */
++	0x21, 0x00,             /* last mod file date (unused: 0x5455 "UT" wins) */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,             /* file name length = 8 */
++	0x11, 0x00,             /* extra field length = 17 */
++	0x00, 0x00,             /* file comment length */
++	0x00, 0x00,             /* disk number start */
++	0x00, 0x00,             /* internal file attributes */
++	0x00, 0x00, 0xa4, 0x81, /* external file attributes: -rw-r--r-- */
++	0x00, 0x00, 0x00, 0x00, /* relative offset of local header = 0 */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x5455 "UT" (only copy: must set mtime) */
++	0x55, 0x54,             /* extra field ID = 0x5455 */
++	0x0d, 0x00,             /* extra field size = 13 */
++	0x07,                   /* flags: mtime, atime, ctime all present */
++	0x00, 0xf1, 0x53, 0x65, /* mtime -> 1700000000 */
++	0x64, 0xf1, 0x53, 0x65, /* atime -> 1700000100 */
++	0xc8, 0xf1, 0x53, 0x65, /* ctime -> 1700000200 */
++/* --- end of central directory record --- */
++	0x50, 0x4b, 0x05, 0x06, /* end of central directory signature */
++	0x00, 0x00,             /* number of this disk */
++	0x00, 0x00,             /* disk with start of central directory */
++	0x01, 0x00,             /* central directory entries on this disk */
++	0x01, 0x00,             /* total central directory entries */
++	0x47, 0x00, 0x00, 0x00, /* size of central directory = 71 */
++	0x29, 0x00, 0x00, 0x00, /* offset of central directory = 41 */
++	0x00, 0x00,             /* .ZIP file comment length */
++};
++
++DEFINE_TEST(test_read_format_zip_dos_mtime_precedence_ut)
++{
++	struct archive *a;
++	struct archive_entry *ae;
++
++	assert((a = archive_read_new()) != NULL);
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_support_format_zip_seekable(a));
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_open_memory(a, archive_dos_mtime_precedence_ut,
++		sizeof(archive_dos_mtime_precedence_ut)));
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_next_header(a, &ae));
++
++	assertEqualString("test.txt", archive_entry_pathname(ae));
++	assertEqualInt(1700000000LL, archive_entry_mtime(ae));
++	assertEqualInt(1700000100LL, archive_entry_atime(ae));
++	assertEqualInt(1700000200LL, archive_entry_ctime(ae));
++
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_close(a));
++	assertEqualInt(ARCHIVE_OK, archive_read_free(a));
++}
++
++/* 0x5855 "UX" (old), Central Directory only. */
++static const unsigned char archive_dos_mtime_precedence_ux[] = {
++/* --- local file header --- */
++	0x50, 0x4b, 0x03, 0x04, /* local file header signature */
++	0x14, 0x00,             /* version needed to extract: 2.0 */
++	0x00, 0x00,             /* general purpose bit flag */
++	0x00, 0x00,             /* compression method: stored */
++	0x00, 0x00,             /* last mod file time (wrong-on-purpose: DOS_MIN_TIME) */
++	0x21, 0x00,             /* last mod file date (wrong-on-purpose: DOS_MIN_TIME) */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,             /* file name length = 8 */
++	0x00, 0x00,             /* extra field length = 0 (no extra field here) */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x5855 "UX" (old) placed in the Central Directory ONLY -
++ * the Local Header above has none: this is the scenario the
++ * DOS-clobber guard exists for. */
++	0x68, 0x69, 0x0a,       /* "hi\n" */
++/* --- central directory header --- */
++	0x50, 0x4b, 0x01, 0x02, /* central directory header signature */
++	0x14, 0x00,             /* version made by: 2.0, MS-DOS */
++	0x14, 0x00,             /* version needed to extract: 2.0 */
++	0x00, 0x00,             /* general purpose bit flag */
++	0x00, 0x00,             /* compression method: stored */
++	0x00, 0x00,             /* last mod file time (unused: 0x5855 "UX" (old) wins) */
++	0x21, 0x00,             /* last mod file date (unused: 0x5855 "UX" (old) wins) */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,             /* file name length = 8 */
++	0x10, 0x00,             /* extra field length = 16 */
++	0x00, 0x00,             /* file comment length */
++	0x00, 0x00,             /* disk number start */
++	0x00, 0x00,             /* internal file attributes */
++	0x00, 0x00, 0xa4, 0x81, /* external file attributes: -rw-r--r-- */
++	0x00, 0x00, 0x00, 0x00, /* relative offset of local header = 0 */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x5855 "UX" (old) (only copy: must set mtime) */
++	0x55, 0x58,             /* extra field ID = 0x5855 */
++	0x0c, 0x00,             /* extra field size = 12 */
++	0x64, 0xf1, 0x53, 0x65, /* atime -> 1700000100 */
++	0x00, 0xf1, 0x53, 0x65, /* mtime -> 1700000000 */
++	0xe9, 0x03,             /* uid = 1001 */
++	0xea, 0x03,             /* gid = 1002 */
++/* --- end of central directory record --- */
++	0x50, 0x4b, 0x05, 0x06, /* end of central directory signature */
++	0x00, 0x00,             /* number of this disk */
++	0x00, 0x00,             /* disk with start of central directory */
++	0x01, 0x00,             /* central directory entries on this disk */
++	0x01, 0x00,             /* total central directory entries */
++	0x46, 0x00, 0x00, 0x00, /* size of central directory = 70 */
++	0x29, 0x00, 0x00, 0x00, /* offset of central directory = 41 */
++	0x00, 0x00,             /* .ZIP file comment length */
++};
++
++DEFINE_TEST(test_read_format_zip_dos_mtime_precedence_ux)
++{
++	struct archive *a;
++	struct archive_entry *ae;
++
++	assert((a = archive_read_new()) != NULL);
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_support_format_zip_seekable(a));
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_open_memory(a, archive_dos_mtime_precedence_ux,
++		sizeof(archive_dos_mtime_precedence_ux)));
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_next_header(a, &ae));
++
++	assertEqualString("test.txt", archive_entry_pathname(ae));
++	assertEqualInt(1700000000LL, archive_entry_mtime(ae));
++	assertEqualInt(1700000100LL, archive_entry_atime(ae));
++	assertEqualInt(1001, archive_entry_uid(ae));
++	assertEqualInt(1002, archive_entry_gid(ae));
++
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_close(a));
++	assertEqualInt(ARCHIVE_OK, archive_read_free(a));
++}
+diff --git a/libarchive/test/test_read_format_zip_ntfs_precedence.c b/libarchive/test/test_read_format_zip_ntfs_precedence.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..03c75dec8bb87378c84513ee3fc4ab296fb40d5f
+--- /dev/null
++++ b/libarchive/test/test_read_format_zip_ntfs_precedence.c
+@@ -0,0 +1,365 @@
++/*-
++ * Copyright (c) 2026 François Degros
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR(S) ``AS IS'' AND ANY EXPRESS OR
++ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
++ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
++ * IN NO EVENT SHALL THE AUTHOR(S) BE LIABLE FOR ANY DIRECT, INDIRECT,
++ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
++ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
++ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++#include "test.h"
++
++/*
++ * Regression tests for NTFS (0x000A) extra field precedence: its
++ * mtime/atime/birthtime must win over a coarser field (0x000D PKWARE
++ * Unix, 0x5455 UT, or 0x5855 UX) for the same entry, regardless of
++ * which one is stored - and therefore processed - first. This is the
++ * opposite ordering from what a naive "last one wins" implementation
++ * would need to get right, since process_extra() walks the extra data
++ * in file order and any coarser field found after NTFS could otherwise
++ * clobber the more precise value NTFS already set.
++ *
++ * Each archive below has a single entry ("test.txt") with the NTFS
++ * field placed *before* the coarser one. NTFS gives:
++ *   Mtime: 1700000000.100000000
++ *   Atime: 1700000100.200000000
++ *   Ctime: 1700000200.300000000 (-> birthtime)
++ * while the coarser field carries different, wrong-on-purpose values
++ * (1600000000/1600000100/1600000200) that must NOT show up in the
++ * resulting archive_entry - if they do, the ordering-independence
++ * guarantee is broken.
++ */
++
++/* 0x000A "NTFS" then 0x000D "PKWARE Unix": AcTime, ModTime, UID, GID. */
++static const unsigned char archive_ntfs_precedence_pkware_unix[] = {
++/* --- local file header --- */
++	0x50, 0x4b, 0x03, 0x04, /* local file header signature */
++	0x14, 0x00,          /* version needed to extract: 2.0 */
++	0x00, 0x00,          /* general purpose bit flag */
++	0x00, 0x00,          /* compression method: stored */
++	0x00, 0x00,          /* last mod file time */
++	0x00, 0x00,          /* last mod file date */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,          /* file name length = 8 */
++	0x34, 0x00,          /* extra field length = 52 */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x000a "NTFS" (processed FIRST: must still win) */
++	0x0a, 0x00,          /* extra field ID = 0x000a */
++	0x20, 0x00,          /* extra field size = 32 */
++	0x00, 0x00, 0x00, 0x00, /* reserved */
++	0x01, 0x00,          /* NTFS attribute tag 1 */
++	0x18, 0x00,          /* NTFS attribute 1 size */
++	0x40, 0x42, 0x7c, 0xc6, 0x47, 0x17, 0xda, 0x01, /* Mtime (precise) */
++	0x80, 0x4e, 0x26, 0x02, 0x48, 0x17, 0xda, 0x01, /* Atime (precise) */
++	0xc0, 0x5a, 0xd0, 0x3d, 0x48, 0x17, 0xda, 0x01, /* Ctime -> birthtime */
++/* extra field 0x000d "PKWARE Unix" (coarser; must NOT win) */
++	0x0d, 0x00,          /* extra field ID = 0x000d */
++	0x0c, 0x00,          /* extra field size = 12 */
++	0x64, 0x10, 0x5e, 0x5f, /* atime -> 1600000100 (must be ignored) */
++	0x00, 0x10, 0x5e, 0x5f, /* mtime -> 1600000000 (must be ignored) */
++	0xe9, 0x03,          /* uid = 1001 */
++	0xea, 0x03,          /* gid = 1002 */
++	0x68, 0x69, 0x0a,    /* "hi\n" */
++/* --- central directory header --- */
++	0x50, 0x4b, 0x01, 0x02, /* central directory header signature */
++	0x14, 0x00,          /* version made by: 2.0, MS-DOS */
++	0x14, 0x00,          /* version needed to extract: 2.0 */
++	0x00, 0x00,          /* general purpose bit flag */
++	0x00, 0x00,          /* compression method: stored */
++	0x00, 0x00,          /* last mod file time */
++	0x00, 0x00,          /* last mod file date */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,          /* file name length = 8 */
++	0x34, 0x00,          /* extra field length = 52 */
++	0x00, 0x00,          /* file comment length */
++	0x00, 0x00,          /* disk number start */
++	0x00, 0x00,          /* internal file attributes */
++	0x00, 0x00, 0xa4, 0x81, /* external file attributes: -rw-r--r-- */
++	0x00, 0x00, 0x00, 0x00, /* relative offset of local header = 0 */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x000a "NTFS" (processed FIRST: must still win) */
++	0x0a, 0x00,          /* extra field ID = 0x000a */
++	0x20, 0x00,          /* extra field size = 32 */
++	0x00, 0x00, 0x00, 0x00, /* reserved */
++	0x01, 0x00,          /* NTFS attribute tag 1 */
++	0x18, 0x00,          /* NTFS attribute 1 size */
++	0x40, 0x42, 0x7c, 0xc6, 0x47, 0x17, 0xda, 0x01, /* Mtime (precise) */
++	0x80, 0x4e, 0x26, 0x02, 0x48, 0x17, 0xda, 0x01, /* Atime (precise) */
++	0xc0, 0x5a, 0xd0, 0x3d, 0x48, 0x17, 0xda, 0x01, /* Ctime -> birthtime */
++/* extra field 0x000d "PKWARE Unix" (coarser; must NOT win) */
++	0x0d, 0x00,          /* extra field ID = 0x000d */
++	0x0c, 0x00,          /* extra field size = 12 */
++	0x64, 0x10, 0x5e, 0x5f, /* atime -> 1600000100 (must be ignored) */
++	0x00, 0x10, 0x5e, 0x5f, /* mtime -> 1600000000 (must be ignored) */
++	0xe9, 0x03,          /* uid = 1001 */
++	0xea, 0x03,          /* gid = 1002 */
++/* --- end of central directory record --- */
++	0x50, 0x4b, 0x05, 0x06, /* end of central directory signature */
++	0x00, 0x00,          /* number of this disk */
++	0x00, 0x00,          /* disk with start of central directory */
++	0x01, 0x00,          /* central directory entries on this disk */
++	0x01, 0x00,          /* total central directory entries */
++	0x6a, 0x00, 0x00, 0x00, /* size of central directory = 106 */
++	0x5d, 0x00, 0x00, 0x00, /* offset of central directory = 93 */
++	0x00, 0x00,          /* .ZIP file comment length */
++};
++
++DEFINE_TEST(test_read_format_zip_ntfs_precedence_pkware_unix)
++{
++	struct archive *a;
++	struct archive_entry *ae;
++
++	assert((a = archive_read_new()) != NULL);
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_support_format_zip_seekable(a));
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_open_memory(a, archive_ntfs_precedence_pkware_unix,
++		sizeof(archive_ntfs_precedence_pkware_unix)));
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_next_header(a, &ae));
++
++	assertEqualString("test.txt", archive_entry_pathname(ae));
++	assertEqualInt(1700000000LL, archive_entry_mtime(ae));
++	assertEqualInt(100000000L, archive_entry_mtime_nsec(ae));
++	assertEqualInt(1700000100LL, archive_entry_atime(ae));
++	assertEqualInt(200000000L, archive_entry_atime_nsec(ae));
++	assert(archive_entry_birthtime_is_set(ae));
++	assertEqualInt(1700000200LL, archive_entry_birthtime(ae));
++	assertEqualInt(300000000L, archive_entry_birthtime_nsec(ae));
++	assertEqualInt(1001, archive_entry_uid(ae));
++	assertEqualInt(1002, archive_entry_gid(ae));
++
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_close(a));
++	assertEqualInt(ARCHIVE_OK, archive_read_free(a));
++}
++
++/* 0x000A "NTFS" then 0x5455 "UT": Flags, ModTime, AcTime, CrTime. */
++static const unsigned char archive_ntfs_precedence_ut[] = {
++/* --- local file header --- */
++	0x50, 0x4b, 0x03, 0x04, /* local file header signature */
++	0x14, 0x00,          /* version needed to extract: 2.0 */
++	0x00, 0x00,          /* general purpose bit flag */
++	0x00, 0x00,          /* compression method: stored */
++	0x00, 0x00,          /* last mod file time */
++	0x00, 0x00,          /* last mod file date */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,          /* file name length = 8 */
++	0x35, 0x00,          /* extra field length = 53 */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x000a "NTFS" (processed FIRST: must still win) */
++	0x0a, 0x00,          /* extra field ID = 0x000a */
++	0x20, 0x00,          /* extra field size = 32 */
++	0x00, 0x00, 0x00, 0x00, /* reserved */
++	0x01, 0x00,          /* NTFS attribute tag 1 */
++	0x18, 0x00,          /* NTFS attribute 1 size */
++	0x40, 0x42, 0x7c, 0xc6, 0x47, 0x17, 0xda, 0x01, /* Mtime (precise) */
++	0x80, 0x4e, 0x26, 0x02, 0x48, 0x17, 0xda, 0x01, /* Atime (precise) */
++	0xc0, 0x5a, 0xd0, 0x3d, 0x48, 0x17, 0xda, 0x01, /* Ctime -> birthtime */
++/* extra field 0x5455 "UT" (coarser; must NOT win for m/atime) */
++	0x55, 0x54,          /* extra field ID = 0x5455 */
++	0x0d, 0x00,          /* extra field size = 13 */
++	0x07,                /* flags: mtime, atime, ctime all present */
++	0x00, 0x10, 0x5e, 0x5f, /* mtime -> 1600000000 (must be ignored) */
++	0x64, 0x10, 0x5e, 0x5f, /* atime -> 1600000100 (must be ignored) */
++	0xc8, 0x10, 0x5e, 0x5f, /* ctime -> 1600000200, unaffected */
++	0x68, 0x69, 0x0a,    /* "hi\n" */
++/* --- central directory header --- */
++	0x50, 0x4b, 0x01, 0x02, /* central directory header signature */
++	0x14, 0x00,          /* version made by: 2.0, MS-DOS */
++	0x14, 0x00,          /* version needed to extract: 2.0 */
++	0x00, 0x00,          /* general purpose bit flag */
++	0x00, 0x00,          /* compression method: stored */
++	0x00, 0x00,          /* last mod file time */
++	0x00, 0x00,          /* last mod file date */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,          /* file name length = 8 */
++	0x35, 0x00,          /* extra field length = 53 */
++	0x00, 0x00,          /* file comment length */
++	0x00, 0x00,          /* disk number start */
++	0x00, 0x00,          /* internal file attributes */
++	0x00, 0x00, 0xa4, 0x81, /* external file attributes: -rw-r--r-- */
++	0x00, 0x00, 0x00, 0x00, /* relative offset of local header = 0 */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x000a "NTFS" (processed FIRST: must still win) */
++	0x0a, 0x00,          /* extra field ID = 0x000a */
++	0x20, 0x00,          /* extra field size = 32 */
++	0x00, 0x00, 0x00, 0x00, /* reserved */
++	0x01, 0x00,          /* NTFS attribute tag 1 */
++	0x18, 0x00,          /* NTFS attribute 1 size */
++	0x40, 0x42, 0x7c, 0xc6, 0x47, 0x17, 0xda, 0x01, /* Mtime (precise) */
++	0x80, 0x4e, 0x26, 0x02, 0x48, 0x17, 0xda, 0x01, /* Atime (precise) */
++	0xc0, 0x5a, 0xd0, 0x3d, 0x48, 0x17, 0xda, 0x01, /* Ctime -> birthtime */
++/* extra field 0x5455 "UT" (coarser; must NOT win for m/atime) */
++	0x55, 0x54,          /* extra field ID = 0x5455 */
++	0x0d, 0x00,          /* extra field size = 13 */
++	0x07,                /* flags: mtime, atime, ctime all present */
++	0x00, 0x10, 0x5e, 0x5f, /* mtime -> 1600000000 (must be ignored) */
++	0x64, 0x10, 0x5e, 0x5f, /* atime -> 1600000100 (must be ignored) */
++	0xc8, 0x10, 0x5e, 0x5f, /* ctime -> 1600000200, unaffected */
++/* --- end of central directory record --- */
++	0x50, 0x4b, 0x05, 0x06, /* end of central directory signature */
++	0x00, 0x00,          /* number of this disk */
++	0x00, 0x00,          /* disk with start of central directory */
++	0x01, 0x00,          /* central directory entries on this disk */
++	0x01, 0x00,          /* total central directory entries */
++	0x6b, 0x00, 0x00, 0x00, /* size of central directory = 107 */
++	0x5e, 0x00, 0x00, 0x00, /* offset of central directory = 94 */
++	0x00, 0x00,          /* .ZIP file comment length */
++};
++
++DEFINE_TEST(test_read_format_zip_ntfs_precedence_ut)
++{
++	struct archive *a;
++	struct archive_entry *ae;
++
++	assert((a = archive_read_new()) != NULL);
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_support_format_zip_seekable(a));
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_open_memory(a, archive_ntfs_precedence_ut,
++		sizeof(archive_ntfs_precedence_ut)));
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_next_header(a, &ae));
++
++	assertEqualString("test.txt", archive_entry_pathname(ae));
++	assertEqualInt(1700000000LL, archive_entry_mtime(ae));
++	assertEqualInt(100000000L, archive_entry_mtime_nsec(ae));
++	assertEqualInt(1700000100LL, archive_entry_atime(ae));
++	assertEqualInt(200000000L, archive_entry_atime_nsec(ae));
++	assert(archive_entry_birthtime_is_set(ae));
++	assertEqualInt(1700000200LL, archive_entry_birthtime(ae));
++	assertEqualInt(300000000L, archive_entry_birthtime_nsec(ae));
++	/* UT's ctime is POSIX ctime, a separate field the NTFS precedence
++	 * logic doesn't touch either way: it applies normally. */
++	assertEqualInt(1600000200LL, archive_entry_ctime(ae));
++
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_close(a));
++	assertEqualInt(ARCHIVE_OK, archive_read_free(a));
++}
++
++/* 0x000A "NTFS" then 0x5855 "UX" (old): AcTime, ModTime, UID, GID. */
++static const unsigned char archive_ntfs_precedence_ux[] = {
++/* --- local file header --- */
++	0x50, 0x4b, 0x03, 0x04, /* local file header signature */
++	0x14, 0x00,          /* version needed to extract: 2.0 */
++	0x00, 0x00,          /* general purpose bit flag */
++	0x00, 0x00,          /* compression method: stored */
++	0x00, 0x00,          /* last mod file time */
++	0x00, 0x00,          /* last mod file date */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,          /* file name length = 8 */
++	0x34, 0x00,          /* extra field length = 52 */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x000a "NTFS" (processed FIRST: must still win) */
++	0x0a, 0x00,          /* extra field ID = 0x000a */
++	0x20, 0x00,          /* extra field size = 32 */
++	0x00, 0x00, 0x00, 0x00, /* reserved */
++	0x01, 0x00,          /* NTFS attribute tag 1 */
++	0x18, 0x00,          /* NTFS attribute 1 size */
++	0x40, 0x42, 0x7c, 0xc6, 0x47, 0x17, 0xda, 0x01, /* Mtime (precise) */
++	0x80, 0x4e, 0x26, 0x02, 0x48, 0x17, 0xda, 0x01, /* Atime (precise) */
++	0xc0, 0x5a, 0xd0, 0x3d, 0x48, 0x17, 0xda, 0x01, /* Ctime -> birthtime */
++/* extra field 0x5855 "UX" (coarser; must NOT win) */
++	0x55, 0x58,          /* extra field ID = 0x5855 */
++	0x0c, 0x00,          /* extra field size = 12 */
++	0x64, 0x10, 0x5e, 0x5f, /* atime -> 1600000100 (must be ignored) */
++	0x00, 0x10, 0x5e, 0x5f, /* mtime -> 1600000000 (must be ignored) */
++	0xe9, 0x03,          /* uid = 1001 */
++	0xea, 0x03,          /* gid = 1002 */
++	0x68, 0x69, 0x0a,    /* "hi\n" */
++/* --- central directory header --- */
++	0x50, 0x4b, 0x01, 0x02, /* central directory header signature */
++	0x14, 0x00,          /* version made by: 2.0, MS-DOS */
++	0x14, 0x00,          /* version needed to extract: 2.0 */
++	0x00, 0x00,          /* general purpose bit flag */
++	0x00, 0x00,          /* compression method: stored */
++	0x00, 0x00,          /* last mod file time */
++	0x00, 0x00,          /* last mod file date */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,          /* file name length = 8 */
++	0x34, 0x00,          /* extra field length = 52 */
++	0x00, 0x00,          /* file comment length */
++	0x00, 0x00,          /* disk number start */
++	0x00, 0x00,          /* internal file attributes */
++	0x00, 0x00, 0xa4, 0x81, /* external file attributes: -rw-r--r-- */
++	0x00, 0x00, 0x00, 0x00, /* relative offset of local header = 0 */
++	0x74, 0x65, 0x73, 0x74, 0x2e, 0x74, 0x78, 0x74, /* "test.txt" */
++/* extra field 0x000a "NTFS" (processed FIRST: must still win) */
++	0x0a, 0x00,          /* extra field ID = 0x000a */
++	0x20, 0x00,          /* extra field size = 32 */
++	0x00, 0x00, 0x00, 0x00, /* reserved */
++	0x01, 0x00,          /* NTFS attribute tag 1 */
++	0x18, 0x00,          /* NTFS attribute 1 size */
++	0x40, 0x42, 0x7c, 0xc6, 0x47, 0x17, 0xda, 0x01, /* Mtime (precise) */
++	0x80, 0x4e, 0x26, 0x02, 0x48, 0x17, 0xda, 0x01, /* Atime (precise) */
++	0xc0, 0x5a, 0xd0, 0x3d, 0x48, 0x17, 0xda, 0x01, /* Ctime -> birthtime */
++/* extra field 0x5855 "UX" (coarser; must NOT win) */
++	0x55, 0x58,          /* extra field ID = 0x5855 */
++	0x0c, 0x00,          /* extra field size = 12 */
++	0x64, 0x10, 0x5e, 0x5f, /* atime -> 1600000100 (must be ignored) */
++	0x00, 0x10, 0x5e, 0x5f, /* mtime -> 1600000000 (must be ignored) */
++	0xe9, 0x03,          /* uid = 1001 */
++	0xea, 0x03,          /* gid = 1002 */
++/* --- end of central directory record --- */
++	0x50, 0x4b, 0x05, 0x06, /* end of central directory signature */
++	0x00, 0x00,          /* number of this disk */
++	0x00, 0x00,          /* disk with start of central directory */
++	0x01, 0x00,          /* central directory entries on this disk */
++	0x01, 0x00,          /* total central directory entries */
++	0x6a, 0x00, 0x00, 0x00, /* size of central directory = 106 */
++	0x5d, 0x00, 0x00, 0x00, /* offset of central directory = 93 */
++	0x00, 0x00,          /* .ZIP file comment length */
++};
++
++DEFINE_TEST(test_read_format_zip_ntfs_precedence_ux)
++{
++	struct archive *a;
++	struct archive_entry *ae;
++
++	assert((a = archive_read_new()) != NULL);
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_support_format_zip_seekable(a));
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_open_memory(a, archive_ntfs_precedence_ux,
++		sizeof(archive_ntfs_precedence_ux)));
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_next_header(a, &ae));
++
++	assertEqualString("test.txt", archive_entry_pathname(ae));
++	assertEqualInt(1700000000LL, archive_entry_mtime(ae));
++	assertEqualInt(100000000L, archive_entry_mtime_nsec(ae));
++	assertEqualInt(1700000100LL, archive_entry_atime(ae));
++	assertEqualInt(200000000L, archive_entry_atime_nsec(ae));
++	assert(archive_entry_birthtime_is_set(ae));
++	assertEqualInt(1700000200LL, archive_entry_birthtime(ae));
++	assertEqualInt(300000000L, archive_entry_birthtime_nsec(ae));
++	assertEqualInt(1001, archive_entry_uid(ae));
++	assertEqualInt(1002, archive_entry_gid(ae));
++
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_close(a));
++	assertEqualInt(ARCHIVE_OK, archive_read_free(a));
++}
+diff --git a/libarchive/test/test_read_format_zip_ntfs_timestamp.c b/libarchive/test/test_read_format_zip_ntfs_timestamp.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..93dba1dbf90765d50d640ecabcbf4feb2d3403be
+--- /dev/null
++++ b/libarchive/test/test_read_format_zip_ntfs_timestamp.c
+@@ -0,0 +1,136 @@
++/*-
++ * Copyright (c) 2026 François Degros
++ * All rights reserved.
++ *
++ * Redistribution and use in source and binary forms, with or without
++ * modification, are permitted provided that the following conditions
++ * are met:
++ * 1. Redistributions of source code must retain the above copyright
++ *    notice, this list of conditions and the following disclaimer.
++ * 2. Redistributions in binary form must reproduce the above copyright
++ *    notice, this list of conditions and the following disclaimer in the
++ *    documentation and/or other materials provided with the distribution.
++ *
++ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR(S) ``AS IS'' AND ANY EXPRESS OR
++ * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
++ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
++ * IN NO EVENT SHALL THE AUTHOR(S) BE LIABLE FOR ANY DIRECT, INDIRECT,
++ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
++ * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
++ * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
++ * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
++ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
++ * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++#include "test.h"
++
++/*
++ * A minimal ZIP archive with a single empty-ish entry ("ntfs.txt") whose
++ * local and central extra data both carry an 0x000A "NTFS" extra field
++ * (reserved(4) + Tag(1)/Size(24): Mtime, Atime, Ctime as 8-byte Windows
++ * FILETIME values), and no 0x5455 "UT" field. This exercises reading
++ * that field directly, rather than through libarchive's own writer,
++ * since libarchive doesn't write 0x000A.
++ *
++ * The three FILETIME values encode, respectively:
++ *   Mtime: 2024-03-15T10:20:30.123456000Z
++ *   Atime: 2024-03-16T11:21:31.234567000Z
++ *   Ctime: 2024-03-14T09:19:29.345678000Z (Windows creation time, which
++ *          is why it must map to archive_entry_birthtime(), not ctime)
++ */
++static const unsigned char archive_ntfs_timestamp[] = {
++/* --- local file header --- */
++	0x50, 0x4b, 0x03, 0x04, /* local file header signature */
++	0x14, 0x00,          /* version needed to extract: 2.0 */
++	0x00, 0x00,          /* general purpose bit flag */
++	0x00, 0x00,          /* compression method: stored */
++	0x00, 0x00,          /* last mod file time */
++	0x00, 0x00,          /* last mod file date */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,          /* file name length = 8 */
++	0x24, 0x00,          /* extra field length = 36 */
++	0x6e, 0x74, 0x66, 0x73, 0x2e, 0x74, 0x78, 0x74, /* "ntfs.txt" */
++/* extra field 0x000a "NTFS" */
++	0x0a, 0x00,          /* extra field ID = 0x000a */
++	0x20, 0x00,          /* extra field size = 32 */
++	0x00, 0x00, 0x00, 0x00, /* reserved */
++	0x01, 0x00,          /* NTFS attribute tag 1 */
++	0x18, 0x00,          /* NTFS attribute 1 size */
++	0x80, 0x41, 0xfd, 0x67, 0xc2, 0x76, 0xda, 0x01, /* Mtime FILETIME */
++	0x46, 0x3a, 0x98, 0x18, 0x94, 0x77, 0xda, 0x01, /* Atime FILETIME */
++	0x8c, 0x25, 0x95, 0xb7, 0xf0, 0x75, 0xda, 0x01, /* Ctime -> birthtime */
++	0x68, 0x69, 0x0a,    /* "hi\n" */
++/* --- central directory header --- */
++	0x50, 0x4b, 0x01, 0x02, /* central directory header signature */
++	0x14, 0x00,          /* version made by: 2.0, MS-DOS */
++	0x14, 0x00,          /* version needed to extract: 2.0 */
++	0x00, 0x00,          /* general purpose bit flag */
++	0x00, 0x00,          /* compression method: stored */
++	0x00, 0x00,          /* last mod file time */
++	0x00, 0x00,          /* last mod file date */
++	0x7a, 0x7a, 0x6f, 0xed, /* CRC-32 = 0xed6f7a7a */
++	0x03, 0x00, 0x00, 0x00, /* compressed size = 3 */
++	0x03, 0x00, 0x00, 0x00, /* uncompressed size = 3 */
++	0x08, 0x00,          /* file name length = 8 */
++	0x24, 0x00,          /* extra field length = 36 */
++	0x00, 0x00,          /* file comment length */
++	0x00, 0x00,          /* disk number start */
++	0x00, 0x00,          /* internal file attributes */
++	0x00, 0x00, 0xa4, 0x81, /* external file attributes: -rw-r--r-- */
++	0x00, 0x00, 0x00, 0x00, /* relative offset of local header = 0 */
++	0x6e, 0x74, 0x66, 0x73, 0x2e, 0x74, 0x78, 0x74, /* "ntfs.txt" */
++/* extra field 0x000a "NTFS" */
++	0x0a, 0x00,          /* extra field ID = 0x000a */
++	0x20, 0x00,          /* extra field size = 32 */
++	0x00, 0x00, 0x00, 0x00, /* reserved */
++	0x01, 0x00,          /* NTFS attribute tag 1 */
++	0x18, 0x00,          /* NTFS attribute 1 size */
++	0x80, 0x41, 0xfd, 0x67, 0xc2, 0x76, 0xda, 0x01, /* Mtime FILETIME */
++	0x46, 0x3a, 0x98, 0x18, 0x94, 0x77, 0xda, 0x01, /* Atime FILETIME */
++	0x8c, 0x25, 0x95, 0xb7, 0xf0, 0x75, 0xda, 0x01, /* Ctime -> birthtime */
++/* --- end of central directory record --- */
++	0x50, 0x4b, 0x05, 0x06, /* end of central directory signature */
++	0x00, 0x00,          /* number of this disk */
++	0x00, 0x00,          /* disk with start of central directory */
++	0x01, 0x00,          /* central directory entries on this disk */
++	0x01, 0x00,          /* total central directory entries */
++	0x5a, 0x00, 0x00, 0x00, /* size of central directory = 90 */
++	0x4d, 0x00, 0x00, 0x00, /* offset of central directory = 77 */
++	0x00, 0x00,          /* .ZIP file comment length */
++};
++
++DEFINE_TEST(test_read_format_zip_ntfs_timestamp)
++{
++	struct archive *a;
++	struct archive_entry *ae;
++
++	assert((a = archive_read_new()) != NULL);
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_support_filter_all(a));
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_support_format_all(a));
++	assertEqualIntA(a, ARCHIVE_OK,
++	    archive_read_open_memory(a, archive_ntfs_timestamp,
++		sizeof(archive_ntfs_timestamp)));
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_next_header(a, &ae));
++
++	assertEqualString("ntfs.txt", archive_entry_pathname(ae));
++
++	assert(archive_entry_mtime_is_set(ae));
++	assertEqualInt(1710498030, archive_entry_mtime(ae));
++	assertEqualInt(123456000, archive_entry_mtime_nsec(ae));
++
++	assert(archive_entry_atime_is_set(ae));
++	assertEqualInt(1710588091, archive_entry_atime(ae));
++	assertEqualInt(234567000, archive_entry_atime_nsec(ae));
++
++	/* NTFS "Ctime" is Windows creation time, so it must map to
++	 * birthtime, not to POSIX ctime (which ZIP has no source for
++	 * here, so it stays unset by this extra field). */
++	assert(archive_entry_birthtime_is_set(ae));
++	assertEqualInt(1710407969, archive_entry_birthtime(ae));
++	assertEqualInt(345678000, archive_entry_birthtime_nsec(ae));
++
++	assertEqualIntA(a, ARCHIVE_OK, archive_read_close(a));
++	assertEqualInt(ARCHIVE_OK, archive_read_free(a));
++}

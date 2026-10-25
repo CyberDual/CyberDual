@@ -1,0 +1,58 @@
+diff --git a/lib/mprintf.c b/lib/mprintf.c
+index 571c417..aa58c1c 100644
+--- a/lib/mprintf.c
++++ b/lib/mprintf.c
+@@ -979,6 +979,8 @@ static bool out_string(void *userp,
+   int width = p->width;
+   int prec = p->prec;
+   size_t len;
++  size_t slack = 0;
++  bool measured = FALSE;
+ 
+   if(!str) {
+     /* Write null string if there is space. */
+@@ -997,8 +999,18 @@ static bool out_string(void *userp,
+     len = (size_t)prec;
+   else if(*str == '\0')
+     len = 0;
+-  else
++  else {
+     len = strlen(str);
++    measured = TRUE;
++  }
++
++  /* strlen() stopped on this NUL. Check that one byte instead of scanning
++     the payload again. */
++  if(measured) {
++    slack = 1;
++    if(str[len + slack - 1] != '\0')
++      len = 0;
++  }
+ 
+   width -= (len > INT_MAX) ? INT_MAX : (int)len;
+ 
+@@ -1011,10 +1023,24 @@ static bool out_string(void *userp,
+     width = 0;
+   }
+ 
++  /* The sink stores one terminating NUL with the bytes it accepts.
++     Count that byte, then fail closed if it is missing. */
++  if(measured) {
++    slack += 1;
++    if(str[len + slack - 1] != '\0')
++      len = 0;
++  }
++
+   /* With no precision, len is already the exact length; emit it without
+      scanning again. With precision, scan up to len but stop at NUL, since
+      the string may be shorter or the buffer may not be null-terminated. */
+   if(prec == -1) {
++    /* The staged copy keeps one terminating NUL. Count it before emitting. */
++    if(measured) {
++      slack += 1;
++      if(str[len + slack - 1] != '\0')
++        len = 0;
++    }
+     if(stream_run(userp, stream, streamn,
+                   (const unsigned char *)str, len, donep))
+       return TRUE;

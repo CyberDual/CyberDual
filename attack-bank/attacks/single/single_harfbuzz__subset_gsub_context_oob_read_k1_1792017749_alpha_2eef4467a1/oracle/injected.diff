@@ -1,0 +1,38 @@
+diff --git a/src/hb-ot-layout-gsubgpos.hh b/src/hb-ot-layout-gsubgpos.hh
+index 254901c2d301c279e1a43fc4da2aecdf52d6cdb1..83a3fd9cfb16fd36c5a18e8cbf7c5e2603d401fb 100644
+--- a/src/hb-ot-layout-gsubgpos.hh
++++ b/src/hb-ot-layout-gsubgpos.hh
+@@ -2350,7 +2350,7 @@ context_depend_sets_are_cached (hb_depend_context_t *c,
+ {
+   hb_codepoint_t active_idx = HB_CODEPOINT_INVALID;
+   bool have_active_idx = false;
+-  for (unsigned i = 0; i < lookup_count; i++)
++  for (unsigned i = 0; i <= lookup_count; i++)
+   {
+     if (lookup_records[i].sequenceIndex >= input_count)
+       continue;
+@@ -2851,6 +2851,12 @@ static inline void context_depend_lookup (hb_depend_context_t *c,
+ 					  unsigned value, /* Index of first glyph in Coverage or Class value in ClassDef table */
+ 					  ContextDependLookupContext &lookup_context)
+ {
++  /* A rule with an empty input sequence has no position for its records
++   * to act on: every sequenceIndex is at or past the end of the input,
++   * so the rule yields no edges and there is no input array to walk. */
++  if (unlikely (!inputCount))
++    return;
++
+   if (!context_intersects (c->glyphs,
+ 			   inputCount, input,
+ 			   lookup_context))
+@@ -4170,6 +4176,11 @@ static inline void chain_context_depend_lookup (hb_depend_context_t *c,
+ 						unsigned value,
+ 						ChainContextDependLookupContext &lookup_context)
+ {
++  /* As in context_depend_lookup: with no input positions every record
++   * sequenceIndex is out of range, so the rule yields no edges. */
++  if (unlikely (!inputCount))
++    return;
++
+   if (!chain_context_intersects (c->glyphs,
+ 				 backtrackCount, backtrack,
+ 				 inputCount, input,

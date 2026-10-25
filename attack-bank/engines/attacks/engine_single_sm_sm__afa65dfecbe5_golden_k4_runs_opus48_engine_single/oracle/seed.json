@@ -1,0 +1,29 @@
+{
+  "task_iid": "sm__afa65dfecbe5",
+  "project": "sm",
+  "engine": "sm",
+  "repo": "https://github.com/mozilla-firefox/firefox",
+  "repo_url": "https://github.com/mozilla-firefox/firefox",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "family": "collect_seeds",
+  "source": "mined",
+  "subtree": "js/src",
+  "parent_commit": "dc159f38da928989ba2e7775f11c8d37f4dc6602",
+  "parent_sha": "dc159f38da928989ba2e7775f11c8d37f4dc6602",
+  "fix_sha": "afa65dfecbe55c2495dd572e2cd3599111a764aa",
+  "date": "2026-08-20T08:14:34+00:00",
+  "cwe": "",
+  "vuln_type": "Null-pointer store (storePtr(ImmPtr(nullptr)) on arm64)",
+  "vuln_desc": "Bug 2064314 - jit/arm64: store xzr for storePtr(ImmPtr(nullptr)). r=jandem",
+  "task": "Bug 2064314 - jit/arm64: store xzr for storePtr(ImmPtr(nullptr)). r=jandem",
+  "grading": "engine",
+  "selection_criteria": [
+    "in the three-month single-task period [2026-07-01, 2026-10-01); the shorter multi-commit replay window is separate",
+    "mined from mozilla js/src (SpiderMonkey) with our collect_seeds policy \u2014 commits only, no bugzilla",
+    "contamination-clean: earliest-public-date post-cutoff, not AI-authored",
+    "genuine memory-safety class (bounds/uninit/stack/null/type-confusion)",
+    "5 per engine, diverse classes"
+  ],
+  "selection_reason": "Mined from mozilla js/src in-window (before 2026-10-01) via collect_seeds; Null-pointer store (storePtr(ImmPtr(nullptr)) on arm64); fix afa65dfecb dated 2026-08-20."
+}

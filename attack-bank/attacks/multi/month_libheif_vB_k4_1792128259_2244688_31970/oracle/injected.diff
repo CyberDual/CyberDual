@@ -1,0 +1,241 @@
+diff --git a/libheif/color-conversion/yuv2rgb.cc b/libheif/color-conversion/yuv2rgb.cc
+index 0073527..fcc641c 100644
+--- a/libheif/color-conversion/yuv2rgb.cc
++++ b/libheif/color-conversion/yuv2rgb.cc
+@@ -580,16 +580,18 @@ Op_YCbCr420_to_RRGGBBaa::state_after_conversion(const ColorState& input_state,
+     }
+   }
+ 
+-  // The conversion derives its shifts from one bit depth, so the three planes must share
+-  // it (get_uniform_color_bits_per_pixel() is 0 when they differ) and it must be > 8.
++  // The operator converts to a 16-bit output, so it needs a source deeper than 8 bits;
++  // take the depth from the widest colour plane (get_max_color_bits_per_pixel() is 0
++  // when there are no colour planes).
+   if (input_state.colorspace != heif_colorspace_YCbCr ||
+       input_state.chroma != heif_chroma_420 ||
+-      input_state.get_uniform_color_bits_per_pixel() <= 8) {
++      input_state.get_max_color_bits_per_pixel() <= 8) {
+     return {};
+   }
+ 
+-  // All planes, alpha included, are read as uint16_t samples.
+-  if (!input_state.all_channels_have_bytes_per_sample(2)) {
++  // All planes, alpha included, are read as uint16_t samples; a wider component
++  // ('unci' can carry up to 128 bits) does not fit.
++  if (input_state.get_max_bytes_per_sample() > 2) {
+     return {};
+   }
+ 
+@@ -643,16 +645,18 @@ Op_YCbCr420_to_RRGGBBaa::convert_colorspace(const std::shared_ptr<const HeifPixe
+   int bpp = input->get_bits_per_pixel(heif_channel_Y);
+   bool has_alpha = input->has_channel(heif_channel_Alpha);
+ 
+-  // Defense in depth: the Cb/Cr planes are read below through a uint16_t* using a
+-  // sample width taken from the Y channel (bpp). convert_colorspace() already
+-  // rejects YCbCr with mismatched luma/chroma bit depths (GHSA-w7mc-p8jc-p853),
+-  // but guard here as well so this operator is self-contained and a future direct
+-  // caller or pipeline change cannot reintroduce the out-of-bounds chroma read.
+-  if (input->get_bits_per_pixel(heif_channel_Cb) != bpp ||
+-      input->get_bits_per_pixel(heif_channel_Cr) != bpp) {
++  // Defense in depth: the two chroma planes are read below through a uint16_t*
++  // with one shared sample width, so they must be stored alike. A file may
++  // declare a bit depth per component ('unci'), letting Cb and Cr disagree,
++  // which would desynchronize the two chroma reads. convert_colorspace() already
++  // rejects a luma/chroma mismatch centrally (GHSA-w7mc-p8jc-p853), but guard
++  // the chroma pair here as well so this operator stays self-contained and a
++  // future direct caller or pipeline change cannot reintroduce an out-of-bounds
++  // chroma read.
++  if (input->get_bits_per_pixel(heif_channel_Cb) != input->get_bits_per_pixel(heif_channel_Cr)) {
+     return Error{heif_error_Unsupported_feature,
+                  heif_suberror_Unsupported_bit_depth,
+-                 "Color conversion cannot handle YCbCr images with chroma bit depth differing from luma."};
++                 "Color conversion cannot handle YCbCr images with differing Cb and Cr bit depths."};
+   }
+ 
+   int le = (target_state.chroma == heif_chroma_interleaved_RRGGBB_LE ||
+diff --git a/tests/uncompressed_mixed_chroma_depth_colorconv.cc b/tests/uncompressed_mixed_chroma_depth_colorconv.cc
+index db8922a..68568cf 100644
+--- a/tests/uncompressed_mixed_chroma_depth_colorconv.cc
++++ b/tests/uncompressed_mixed_chroma_depth_colorconv.cc
+@@ -25,30 +25,32 @@
+ */
+ 
+ // Regression test for GHSA-w7mc-p8jc-p853, modeled on the reporter's PoC
+-// (a YCbCr 4:2:0 'unci' image with Y=16 bit and Cb=Cr=8 bit).
++// (a YCbCr 4:2:0 'unci' image whose components declare different bit depths).
+ //
+ // The YCbCr->RGB color-conversion operators assume all color channels share a
+ // single bit depth. Op_YCbCr420_to_RRGGBBaa takes its sample width from the Y
+ // channel and reads Cb/Cr through a uint16_t*, so an image with 16-bit luma but
+-// 8-bit chroma (chroma planes allocated at 1 byte/sample) is read two bytes per
+-// sample past the end of each chroma plane: a heap out-of-bounds read whose
+-// bytes reach the decoded RGB output (information disclosure).
++// narrower chroma (chroma planes allocated at fewer bytes per sample) is read
++// past the end of each chroma plane: a heap out-of-bounds read whose bytes
++// reach the decoded RGB output (information disclosure).
+ //
+ // The fix is made in the pipeline planner: ColorState carries one bit depth per
+-// plane, and every YCbCr operator declares in state_after_conversion() that it
+-// needs the colour planes to share one depth (color_channels_have_same_bpp()), so
+-// no pipeline is ever built through an operator that would read a chroma plane
+-// with the luma sample width. Op_to_sdr_planes lowers every plane on its own and
+-// can therefore still equalize such an image to 8 bits.
++// plane, and every YCbCr operator declares in state_after_conversion() which
++// depth layout it needs (color_channels_have_same_bpp(), the shared 8-bit
++// depth, or a source deeper than 8 bits), so no pipeline is ever built through
++// an operator that cannot handle the image; the operator itself refuses a
++// chroma pair whose planes disagree. Op_to_sdr_planes lowers every plane on
++// its own and can therefore still equalize such an image to 8 bits.
+ //
+-// This test builds such a file, confirms it still decodes natively to the
+-// mismatched-depth planar image (so the decoder path itself is unaffected), then
+-// requires the conversion to the reporter's 16-bit interleaved RGB target to be
+-// refused cleanly (no operator can widen the 8-bit chroma planes to 16 bits), and
+-// checks that the two 8-bit routes (interleaved RGB, and convert_hdr_to_8bit)
+-// succeed with the expected samples. Under the unfixed code the 16-bit RGB decode
+-// reproduces the reporter's ASAN trace (heap-buffer-overflow READ in
+-// Op_YCbCr420_to_RRGGBBaa::convert_colorspace).
++// This test builds such a file (Y=16 bit, Cb=12 bit, Cr=8 bit), confirms it
++// still decodes natively to the mismatched-depth planar image (so the decoder
++// path itself is unaffected), then requires the conversion to the reporter's
++// 16-bit interleaved RGB target to be refused cleanly -- by the planner when
++// no operator can widen the chroma planes, or by the operator when the two
++// chroma planes disagree -- and checks that the two 8-bit routes (interleaved
++// RGB, and convert_hdr_to_8bit) succeed with the expected samples. Under the
++// unfixed code the 16-bit RGB decode reproduces the reporter's ASAN trace
++// (heap-buffer-overflow READ in Op_YCbCr420_to_RRGGBBaa::convert_colorspace).
+ 
+ #include "catch_amalgamated.hpp"
+ #include "libheif/heif.h"
+@@ -59,7 +61,7 @@
+ 
+ namespace {
+ 
+-// Use a reasonably large image: reading the 8-bit chroma planes through a
++// Use a reasonably large image: reading the narrow chroma planes through a
+ // uint16_t* over-reads by roughly the chroma row width per row, so the image
+ // must be wide enough that this exceeds the plane's allocated (stride-padded)
+ // size and reaches an AddressSanitizer redzone. Small images (e.g. 8x8) hide
+@@ -70,7 +72,7 @@ constexpr uint32_t CHROMA_WIDTH = WIDTH / 2;
+ constexpr uint32_t CHROMA_HEIGHT = HEIGHT / 2;
+ 
+ // Build a minimal HEIF file with a single 'unci' item: mixed interleave,
+-// 4:2:0 sampling, Y=16 bit, Cb=8 bit, Cr=8 bit, uncompressed (no cmpC).
++// 4:2:0 sampling, Y=16 bit, Cb=12 bit, Cr=8 bit, uncompressed (no cmpC).
+ std::vector<uint8_t> build_heif_unci_ycbcr_mismatched_luma_depth() {
+   std::vector<uint8_t> ftyp_payload;
+   append_fourcc(ftyp_payload, "mif1");
+@@ -119,8 +121,8 @@ std::vector<uint8_t> build_heif_unci_ycbcr_mismatched_luma_depth() {
+   put_u16_be(cmpd_payload, 3); // Cr
+   auto cmpd = make_box("cmpd", cmpd_payload);
+ 
+-  // uncC (v0): mixed interleave, 4:2:0, Y=16 bit, Cb=8 bit, Cr=8 bit.
+-  const uint8_t depths[3] = {16, 8, 8}; // Y, Cb, Cr
++  // uncC (v0): mixed interleave, 4:2:0, Y=16 bit, Cb=12 bit, Cr=8 bit.
++  const uint8_t depths[3] = {16, 12, 8}; // Y, Cb, Cr
+   std::vector<uint8_t> uncC_payload;
+   put_u32_be(uncC_payload, 0); // profile
+   put_u32_be(uncC_payload, 3); // component_count
+@@ -173,10 +175,10 @@ std::vector<uint8_t> build_heif_unci_ycbcr_mismatched_luma_depth() {
+   auto iprp = make_box("iprp", iprp_payload);
+ 
+   // --- Tile data: Y plane (row-major, 2 bytes/sample, big-endian), followed by
+-  // the interleaved chroma block (Cb, Cr; 1 byte each per chroma position):
+-  // 8*8*2 (Y) + 4*4*(1+1) (Cb+Cr interleaved) = 128 + 32 = 160 bytes.
++  // the interleaved chroma block, each component at its own byte width
++  // (Cb: 2 bytes/sample, Cr: 1 byte/sample).
+   std::vector<uint8_t> tile_data;
+-  tile_data.reserve(WIDTH * HEIGHT * 2 + CHROMA_WIDTH * CHROMA_HEIGHT * 2);
++  tile_data.reserve(WIDTH * HEIGHT * 2 + CHROMA_WIDTH * CHROMA_HEIGHT * 3);
+ 
+   for (uint32_t y = 0; y < HEIGHT; y++) {
+     for (uint32_t x = 0; x < WIDTH; x++) {
+@@ -185,8 +187,8 @@ std::vector<uint8_t> build_heif_unci_ycbcr_mismatched_luma_depth() {
+   }
+   for (uint32_t y = 0; y < CHROMA_HEIGHT; y++) {
+     for (uint32_t x = 0; x < CHROMA_WIDTH; x++) {
+-      tile_data.push_back(static_cast<uint8_t>(0x40 + y * CHROMA_WIDTH + x)); // Cb
+-      tile_data.push_back(static_cast<uint8_t>(0x80 + y * CHROMA_WIDTH + x)); // Cr
++      put_u16_be(tile_data, static_cast<uint16_t>((0x400 + y * CHROMA_WIDTH + x) & 0xFFF)); // Cb
++      tile_data.push_back(static_cast<uint8_t>(0x80 + y * CHROMA_WIDTH + x));               // Cr
+     }
+   }
+ 
+@@ -240,18 +242,43 @@ TEST_CASE("unci YCbCr with mismatched luma/chroma bit depths converts without he
+   REQUIRE(heif_image_handle_get_width(handle) == static_cast<int>(WIDTH));
+   REQUIRE(heif_image_handle_get_height(handle) == static_cast<int>(HEIGHT));
+ 
++  // The mismatched-depth planes decode natively without any color conversion,
++  // so the decoder path itself is unaffected. The file's colr box is kept as
++  // the output profile; the default sRGB target would need a conversion the
++  // planner must refuse (which is what the next block checks).
++  {
++    heif_decoding_options* options = heif_decoding_options_alloc();
++    REQUIRE(options != nullptr);
++    options->output_image_nclx_profile_passthrough = 1;
++
++    heif_image* img = nullptr;
++    err = heif_decode_image(handle, &img, heif_colorspace_undefined, heif_chroma_undefined, options);
++    INFO("native decode error (" << err.code << "/" << err.subcode << "): " << err.message);
++    REQUIRE(err.code == heif_error_Ok);
++    REQUIRE(img != nullptr);
++    CHECK(heif_image_get_bits_per_pixel_range(img, heif_channel_Y) == 16);
++    CHECK(heif_image_get_bits_per_pixel_range(img, heif_channel_Cb) == 12);
++    CHECK(heif_image_get_bits_per_pixel_range(img, heif_channel_Cr) == 8);
++    heif_image_release(img);
++    heif_decoding_options_free(options);
++  }
++
+   // Converting to a high-bit-depth interleaved RGB target used to select
+-  // Op_YCbCr420_to_RRGGBBaa, which is where the over-read occurred. That operator
+-  // now declines colour planes of differing depth, and no other operator can widen
+-  // the 8-bit chroma planes to the 16 bits the target needs, so the decode must fail
+-  // cleanly rather than read past the chroma planes. Under the unfixed code this
+-  // decode reproduces the reporter's ASAN heap-buffer-overflow READ.
++  // Op_YCbCr420_to_RRGGBBaa, which is where the over-read occurred. The
++  // conversion must now be refused cleanly rather than read past the chroma
++  // planes: the planner declines the image when no operator can widen the
++  // chroma planes to the 16 bits the target needs
++  // (heif_suberror_Unsupported_color_conversion), and the operator itself
++  // refuses a chroma pair whose planes disagree (heif_suberror_Unsupported_bit_depth).
++  // Under the unfixed code this decode reproduces the reporter's ASAN
++  // heap-buffer-overflow READ.
+   {
+     heif_image* img = nullptr;
+     err = heif_decode_image(handle, &img, heif_colorspace_RGB, heif_chroma_interleaved_RRGGBB_LE, nullptr);
+     INFO("decode error (" << err.code << "/" << err.subcode << "): " << err.message);
+     REQUIRE(err.code == heif_error_Unsupported_feature);
+-    REQUIRE(err.subcode == heif_suberror_Unsupported_color_conversion);
++    REQUIRE((err.subcode == heif_suberror_Unsupported_color_conversion ||
++             err.subcode == heif_suberror_Unsupported_bit_depth));
+     REQUIRE(img == nullptr);
+ 
+     if (img != nullptr) {
+@@ -259,8 +286,9 @@ TEST_CASE("unci YCbCr with mismatched luma/chroma bit depths converts without he
+     }
+   }
+ 
+-  // An 8-bit target is reachable: Op_to_sdr_planes lowers the 16-bit luma plane
+-  // and copies the 8-bit chroma planes, after which the planes agree.
++  // An 8-bit target is reachable: Op_to_sdr_planes lowers the 16-bit luma and
++  // 12-bit chroma planes and copies the 8-bit chroma plane, after which the
++  // planes agree.
+   {
+     heif_image* img = nullptr;
+     err = heif_decode_image(handle, &img, heif_colorspace_RGB, heif_chroma_interleaved_RGB, nullptr);
+@@ -273,10 +301,11 @@ TEST_CASE("unci YCbCr with mismatched luma/chroma bit depths converts without he
+     heif_image_release(img);
+   }
+ 
+-  // The same in the native layout with convert_hdr_to_8bit: the planes keep their
+-  // values (luma 0x1000 >> 8 = 0x10 at the origin, chroma unchanged). The file's colr
+-  // box is kept as the output profile; otherwise the default sRGB target would add a
+-  // YCbCr -> RGB -> YCbCr round trip that clips the extreme test chroma.
++  // The same in the native layout with convert_hdr_to_8bit: the planes keep
++  // their values (luma 0x1000 >> 8 = 0x10 at the origin, Cb 0x400 >> 4 = 0x40,
++  // Cr 0x80 unchanged). The file's colr box is kept as the output profile;
++  // otherwise the default sRGB target would add a YCbCr -> RGB -> YCbCr round
++  // trip that clips the extreme test chroma.
+   {
+     heif_decoding_options* options = heif_decoding_options_alloc();
+     REQUIRE(options != nullptr);

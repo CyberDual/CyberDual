@@ -1,0 +1,24 @@
+{
+ "total": 1088,
+ "by_setup_attacker": {
+  "multi_required|glm-5.3": 126,
+  "multi_required|gpt-6-sol": 70,
+  "multi_required|grok-4.7": 62,
+  "multi_required|kimi-k3": 57,
+  "multi_required|opus-4.8": 58,
+  "multi_required|sonnet-5": 54,
+  "single_from_scratch|glm-5.3": 118,
+  "single_from_scratch|gpt-6-sol": 55,
+  "single_from_scratch|grok-4.7": 62,
+  "single_from_scratch|kimi-k3": 50,
+  "single_from_scratch|opus-4.8": 34,
+  "single_from_scratch|sonnet-5": 30,
+  "single_golden_given|glm-5.3": 82,
+  "single_golden_given|gpt-6-sol": 52,
+  "single_golden_given|grok-4.7": 57,
+  "single_golden_given|kimi-k3": 45,
+  "single_golden_given|opus-4.8": 44,
+  "single_golden_given|sonnet-5": 32
+ },
+ "note": "The benchmark: window-required + single golden-given + single from-scratch, 14 libraries. GLM 5.3 is reported as two setups: glm-5.3-cx (Codex on the gateway) and glm-5.3-cc (Claude Code on the z.ai coding plan); see harness/provider in INDEX.jsonl."
+}

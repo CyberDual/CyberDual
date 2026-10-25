@@ -1,0 +1,25 @@
+{
+  "regime": "incomplete_fix",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "7be60b3f478e0edd29d0f99dae38f5761ee5c647",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\nindex 2da2750..acdad0d 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4772,7 +4772,7 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n          (class_type == MAT_C_UINT32 && data_type == MAT_T_UINT32) ||\n          (class_type == MAT_C_UINT64 && data_type == MAT_T_UINT64) ||\n          (class_type == MAT_C_UINT8 && data_type == MAT_T_UINT8) )\n-        same_type = 1;\n+        same_type = class_type;\n \n     if ( rank == 2 ) {\n         if ( (size_t)stride[0] * (edge[0] - 1) + start[0] + 1 > dims[0] )\n@@ -4780,7 +4780,8 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n         else if ( (size_t)stride[1] * (edge[1] - 1) + start[1] + 1 > dims[1] )\n             err = MATIO_E_BAD_ARGUMENT;\n         else if ( (stride[0] == 1 && (size_t)edge[0] == dims[0]) &&\n-                  (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) )\n+                  (stride[1] == 1 && (size_t)edge[1] == dims[1]) &&\n+                  (same_type != 0) )\n             memcpy(data_out, data_in, nbytes);\n         else {\n             int i, j;\n"
+    },
+    {
+      "sha": "42fd36788771f89ca926ff2490ac51c9f452a98c",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\nindex 5d3bbb2..1254b36 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4810,7 +4810,9 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n \n     if ( rank == 2 ) {\n         if ( (stride[0] == 1 && (size_t)edge[0] == dims[0]) &&\n-             (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) )\n+             (stride[1] == 1 && ((size_t)edge[1] == dims[1] ||\n+                                 (same_type == MAT_C_UINT8 && start[1] == 0))) &&\n+             (same_type != 0) )\n             memcpy(data_out, data_in, nbytes);\n         else {\n             int i, j;\n"
+    }
+  ],
+  "coupling": "The first edit records the matching numeric class identifier in same_type while preserving the existing whole-array copy behavior. The later slab-indexing commit treats that identifier as permission to bulk-copy a leading uint8 column subset. Its memcpy still uses the full variable nbytes, so a caller-sized subset buffer overflows. Either edit alone keeps the full-array restriction effective; repairing the combined path requires matching the fast-path eligibility to the selected byte count and the class-tag meaning established earlier.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Mat_Open -> Mat_VarReadInfo -> Mat_VarReadData",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

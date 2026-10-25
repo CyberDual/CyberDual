@@ -1,0 +1,86 @@
+diff --git a/src/pcre2_extuni.c b/src/pcre2_extuni.c
+index 1b7f04b4b2f38e8896938fa09b18c7147833ae98..fea098a7631d668842303b7fd57d9810f1855505 100644
+--- a/src/pcre2_extuni.c
++++ b/src/pcre2_extuni.c
+@@ -54,12 +54,12 @@ support, because some compilers do not like functionless source files. */
+ 
+ #ifndef SUPPORT_UNICODE
+ PCRE2_SPTR
+-PRIV(extuni)(uint32_t c, PCRE2_SPTR eptr, PCRE2_SPTR start_subject,
++PRIV(extuni)(uint32_t c, PCRE2_SPTR eptr, PCRE2_SPTR check_subject,
+   PCRE2_SPTR end_subject, BOOL utf, int *xcount)
+ {
+ (void)c;
+ (void)eptr;
+-(void)start_subject;
++(void)check_subject;
+ (void)end_subject;
+ (void)utf;
+ (void)xcount;
+@@ -80,7 +80,7 @@ same behaviour.
+ Arguments:
+   c              the first character
+   eptr           pointer to next character
+-  start_subject  pointer to start of subject
++  check_subject  pointer to start of validated subject
+   end_subject    pointer to end of subject
+   utf            TRUE if in UTF mode
+   xcount         pointer to count of additional characters,
+@@ -90,7 +90,7 @@ Returns:         pointer after the end of the sequence
+ */
+ 
+ PCRE2_SPTR
+-PRIV(extuni)(uint32_t c, PCRE2_SPTR eptr, PCRE2_SPTR start_subject,
++PRIV(extuni)(uint32_t c, PCRE2_SPTR eptr, PCRE2_SPTR check_subject,
+   PCRE2_SPTR end_subject, BOOL utf, int *xcount)
+ {
+ BOOL was_ep_ZWJ = FALSE;
+@@ -121,7 +121,7 @@ while (eptr < end_subject)
+ 
+     /* bptr is pointing to the left-hand character */
+ 
+-    while (bptr > start_subject)
++    while (bptr > check_subject)
+       {
+       bptr--;
+       if (utf)
+diff --git a/src/pcre2_match.c b/src/pcre2_match.c
+index a5a8421f7c219dc66b7fbb87afffe148664bda40..139179a6103fd9ed0eb11a21f36322382c692dd6 100644
+--- a/src/pcre2_match.c
++++ b/src/pcre2_match.c
+@@ -2895,7 +2895,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+     else
+       {
+       GETCHARINCTEST(fc, Feptr);
+-      Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject, mb->end_subject, utf,
++      Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject, mb->end_subject, utf,
+         NULL);
+       }
+     CHECK_PARTIAL();
+@@ -3246,7 +3246,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+           else
+             {
+             GETCHARINCTEST(fc, Feptr);
+-            Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject,
++            Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject,
+               mb->end_subject, utf, NULL);
+             }
+           CHECK_PARTIAL();
+@@ -4071,7 +4071,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+           else
+             {
+             GETCHARINCTEST(fc, Feptr);
+-            Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject, mb->end_subject,
++            Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject, mb->end_subject,
+               utf, NULL);
+             }
+           CHECK_PARTIAL();
+@@ -4660,7 +4660,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+           else
+             {
+             GETCHARINCTEST(fc, Feptr);
+-            Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject, mb->end_subject,
++            Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject, mb->end_subject,
+               utf, NULL);
+             }
+           CHECK_PARTIAL();

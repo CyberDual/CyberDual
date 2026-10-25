@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "f8d57a8998ca21610ed77b8d862351e6c124e63a",
+      "edited_message": null,
+      "patch": "diff --git a/libarchive/archive_read.c b/libarchive/archive_read.c\nindex 8a78c402..a0160398 100644\n--- a/libarchive/archive_read.c\n+++ b/libarchive/archive_read.c\n@@ -1385,7 +1385,6 @@ read_client_data(struct archive_read_filter *f)\n \t\tf->fatal = 1;\n \t} else if (bytes_read == 0) {\n \t\tf->client_total = f->client_avail = 0;\n-\t\tf->client_next = f->client_buff = NULL;\n \t\tf->end_of_file = 1;\n \t} else {\n \t\tf->client_total = bytes_read;\n"
+    },
+    {
+      "sha": "55d5019cf6b2e13d3ce0c7845fa34ac05fc01d31",
+      "edited_message": null,
+      "patch": "diff --git a/libarchive/archive_read.c b/libarchive/archive_read.c\nindex e0f4f6ce..9f741d53 100644\n--- a/libarchive/archive_read.c\n+++ b/libarchive/archive_read.c\n@@ -1437,8 +1437,10 @@ __archive_read_filter_ahead(struct archive_read_filter *f,\n \t\t * We can satisfy directly from client buffer if everything\n \t\t * currently in the copy buffer is still in the client buffer.\n \t\t */\n-\t\tif (f->client_total >= f->client_avail + f->avail\n-\t\t    && f->client_avail + f->avail >= min) {\n+\t\tif (f->client_next != NULL &&\n+\t\t    (size_t)(f->client_next -\n+\t\t\t(const char *)f->client_buff) >= f->avail &&\n+\t\t    f->client_avail + f->avail >= min) {\n \t\t\t/* \"Roll back\" to client buffer. */\n \t\t\tf->client_avail += f->avail;\n \t\t\tf->client_next -= f->avail;\n"
+    }
+  ],
+  "coupling": "The first edited commit leaves the client-buffer pointers in place after terminal EOF while zeroing only their counts. That state is inert under the original count-based rollback guard. The second edited commit replaces that guard with a pointer-offset eligibility test; with the original EOF handling, both pointers are cleared, so the test is also inert. When the edits are composed, a 200-byte first volume is copied while tar requests a 512-byte lookahead, the switch to an empty second volume frees the first file buffer, and terminal EOF leaves client_next in the freed allocation while client_buff names the second allocation. The later pointer test then rolls the stream back into the freed buffer, which the following cpio bid reads. The ownership lifetime established by the EOF path and the eligibility predicate used by the rollback path must be fixed together; a change confined to one side can leave the other relying on the opposite pointer-lifetime invariant.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "archive_read_open_filenames()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

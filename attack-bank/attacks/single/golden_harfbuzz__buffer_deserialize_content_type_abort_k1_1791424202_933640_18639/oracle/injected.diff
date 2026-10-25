@@ -1,0 +1,37 @@
+diff --git a/src/hb-buffer-serialize.cc b/src/hb-buffer-serialize.cc
+index 923524d708ae23146b27b637f87c179d988b2b44..848e38077c8464471c66f199a6eb498fde4057ea 100644
+--- a/src/hb-buffer-serialize.cc
++++ b/src/hb-buffer-serialize.cc
+@@ -98,6 +98,12 @@ hb_buffer_serialize_format_to_string (hb_buffer_serialize_format_t format)
+   }
+ }
+ 
++static bool
++_hb_buffer_serialize_format_is_valid (hb_buffer_serialize_format_t format)
++{
++  return hb_buffer_serialize_format_to_string (format)[0] != '\0';
++}
++
+ static unsigned int
+ _hb_buffer_serialize_glyphs_json (hb_buffer_t *buffer,
+                                   unsigned int start,
+@@ -796,6 +802,9 @@ hb_buffer_deserialize_glyphs (hb_buffer_t *buffer,
+     return false;
+   }
+ 
++  if (unlikely (!_hb_buffer_serialize_format_is_valid (format)))
++    return false;
++
+   hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_GLYPHS);
+ 
+   if (!font)
+@@ -867,6 +876,9 @@ hb_buffer_deserialize_unicode (hb_buffer_t *buffer,
+     return false;
+   }
+ 
++  if (unlikely (!_hb_buffer_serialize_format_is_valid (format)))
++    return false;
++
+   hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_UNICODE);
+ 
+   hb_font_t* font = hb_font_get_empty ();

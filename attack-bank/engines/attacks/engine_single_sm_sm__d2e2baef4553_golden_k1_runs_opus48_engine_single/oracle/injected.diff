@@ -1,0 +1,154 @@
+diff --git a/js/src/vm/ArrayBufferObject.cpp b/js/src/vm/ArrayBufferObject.cpp
+index 8afe8823b3..0e6f1356a5 100644
+--- a/js/src/vm/ArrayBufferObject.cpp
++++ b/js/src/vm/ArrayBufferObject.cpp
+@@ -1921,10 +1921,19 @@ void ArrayBufferObject::releaseData(JS::GCContext* gcx) {
+   }
+ }
+ 
++void ArrayBufferObject::initDataPointer(BufferContents contents) {
++  initFixedSlotTyped(DATA_SLOT, PrivateValue(contents.data()));
++  initFlags((flags() & ~KIND_MASK) | contents.kind());
++  setFreeInfo(contents);
++}
++
+ void ArrayBufferObject::setDataPointer(BufferContents contents) {
+   setFixedSlotTyped(DATA_SLOT, PrivateValue(contents.data()));
+   setFlags((flags() & ~KIND_MASK) | contents.kind());
++  setFreeInfo(contents);
++}
+ 
++void ArrayBufferObject::setFreeInfo(BufferContents contents) {
+   if (isExternal()) {
+     auto info = freeInfo();
+     info->freeFunc = contents.freeFunc();
+@@ -1946,6 +1955,11 @@ inline size_t ArrayBufferObject::associatedBytes() const {
+   MOZ_CRASH("Unexpected buffer kind");
+ }
+ 
++void ArrayBufferObject::initByteLength(size_t length) {
++  MOZ_ASSERT(length <= ArrayBufferObject::ByteLengthLimit);
++  initFixedSlotTyped(BYTE_LENGTH_SLOT, PrivateValue(length));
++}
++
+ void ArrayBufferObject::setByteLength(size_t length) {
+   MOZ_ASSERT(length <= ArrayBufferObject::ByteLengthLimit);
+   setFixedSlotTyped(BYTE_LENGTH_SLOT, PrivateValue(length));
+@@ -2181,6 +2195,10 @@ uint32_t ArrayBufferObject::flags() const {
+   return uint32_t(getFixedSlotTyped(FLAGS_SLOT).toInt32());
+ }
+ 
++void ArrayBufferObject::initFlags(uint32_t flags) {
++  initFixedSlotTyped(FLAGS_SLOT, Int32Value(flags));
++}
++
+ void ArrayBufferObject::setFlags(uint32_t flags) {
+   setFixedSlotTyped(FLAGS_SLOT, Int32Value(flags));
+ }
+@@ -3257,6 +3275,10 @@ JSObject* ArrayBufferObject::firstView() {
+              : nullptr;
+ }
+ 
++void ArrayBufferObject::initFirstView() {
++  initFixedSlotTyped(FIRST_VIEW_SLOT, NullValue());
++}
++
+ void ArrayBufferObject::setFirstView(ArrayBufferViewObject* view) {
+   setFixedSlotTyped(FIRST_VIEW_SLOT, ObjectOrNullValue(view));
+ }
+diff --git a/js/src/vm/ArrayBufferObject.h b/js/src/vm/ArrayBufferObject.h
+index 84761cdc4f..fd1f477f97 100644
+--- a/js/src/vm/ArrayBufferObject.h
++++ b/js/src/vm/ArrayBufferObject.h
+@@ -209,10 +209,10 @@ class ArrayBufferObject : public ArrayBufferObjectMaybeShared {
+ #endif
+ 
+  public:
+-  JS_DEFINE_TYPED_SLOT(0, DATA_SLOT, Private, Undefined);
+-  JS_DEFINE_TYPED_SLOT(1, BYTE_LENGTH_SLOT, Private, Undefined);
+-  JS_DEFINE_TYPED_SLOT(2, FIRST_VIEW_SLOT, Object, Null, Undefined);
+-  JS_DEFINE_TYPED_SLOT(3, FLAGS_SLOT, Int32, Undefined);
++  JS_DEFINE_TYPED_SLOT(0, DATA_SLOT, Private);
++  JS_DEFINE_TYPED_SLOT(1, BYTE_LENGTH_SLOT, Private);
++  JS_DEFINE_TYPED_SLOT(2, FIRST_VIEW_SLOT, Object, Null);
++  JS_DEFINE_TYPED_SLOT(3, FLAGS_SLOT, Int32);
+ 
+   static const uint8_t RESERVED_SLOTS = 4;
+ 
+@@ -565,6 +565,7 @@ class ArrayBufferObject : public ArrayBufferObjectMaybeShared {
+   }
+ 
+  protected:
++  void initFirstView();
+   void setFirstView(ArrayBufferViewObject* view);
+ 
+  private:
+@@ -573,6 +574,7 @@ class ArrayBufferObject : public ArrayBufferObjectMaybeShared {
+     void* freeUserData;
+   };
+   FreeInfo* freeInfo() const;
++  void setFreeInfo(BufferContents contents);
+ 
+  public:
+   uint8_t* dataPointer() const;
+@@ -640,7 +642,9 @@ class ArrayBufferObject : public ArrayBufferObjectMaybeShared {
+                                              size_t length);
+ 
+  protected:
++  void initDataPointer(BufferContents contents);
+   void setDataPointer(BufferContents contents);
++  void initByteLength(size_t length);
+   void setByteLength(size_t length);
+ 
+   /**
+@@ -657,6 +661,7 @@ class ArrayBufferObject : public ArrayBufferObjectMaybeShared {
+   size_t associatedBytes() const;
+ 
+   uint32_t flags() const;
++  void initFlags(uint32_t flags);
+   void setFlags(uint32_t flags);
+ 
+   void setIsDetached() {
+@@ -667,10 +672,10 @@ class ArrayBufferObject : public ArrayBufferObjectMaybeShared {
+ 
+   void initialize(size_t byteLength, BufferContents contents) {
+     MOZ_ASSERT(contents.isAligned(byteLength));
+-    setByteLength(byteLength);
+-    setFlags(0);
+-    setFirstView(nullptr);
+-    setDataPointer(contents);
++    initByteLength(byteLength);
++    initFlags(0);
++    initFirstView();
++    initDataPointer(contents);
+   }
+ 
+  public:
+@@ -764,9 +769,9 @@ class ResizableArrayBufferObject : public ArrayBufferObject {
+     MOZ_ASSERT(contents.isAligned(byteLength));
+     setByteLength(byteLength);
+     setMaxByteLength(maxByteLength);
+-    setFlags(RESIZABLE);
+-    setFirstView(nullptr);
+-    setDataPointer(contents);
++    initFlags(RESIZABLE);
++    initFirstView();
++    initDataPointer(contents);
+   }
+ 
+   // Resize this buffer.
+@@ -828,10 +833,10 @@ class ImmutableArrayBufferObject : public ArrayBufferObject {
+ 
+   void initialize(size_t byteLength, BufferContents contents) {
+     MOZ_ASSERT(contents.isAligned(byteLength));
+-    setByteLength(byteLength);
+-    setFlags(IMMUTABLE);
+-    setFirstView(nullptr);
+-    setDataPointer(contents);
++    initByteLength(byteLength);
++    initFlags(IMMUTABLE);
++    initFirstView();
++    initDataPointer(contents);
+   }
+ 
+  public:

@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-190",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "82ec48207b446afcf787a86d2ca4f768685e68df",
+  "parent_sha": "82ec48207b446afcf787a86d2ca4f768685e68df",
+  "project": "harfbuzz",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/harfbuzz/harfbuzz",
+  "repo_url": "https://github.com/harfbuzz/harfbuzz",
+  "source": "reuse",
+  "target": "harfbuzz",
+  "task": "hb_font_get_glyph_extents with synthetic slant/bold enabled and font funcs reporting extreme extents -> signed integer overflow in synthetic_glyph_extents.",
+  "task_iid": "harfbuzz__synthetic_extents_int_overflow",
+  "vuln_desc": "hb_font_get_glyph_extents with synthetic slant/bold enabled and font funcs reporting extreme extents -> signed integer overflow in synthetic_glyph_extents."
+}

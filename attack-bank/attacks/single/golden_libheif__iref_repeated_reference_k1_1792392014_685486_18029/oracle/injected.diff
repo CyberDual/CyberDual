@@ -1,0 +1,57 @@
+diff --git a/libheif/box.cc b/libheif/box.cc
+index 504e26e6988de13f77ac24b5d6be2fdbaa5f76eb..eba14e9cc5460688160df2f372b79050c0858536 100644
+--- a/libheif/box.cc
++++ b/libheif/box.cc
+@@ -4151,16 +4151,19 @@ Error Box_iref::parse(BitstreamRange& range, const heif_security_limits* limits)
+ Error Box_iref::check_for_double_references() const
+ {
+   for (const auto& ref : m_references) {
+-    std::set<heif_item_id> to_ids;
++    if (ref.header.get_short_type() == fourcc("dimg")) {
++      continue;
++    }
++
++    std::vector<bool> to_ids(65536);
+     for (const auto to_id : ref.to_item_ID) {
+-      if (to_ids.find(to_id) == to_ids.end()) {
+-        to_ids.insert(to_id);
+-      }
+-      else {
++      if (to_ids[to_id]) {
+         return {heif_error_Invalid_input,
+                 heif_suberror_Unspecified,
+                 "'iref' has double references"};
+       }
++
++      to_ids[to_id] = true;
+     }
+   }
+ 
+diff --git a/tests/grid_tile_missing.cc b/tests/grid_tile_missing.cc
+index d7c9fce9cc2fdae27eaf72b0729b4518bd38ac31..5bba56295ca9444c4c5e39bc8e87dd262e23f0f7 100644
+--- a/tests/grid_tile_missing.cc
++++ b/tests/grid_tile_missing.cc
+@@ -223,8 +223,7 @@ std::vector<uint8_t> build_heif_grid_with_irot270() {
+   put_u32_be(iloc_payload, 8);
+   auto iloc = make_box("iloc", iloc_payload, /*full=*/true, /*version=*/1);
+ 
+-  // iref: grid (item 1) references 2 missing tiles (ids 99 and 100). Two
+-  // distinct ids are required because iref rejects duplicate references.
++  // iref: grid (item 1) references 2 missing tiles (ids 99 and 100).
+   std::vector<uint8_t> dimg_payload;
+   put_u16_be(dimg_payload, 1);
+   put_u16_be(dimg_payload, 2);
+diff --git a/tests/overlay_amplification.cc b/tests/overlay_amplification.cc
+index 52af71873aac4ab782d066ecac669d24017e8cea..31427399e7244afff9fd07f307c470f4c7b24096 100644
+--- a/tests/overlay_amplification.cc
++++ b/tests/overlay_amplification.cc
+@@ -202,7 +202,8 @@ std::vector<uint8_t> build_file(const std::vector<Item>& items, uint16_t primary
+ 
+ // Build the exponential amplification gadget: a chain of `depth` overlays where
+ // each overlay composites the next one twice, through two distinct 'iden' items
+-// (a direct double reference would be rejected by Box_iref). Without the fix,
++// (listing the same item twice in one 'dimg' entry is legal too, but the two
++// items keep the gadget independent of that). Without the fix,
+ // decoding the primary overlay decodes the base 2^depth times.
+ //
+ // Item layout: id 1 = base ('mski'); then per level k = 0..depth-1:

@@ -1,0 +1,57 @@
+diff --git a/src/mat.c b/src/mat.c
+index c46790a..a6c167d 100644
+--- a/src/mat.c
++++ b/src/mat.c
+@@ -546,8 +546,8 @@ Add(size_t *res, size_t a, size_t b)
+ /** @brief Checks the product of the edge dimensions for overflow
+  *
+  * Validates that each edge is non-negative and that the product of the edge
+- * dimensions does not overflow and stays within @c INT_MAX, so that the result
+- * can be used as an @c int element count.
++ * dimensions does not overflow @c size_t, so that the result can be used
++ * as an element count for sizing an allocation.
+  * @param rank Number of dimensions
+  * @param edge Number of elements to read per dimension
+  * @retval 0 on success
+@@ -562,12 +562,12 @@ CheckEdgeOverflow(int rank, const int *edge, size_t extra)
+             return MATIO_E_BAD_ARGUMENT;
+         }
+         err = Mul(&nElements, nElements, (size_t)edge[i]);
+-        if ( err || nElements > (size_t)INT_MAX ) {
++        if ( err ) {
+             return MATIO_E_INDEX_TOO_BIG;
+         }
+     }
+     err = Mul(&nElements, nElements, extra);
+-    if ( err || nElements > (size_t)INT_MAX ) {
++    if ( err ) {
+         return MATIO_E_INDEX_TOO_BIG;
+     }
+     return MATIO_E_NO_ERROR;
+diff --git a/src/matvar_struct.c b/src/matvar_struct.c
+index 4609fd2..a30d7b5 100644
+--- a/src/matvar_struct.c
++++ b/src/matvar_struct.c
+@@ -403,6 +403,7 @@ Mat_VarGetStructs(const matvar_t *matvar, const int *start, const int *stride, c
+         };
+     matvar_t **fields, *struct_slab;
+     int j;
++    int nelems_total;
+ 
+     if ( matvar == NULL || start == NULL || stride == NULL || edge == NULL ) {
+         return NULL;
+@@ -443,9 +444,12 @@ Mat_VarGetStructs(const matvar_t *matvar, const int *start, const int *stride, c
+         struct_slab->dims[j] = edge[j];
+     }
+     I *= nfields;
+-    struct_slab->nbytes = N * nfields * sizeof(matvar_t *);
++    /* Compute the element count once and reuse it for both the byte count
++     * and the allocation below. */
++    nelems_total = (int)(N * nfields);
++    struct_slab->nbytes = (size_t)nelems_total * sizeof(matvar_t *);
+     if ( struct_slab->nbytes > 0 ) {
+-        struct_slab->data = calloc(N * nfields, sizeof(matvar_t *));
++        struct_slab->data = calloc((size_t)nelems_total, sizeof(matvar_t *));
+         if ( struct_slab->data == NULL ) {
+             Mat_VarFree(struct_slab);
+             return NULL;

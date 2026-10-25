@@ -1,0 +1,42 @@
+diff --git a/lib/http.c b/lib/http.c
+index 9af3a705147022afebba333c17f4ad8a9053bc09..c55a8eb635ce13714bafb43cdb17a5f5c357b1ae 100644
+--- a/lib/http.c
++++ b/lib/http.c
+@@ -1423,24 +1423,29 @@ bool Curl_compareheader(const char *headerline, /* line to check */
+   if(curlx_strlen(&val) >= clen) {
+     size_t len;
+     p = curlx_str(&val);
++    /* 'len' counts the bytes left of the value, the scans below must not
++       pass the end of it */
+     for(len = curlx_strlen(&val); len >= clen;) {
+-      struct Curl_str next;
+-      const char *o = p;
+       /* after a match there must be a comma, space, newline or null byte */
+       if(curl_strnequal(p, content, clen) &&
+          ((p[clen] == ',') || ISBLANK(p[clen]) || ISNEWLINE(p[clen]) ||
+           !p[clen]))
+         return TRUE; /* match! */
+       /* advance to the next comma */
+-      if(curlx_str_until(&p, &next, MAX_HTTP_RESP_HEADER_SIZE, ',') ||
+-         curlx_str_single(&p, ','))
++      while(len && (*p != ',')) {
++        p++;
++        len--;
++      }
++      if(!len || curlx_str_single(&p, ','))
+         break; /* no comma, get out */
+ 
+       /* if there are more dummy commas, move over them as well */
+-      do
+-        curlx_str_passblanks(&p);
+-      while(!curlx_str_single(&p, ','));
+-      len -= (p - o);
++      do {
++        while(len && ISBLANK(*p)) {
++          p++;
++          len--;
++        }
++      } while(len && !curlx_str_single(&p, ','));
+     }
+   }
+   return FALSE; /* no match */

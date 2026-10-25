@@ -1,0 +1,39 @@
+diff --git a/src/preview.cpp b/src/preview.cpp
+index eda5c1a..37931c7 100644
+--- a/src/preview.cpp
++++ b/src/preview.cpp
+@@ -831,15 +831,17 @@ bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize) {
+     return false;
+ 
+   constexpr size_t bytesPerPixel = 3;
++  // The decoded RGB rows are padded to a 4-byte boundary.
++  constexpr size_t rowAlignment = 4;
+ 
+-  if (width > std::numeric_limits<size_t>::max() / height)
++  if (width > (std::numeric_limits<size_t>::max() - (rowAlignment - 1)) / bytesPerPixel)
+     return false;
+ 
+-  const size_t pixels = width * height;
+-  if (pixels > std::numeric_limits<size_t>::max() / bytesPerPixel)
++  const size_t rowSize = (width * bytesPerPixel + rowAlignment - 1) / rowAlignment * rowAlignment;
++  if (rowSize > std::numeric_limits<size_t>::max() / height)
+     return false;
+ 
+-  rgbSize = pixels * bytesPerPixel;
++  rgbSize = rowSize * height;
+   return rgbSize <= maxAi7ThumbnailSize;
+ }
+ 
+@@ -971,11 +973,9 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {
+ 
+ DataBuf makePnm(size_t width, size_t height, const DataBuf& rgb) {
+   // This was already checked in decodeAi7Thumbnail().
+-  assert(width * height * 3UL == rgb.size());
+-
+   const std::string header = "P6\n" + std::to_string(width) + " " + std::to_string(height) + "\n255\n";
+ 
+-  DataBuf dest(header.size() + rgb.size());
++  DataBuf dest(header.size() + width * height * 3UL);
+   std::copy(header.begin(), header.end(), dest.begin());
+   std::copy(rgb.begin(), rgb.end(), dest.begin() + header.size());
+   return dest;

@@ -1,0 +1,29 @@
+// Decodes a crafted lossless WebP bitstream through the public decoding
+// API. The stream declares a meta Huffman image whose single pixel maps to
+// group id 1 while group id 0 is left unused, forcing the decoder to build
+// an index remapping table for two group slots.
+#include <stdio.h>
+#include <stdlib.h>
+
+#include "src/webp/decode.h"
+
+static const uint8_t kWebpData[] = {
+    0x52, 0x49, 0x46, 0x46, 0x2c, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+    0x56, 0x50, 0x38, 0x4c, 0x1f, 0x00, 0x00, 0x00, 0x2f, 0x00, 0x00, 0x00,
+    0x10, 0xbc, 0x06, 0x14, 0xa0, 0x00, 0xfd, 0x2f, 0x40, 0x01, 0x0a, 0x50,
+    0x80, 0x02, 0x14, 0xa0, 0x07, 0x05, 0x28, 0x40, 0xff, 0x0b, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+};
+
+int main(void) {
+  int width = 0, height = 0;
+  uint8_t* const rgba =
+      WebPDecodeRGBA(kWebpData, sizeof(kWebpData), &width, &height);
+  if (rgba == NULL) {
+    printf("decode failed\n");
+    return 1;
+  }
+  printf("decoded %dx%d\n", width, height);
+  WebPFree(rgba);
+  return 0;
+}

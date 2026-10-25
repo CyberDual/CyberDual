@@ -1,0 +1,39 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0a..9322bec 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -411,12 +411,14 @@ IDManifest::init (const char* data, const char* endOfData)
+     // comments in serialize function describe the format
+     //
+ 
+-    vector<int> mapping (stringList.size ());
++    vector<int> mapping;
+ 
+     //
+     // overlapping sequences: A list [(4,5),(3,6)] expands to 4,5,3,6 - because 4 and 5 are including already
+     // they are not included again
+     // the 'seen' list indicates which values have already been used, so they are not re-referenced
++    // mapping is built up in order as entries are encountered, so its final
++    // size is the number of distinct table entries actually referenced
+     //
+ 
+     vector<char> seen (stringList.size ());
+@@ -429,7 +431,6 @@ IDManifest::init (const char* data, const char* endOfData)
+ 
+     Xdr::read<CharPtrIO> (data, rleLength);
+ 
+-    int currentIndex = 0;
+     for (int i = 0; i < rleLength; ++i)
+     {
+         int first;
+@@ -453,9 +454,8 @@ IDManifest::init (const char* data, const char* endOfData)
+             // don't remap already mapped values
+             if (seen[entry] == 0)
+             {
+-                mapping[currentIndex] = entry;
++                mapping.push_back (entry);
+                 seen[entry]           = 1;
+-                currentIndex++;
+             }
+         }
+     }

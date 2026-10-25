@@ -1,0 +1,22 @@
+diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c
+index 92102164..6eb1a8c6 100644
+--- a/libarchive/archive_read_support_format_rar5.c
++++ b/libarchive/archive_read_support_format_rar5.c
+@@ -1507,7 +1507,7 @@ static int parse_file_extra_redir(struct archive_read* a,
+ 	uint64_t value_size = 0;
+ 	size_t varint_len = 0;
+ 	size_t target_size = 0;
+-	char target_utf8_buf[MAX_NAME_IN_BYTES];
++	char target_utf8_buf[MAX_NAME_IN_CHARS];
+ 	const uint8_t* p;
+ 	int r;
+ 
+@@ -1532,7 +1532,7 @@ static int parse_file_extra_redir(struct archive_read* a,
+ 		return ARCHIVE_EOF;
+ 	*extra_data_size -= (int64_t)(target_size + varint_len);
+ 
+-	if(target_size > (MAX_NAME_IN_CHARS - 1)) {
++	if(target_size > (MAX_NAME_IN_BYTES - 1)) {
+ 		archive_set_error(&a->archive, ARCHIVE_ERRNO_FILE_FORMAT,
+ 		    "Link target is too long");
+ 		return ARCHIVE_FATAL;

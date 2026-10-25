@@ -1,0 +1,14 @@
+{
+ "project": "libarchive",
+ "window_id": "7f317d172bf2d64cf50b2f2cf87e394fdf23583488900e2adb314693a522ae13",
+ "base": "28bd729bb4a8cfe85a60c904e555a226e6c88324",
+ "maint_batch_tip": "8eccc8ce6932b3f57cf3953fbb7064a07f983499",
+ "tree": "ba0a8b44f3efa3ece9a4758ff46105ee2405ba72",
+ "n_commits": 124,
+ "n_editable": 124,
+ "list_sha1": "e5a1b7a2df820cc1974f9f01d9996ecfec5c0fb6",
+ "tar_sha256": "d1d451e57b6f4a9bd27b4212faaf32dab47628c8035801ce77bf00a651a13f48",
+ "tar_bytes": 57948160,
+ "built_utc": "2026-10-17T20:12:02Z",
+ "cyberdual": "f685a97c"
+}

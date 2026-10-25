@@ -1,0 +1,31 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db91..e665cb50 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -1600,10 +1600,6 @@ XML_ParserReset(XML_Parser parser, const XML_Char *encodingName) {
+ 
+   if (parser->m_parentParser)
+     return XML_FALSE;
+-  // The application-defined release callback may access the parser, so it
+-  // must run before any parser state is freed.
+-  if (parser->m_unknownEncodingRelease)
+-    callUnknownEncodingRelease(parser);
+   /* move m_tagStack to m_freeTagList */
+   tStk = parser->m_tagStack;
+   while (tStk) {
+@@ -1623,6 +1619,15 @@ XML_ParserReset(XML_Parser parser, const XML_Char *encodingName) {
+    * entities) */
+   moveEntityList(&parser->m_freeEntities, &parser->m_openValueEntities);
+   moveToFreeBindingList(parser, parser->m_inheritedBindings);
++  // NOTE: We are avoiding FREE(..) here because parser->m_buffer
++  //       is not being allocated with MALLOC(..) but with plain
++  //       .malloc_fcn(..).
++  parser->m_mem.free_fcn(parser->m_buffer);
++  parser->m_buffer = NULL;
++  if (parser->m_unknownEncodingRelease)
++    callUnknownEncodingRelease(parser);
++  // The application-defined release callback may access the parser, so it
++  // must run before the unknown encoding is torn down.
+   FREE(parser, parser->m_unknownEncodingMem);
+   poolClear(&parser->m_tempPool);
+   poolClear(&parser->m_temp2Pool);

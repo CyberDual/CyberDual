@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "fcfbd7048012cabe12328988bf669e1907eb0872",
+      "edited_message": "rar5: Detect 32 bit size_t overflows\n\nIf a parsed value does not fit into 32 bit size_t, treat it as error\ninstead of truncating.\n\nWhile auditing this untrusted size handling, also drop the leftover\n4x margin on MAX_NAME_IN_BYTES: it dates back to a UTF-16-to-UTF-8\nexpansion step that no longer happens here, since parse_file_extra_redir\nand process_head_file both copy an already-validated UTF-8 byte count\ndirectly off the wire. MAX_NAME_IN_CHARS already bounds those counts,\nso the stack buffers backing them don't need to be any larger than\nthat.\n\nReported-by: krishna28238-arch <krishna28238-arch@users.noreply.github.com>\nSigned-off-by: Tobias Stoeckmann <tobias@stoeckmann.org>\n(cherry picked from commit a43d0540a53b2eb3b1da35476e0d30c8f313055e)",
+      "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\nindex f9a2327..b67edaa 100644\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -98,7 +98,7 @@ static const size_t g_unpack_window_size = 0x20000;\n /* These could have been static const's, but they aren't, because of\n  * Visual Studio. */\n #define MAX_NAME_IN_CHARS 2048\n-#define MAX_NAME_IN_BYTES (4 * MAX_NAME_IN_CHARS)\n+#define MAX_NAME_IN_BYTES 2048\n \n struct file_header {\n \tssize_t bytes_remaining;\n"
+    },
+    {
+      "sha": "ea35785a7aeb0f58b6700a30cfe5a5dab73bd715",
+      "edited_message": "rar5: Adjust read_var/read_var_sized return values\n\nUSE ARCHIVE_OK, ARCHIVE_EOF, and ARCHIVE_FATAL for improved error\nhandling. Integer overflows must not be considered \"end of file\".\n\nHandle different error message on 32 bit systems in tests.\n\nNow that oversized varints are reported with a proper error instead of\nbeing silently truncated or mistaken for end-of-file, also raise\nMAX_NAME_IN_CHARS to 4096: 2048 was an arbitrary holdover from earlier\nversions of this reader and rejects filenames that real-world RAR5\narchives legitimately use.\n\nSigned-off-by: Tobias Stoeckmann <tobias@stoeckmann.org>\n(cherry picked from commit 07599ddf8d50830a375b5a3f927c4020fcb4036d)",
+      "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\nindex 9210216..70e93a2 100644\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -97,8 +97,8 @@ static const size_t g_unpack_window_size = 0x20000;\n \n /* These could have been static const's, but they aren't, because of\n  * Visual Studio. */\n-#define MAX_NAME_IN_CHARS 2048\n-#define MAX_NAME_IN_BYTES (4 * MAX_NAME_IN_CHARS)\n+#define MAX_NAME_IN_CHARS 4096\n+#define MAX_NAME_IN_BYTES 2048\n \n struct file_header {\n \tssize_t bytes_remaining;\n"
+    }
+  ],
+  "coupling": "Both edited commits touch only the two adjacent #define lines at the top of archive_read_support_format_rar5.c (MAX_NAME_IN_CHARS and MAX_NAME_IN_BYTES), ~1700-1900 lines away from the stack buffers and length checks that use them (target_utf8_buf/parse_file_extra_redir and name_utf8_buf/process_head_file). fcfbd70 (ancestor) changes MAX_NAME_IN_BYTES from the macro expression '(4 * MAX_NAME_IN_CHARS)' to a hardcoded literal '2048'; at that point in history MAX_NAME_IN_CHARS is still 2048, so the buffers stay exactly large enough for the untouched 'name_size > (MAX_NAME_IN_CHARS - 1)' / 'target_size > (MAX_NAME_IN_CHARS - 1)' checks elsewhere in the file (2047 data bytes + 1 NUL == 2048) - this commit alone is correct and the checks it depends on are not in its diff. ea35785 (descendant) later raises MAX_NAME_IN_CHARS from 2048 to 4096; because MAX_NAME_IN_BYTES is now a plain literal (fcfbd70's doing) rather than a macro reference, it does not scale with MAX_NAME_IN_CHARS, so the two buffers silently stay at 2048 bytes while the length checks that gate writes into them now admit up to 4095 bytes. Neither commit's diff shows an inconsistency by itself: fcfbd70's diff has no visible check to compare against (the checks are untouched context far below), and ea35785's diff changes only MAX_NAME_IN_CHARS, with MAX_NAME_IN_BYTES's literal value sitting unchanged one line below and easy to misread as still tracking it. Reverting either edit in isolation (restoring the macro-expression buffer size, or restoring MAX_NAME_IN_CHARS to 2048) happens to restore safety, but reviewing either commit's diff on its own gives no indication that a 2048-byte stack buffer and a 4095-byte-admitting bounds check coexist in the final tree; that fact only emerges from reading both #define edits together against the (unmodified) usage sites several hundred lines away.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "archive_read_next_header (via archive_read_support_format_rar5 + archive_read_open_memory, libarchive public API)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

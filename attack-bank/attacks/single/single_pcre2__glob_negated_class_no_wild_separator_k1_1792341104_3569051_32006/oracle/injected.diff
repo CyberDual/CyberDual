@@ -1,0 +1,108 @@
+diff --git a/src/pcre2_convert.c b/src/pcre2_convert.c
+index 8a2b293d5f732d59519041be17abed1ef2f157ce..5db033678393c6eb7fa6fe556c7784af66d4e09b 100644
+--- a/src/pcre2_convert.c
++++ b/src/pcre2_convert.c
+@@ -485,6 +485,39 @@ convert_glob_write(out, CHAR_RIGHT_SQUARE_BRACKET);
+ }
+ 
+ 
++/* Prints the opening of a negative character class.
++
++Arguments:
++  out            output context
++  separator      glob separator
++  with_escape    backslash is needed before separator
++  no_wildsep     wildcards may match separator
++*/
++
++static void
++convert_glob_print_negative_class(pcre2_output_context *out,
++  PCRE2_UCHAR separator, BOOL with_escape, BOOL no_wildsep)
++{
++uint32_t length = 0;
++
++out->out_str[length++] = (uint8_t) CHAR_LEFT_SQUARE_BRACKET;
++out->out_str[length++] = (uint8_t) CHAR_CIRCUMFLEX_ACCENT;
++
++if (!no_wildsep)
++  {
++  if (with_escape)
++    out->out_str[length++] = (uint8_t) CHAR_BACKSLASH;
++
++  out->out_str[length++] = (uint8_t) separator;
++  }
++
++if (with_escape)
++  memset(out->out_str + length, 0, sizeof(out->out_str) - length + 1);
++
++convert_glob_write_str(out, length);
++}
++
++
+ /* Parse a posix class.
+ 
+ Arguments:
+@@ -644,7 +677,7 @@ BOOL has_prev_c;
+ PCRE2_SPTR pattern = *from;
+ PCRE2_SPTR char_start = NULL;
+ uint32_t c, prev_c;
+-int len, class_index;
++int class_index;
+ 
+ (void)utf; /* Avoid compiler warning. */
+ 
+@@ -667,21 +700,7 @@ if (*pattern == CHAR_EXCLAMATION_MARK
+ 
+   is_negative = TRUE;
+ 
+-  out->out_str[0] = CHAR_LEFT_SQUARE_BRACKET;
+-  out->out_str[1] = CHAR_CIRCUMFLEX_ACCENT;
+-  len = 2;
+-
+-  if (!no_wildsep)
+-    {
+-    if (with_escape)
+-      {
+-      out->out_str[len] = CHAR_BACKSLASH;
+-      len++;
+-      }
+-    out->out_str[len] = (uint8_t) separator;
+-    }
+-
+-  convert_glob_write_str(out, len + 1);
++  convert_glob_print_negative_class(out, separator, with_escape, no_wildsep);
+   }
+ else
+   convert_glob_write(out, CHAR_LEFT_SQUARE_BRACKET);
+diff --git a/testdata/testinput24 b/testdata/testinput24
+index 03cecf9b2d34d3217d34ceda08f39a27243f1f3c..00901f646fd01e06cb722d597ebf4ac22c5d0a2e 100644
+--- a/testdata/testinput24
++++ b/testdata/testinput24
+@@ -330,6 +330,10 @@
+ 
+ /??a??/
+ 
++/[!a]/
++
++/[^xy]/
++
+ #pattern convert=unset
+ #pattern convert=glob,convert_glob_escape=0
+ 
+diff --git a/testdata/testoutput24 b/testdata/testoutput24
+index feac502499d28f2ea18fffc0992d7eb509f1028e..778b3793b30d7850b02f00fa40b67a319a061b8c 100644
+--- a/testdata/testoutput24
++++ b/testdata/testoutput24
+@@ -512,6 +512,12 @@ No match
+ /??a??/
+ (?s)\A..a..\z
+ 
++/[!a]/
++(?s)\A[^a]\z
++
++/[^xy]/
++(?s)\A[^xy]\z
++
+ #pattern convert=unset
+ #pattern convert=glob,convert_glob_escape=0
+ 

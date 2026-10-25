@@ -1,0 +1,55 @@
+diff --git a/libheif/image/pixelimage.cc b/libheif/image/pixelimage.cc
+index 8316bf71ac4f4b5c0ea2a956215795ce41f6cd13..ccc5f51163beb086a9147f3ab91e6386fdb17af6 100644
+--- a/libheif/image/pixelimage.cc
++++ b/libheif/image/pixelimage.cc
+@@ -74,9 +74,24 @@ uint32_t chroma_height(uint32_t h, heif_chroma chroma)
+   }
+ }
+ 
++static bool is_extra_data_channel(heif_channel channel)
++{
++  switch (channel) {
++    case heif_channel_filter_array:
++    case heif_channel_depth:
++    case heif_channel_disparity:
++    case heif_channel_unknown:
++      return true;
++
++    default:
++      return false;
++  }
++}
++
+ uint32_t channel_width(uint32_t w, heif_chroma chroma, heif_channel channel)
+ {
+-  if (channel == heif_channel_Cb || channel == heif_channel_Cr) {
++  if (channel == heif_channel_Cb || channel == heif_channel_Cr ||
++      is_extra_data_channel(channel)) {
+     return chroma_width(w, chroma);
+   }
+   else {
+@@ -86,7 +101,8 @@ uint32_t channel_width(uint32_t w, heif_chroma chroma, heif_channel channel)
+ 
+ uint32_t channel_height(uint32_t h, heif_chroma chroma, heif_channel channel)
+ {
+-  if (channel == heif_channel_Cb || channel == heif_channel_Cr) {
++  if (channel == heif_channel_Cb || channel == heif_channel_Cr ||
++      is_extra_data_channel(channel)) {
+     return chroma_height(h, chroma);
+   }
+   else {
+@@ -825,6 +841,14 @@ bool HeifPixelImage::has_standard_plane_sizes() const
+         get_subsampled_size(m_width, m_height, component.m_channel, m_chroma, &expected_w, &expected_h);
+         break;
+ 
++      case heif_channel_filter_array:
++      case heif_channel_depth:
++      case heif_channel_disparity:
++      case heif_channel_unknown:
++        expected_w = channel_width(m_width, m_chroma, component.m_channel);
++        expected_h = channel_height(m_height, m_chroma, component.m_channel);
++        break;
++
+       default:
+         // Not one of the standard channels this check knows the geometry of.
+         return false;

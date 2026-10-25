@@ -1,0 +1,46 @@
+diff --git a/src/hb-buffer-serialize.cc b/src/hb-buffer-serialize.cc
+index 923524d708ae23146b27b637f87c179d988b2b44..ea4b2717dd8e450579ede53c703cf9dc88bdd163 100644
+--- a/src/hb-buffer-serialize.cc
++++ b/src/hb-buffer-serialize.cc
+@@ -748,6 +748,21 @@ parse_hex (const char *pp, const char *end, uint32_t *pv)
+ #include "hb-buffer-deserialize-text-glyphs.hh"
+ #include "hb-buffer-deserialize-text-unicode.hh"
+ 
++static const hb_buffer_serialize_format_t supported_deserialize_formats[] =
++{
++  HB_BUFFER_SERIALIZE_FORMAT_TEXT,
++  HB_BUFFER_SERIALIZE_FORMAT_JSON,
++};
++
++static bool
++_hb_buffer_deserialize_format_supported (hb_buffer_serialize_format_t format)
++{
++  for (unsigned int i = 0; i <= ARRAY_LENGTH (supported_deserialize_formats); i++)
++    if (supported_deserialize_formats[i] == format)
++      return true;
++  return false;
++}
++
+ /**
+  * hb_buffer_deserialize_glyphs:
+  * @buffer: an #hb_buffer_t buffer.
+@@ -796,6 +811,9 @@ hb_buffer_deserialize_glyphs (hb_buffer_t *buffer,
+     return false;
+   }
+ 
++  if (unlikely (!_hb_buffer_deserialize_format_supported (format)))
++    return false;
++
+   hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_GLYPHS);
+ 
+   if (!font)
+@@ -867,6 +885,9 @@ hb_buffer_deserialize_unicode (hb_buffer_t *buffer,
+     return false;
+   }
+ 
++  if (unlikely (!_hb_buffer_deserialize_format_supported (format)))
++    return false;
++
+   hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_UNICODE);
+ 
+   hb_font_t* font = hb_font_get_empty ();

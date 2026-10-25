@@ -1,0 +1,43 @@
+diff --git a/js/src/wasm/WasmBinary.h b/js/src/wasm/WasmBinary.h
+index 8cf167fef626d..a9172074cb088 100644
+--- a/js/src/wasm/WasmBinary.h
++++ b/js/src/wasm/WasmBinary.h
+@@ -591,8 +591,13 @@ class Decoder {
+ 
+   bool readUTF8Bytes(uint32_t numBytes, UTF8Bytes* bytes) {
+     const uint8_t* rawBytes;
+-    if (!readBytes(numBytes, &rawBytes)) {
+-      return false;
++    if (bytes->capacity() < numBytes) {
++      if (!readBytes(numBytes, &rawBytes)) {
++        return false;
++      }
++    } else {
++      rawBytes = cur_;
++      cur_ += numBytes;
+     }
+ 
+     if (!IsUtf8(AsChars(mozilla::Span(rawBytes, numBytes)))) {
+diff --git a/js/src/wasm/WasmValidate.cpp b/js/src/wasm/WasmValidate.cpp
+index 378b49e5b5a4a..bf8efcfa13c33 100644
+--- a/js/src/wasm/WasmValidate.cpp
++++ b/js/src/wasm/WasmValidate.cpp
+@@ -4621,13 +4621,12 @@ static bool DecodeNameSectionName(Decoder& d,
+   MOZ_ASSERT(d.currentOffset() >= nameSection.payload.start);
+   uint32_t offsetInNamePayload = d.currentOffset() - nameSection.payload.start;
+ 
+-  const uint8_t* nameBytes;
+-  if (!d.readBytes(length, &nameBytes)) {
+-    return d.failf("failed to read %s name", thing);
++  UTF8Bytes nameBytes;
++  if (!nameBytes.reserve(length)) {
++    return false;
+   }
+-
+-  if (!IsUtf8(AsChars(mozilla::Span(nameBytes, length)))) {
+-    return d.failf("%s name was not valid UTF-8", thing);
++  if (!d.readUTF8Bytes(length, &nameBytes)) {
++    return d.failf("failed to read %s name", thing);
+   }
+ 
+   result->offsetInNamePayload = offsetInNamePayload;

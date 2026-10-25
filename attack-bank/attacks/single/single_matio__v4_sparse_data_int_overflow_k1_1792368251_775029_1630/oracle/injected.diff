@@ -1,0 +1,45 @@
+diff --git a/src/mat4.c b/src/mat4.c
+index 118835f5d2924180942a8b69fe9bcfd692f536a1..6ae6a6987188b366ace85fc400c297fbf67f296c 100644
+--- a/src/mat4.c
++++ b/src/mat4.c
+@@ -496,9 +496,21 @@ Mat_VarRead4(mat_t *mat, matvar_t *matvar)
+                 }
+                 sparse->ndata = sparse->nir;
+                 data_type = matvar->data_type;
++#if defined(EXTENDED_SPARSE)
++                err = Mul(&nBytes, sparse->ndata, Mat_SizeOf(data_type));
++#else
++                err = Mul(&nBytes, sparse->ndata, sizeof(double));
++#endif
++                if ( err ) {
++                    free(sparse->jc);
++                    free(sparse->ir);
++                    free(matvar->data);
++                    matvar->data = NULL;
++                    Mat_Critical("Integer multiplication overflow");
++                    return err;
++                }
+                 if ( matvar->isComplex ) {
+-                    mat_complex_split_t *complex_data =
+-                        ComplexCalloc(sparse->ndata * Mat_SizeOf(data_type));
++                    mat_complex_split_t *complex_data = ComplexCalloc(nBytes);
+                     if ( NULL != complex_data ) {
+                         sparse->data = complex_data;
+ #if defined(EXTENDED_SPARSE)
+@@ -628,7 +640,6 @@ Mat_VarRead4(mat_t *mat, matvar_t *matvar)
+                             free(sparse->jc);
+                             free(sparse->ir);
+                             free(matvar->data);
+-                            matvar->data = NULL;
+                             return MATIO_E_FILE_FORMAT_VIOLATION;
+                         }
+                     } else {
+@@ -640,7 +651,7 @@ Mat_VarRead4(mat_t *mat, matvar_t *matvar)
+                         return MATIO_E_OUT_OF_MEMORY;
+                     }
+                 } else if ( sparse->ndata > 0 ) {
+-                    sparse->data = malloc(sparse->ndata * Mat_SizeOf(data_type));
++                    sparse->data = malloc(nBytes);
+                     if ( sparse->data != NULL ) {
+ #if defined(EXTENDED_SPARSE)
+                         switch ( data_type ) {

@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "00bdd68247f0a11fc94e5ead4346c6a830f93d30",
+  "parent_sha": "00bdd68247f0a11fc94e5ead4346c6a830f93d30",
+  "project": "exiv2",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/Exiv2/exiv2",
+  "repo_url": "https://github.com/Exiv2/exiv2",
+  "source": "reselect",
+  "target": "exiv2",
+  "task": "Behaviour: reading a 12-byte BITMAPCOREHEADER (OS/2 1.x / Win 2.x) BMP via public Image::readMetadata parsed its 16-bit width/height as 32-bit, so reported pixelWidth/Height were wrong; feature-impl handling of the short header. Library change single file src/bmpimage.cpp (+ test).",
+  "task_iid": "exiv2__bmp_os2_coreheader_dimensions",
+  "vuln_desc": "Behaviour: reading a 12-byte BITMAPCOREHEADER (OS/2 1.x / Win 2.x) BMP via public Image::readMetadata parsed its 16-bit width/height as 32-bit, so reported pixelWidth/Height were wrong; feature-impl handling of the short header. Library change single file src/bmpimage.cpp (+ test)."
+}

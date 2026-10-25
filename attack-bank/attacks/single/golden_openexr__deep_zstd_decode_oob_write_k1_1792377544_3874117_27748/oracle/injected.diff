@@ -1,0 +1,17 @@
+diff --git a/src/lib/OpenEXRCore/internal_zstd.c b/src/lib/OpenEXRCore/internal_zstd.c
+index 670b92a73c768ebf3b5cc4cec26d92c90fe23b79..5613ebba9cfa68d1ba8ec515e9d6e46093211f22 100644
+--- a/src/lib/OpenEXRCore/internal_zstd.c
++++ b/src/lib/OpenEXRCore/internal_zstd.c
+@@ -1308,6 +1308,12 @@ exr_undo_zstd_v1 (
+         pack_channel_count,
+         sorting_lookup);
+ 
++    /* split is derived from the (separately validated) sample-count table,
++     * so it is not covered by the payload bound checked above: a first
++     * inner segment longer than the entire decompressed stream can only
++     * come from a corrupt file. */
++    if (split > max_dst) return EXR_ERR_CORRUPT_CHUNK;
++
+     uint64_t  inner_lens[2];
+     uint64_t  inner_els[2];
+     int const n_inner =

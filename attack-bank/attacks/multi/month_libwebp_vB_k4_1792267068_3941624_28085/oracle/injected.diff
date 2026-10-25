@@ -1,0 +1,43 @@
+diff --git a/src/dec/alpha_dec.c b/src/dec/alpha_dec.c
+index 9fb14484..9d1cf41f 100644
+--- a/src/dec/alpha_dec.c
++++ b/src/dec/alpha_dec.c
+@@ -127,22 +127,14 @@ WEBP_NODISCARD static VP8StatusCode ALPHInit(ALPHDecoder* const dec,
+ }
+ 
+ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+-  const int width = io->width;
+   // Alpha rows are always decoded starting from row 0 (for spatial filtering
+   // and lossless stream dependencies) and decoding stops at io->crop_bottom
+   // (which equals io->height when cropping is not used).
+   const int height = io->crop_bottom;
++  const int window_rows = NUM_ARGB_CACHE_ROWS + 9;
+   if (dec->alpha_data == NULL) return 0;
+-  // For each non-last macroblock row (16 pixel rows), FinishRow() in
+-  // frame_dec.c holds back up to 8 bottom pixel rows (kFilterExtraRows[] for
+-  // complex filtering) until the next macroblock row is decoded. On the last
+-  // macroblock row, no bottom rows are held back, so FinishRow() requests the 8
+-  // pixel rows held back from the previous macroblock row plus all 16 pixel
+-  // rows of the last macroblock row (24 pixel rows total), while retaining 1
+-  // preceding row (row - 1) for spatial unfiltering and fancy upsampling.
+-  return (dec->alpha_dithering > 0)
+-             ? height
+-             : VP8LGetWindowRows(width, height, /*max_history_rows=*/25);
++  if (dec->alpha_dithering > 0) return height;
++  return (height < window_rows) ? height : window_rows;
+ }
+ 
+ void WebPShiftAlphaWindow(ALPHDecoder* const alph_dec, int current_end_row,
+diff --git a/src/dec/vp8li_dec.h b/src/dec/vp8li_dec.h
+index 82946677..15e8b1be 100644
+--- a/src/dec/vp8li_dec.h
++++ b/src/dec/vp8li_dec.h
+@@ -33,7 +33,7 @@ WEBP_ASSUME_UNSAFE_INDEXABLE_ABI
+ extern "C" {
+ #endif
+ 
+-#define NUM_ARGB_CACHE_ROWS 16
++#define NUM_ARGB_CACHE_ROWS 15
+ 
+ typedef enum { READ_DATA = 0, READ_HDR = 1, READ_DIM = 2 } VP8LDecodeState;
+ 

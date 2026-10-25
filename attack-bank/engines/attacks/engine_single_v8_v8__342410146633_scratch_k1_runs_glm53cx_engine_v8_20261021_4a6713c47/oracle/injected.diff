@@ -1,0 +1,30 @@
+diff --git a/src/wasm/baseline/liftoff-compiler.cc b/src/wasm/baseline/liftoff-compiler.cc
+index 8c8c46a4..25402283 100644
+--- a/src/wasm/baseline/liftoff-compiler.cc
++++ b/src/wasm/baseline/liftoff-compiler.cc
+@@ -4292,8 +4292,10 @@ class LiftoffCompiler {
+     __ emit_ptrsize_sub(effective_size_reg.gp(), mem_size.gp(),
+                         end_offset_reg.gp());
+ 
+-    __ emit_cond_jump(kUnsignedGreaterThanEqual, trap.label(), kIntPtrKind,
+-                      index_ptrsize, effective_size_reg.gp(), trap.frozen());
++    __ emit_cond_jump(memory->is_shared ? kGreaterThanEqual
++                                        : kUnsignedGreaterThanEqual,
++                      trap.label(), kI32, index_ptrsize,
++                      effective_size_reg.gp(), trap.frozen());
+     return index_ptrsize;
+   }
+ 
+diff --git a/src/wasm/wasm-module.cc b/src/wasm/wasm-module.cc
+index 4affa84d..6c3aa5d7 100644
+--- a/src/wasm/wasm-module.cc
++++ b/src/wasm/wasm-module.cc
+@@ -41,6 +41,8 @@ void UpdateComputedInformation(WasmMemory* memory) {
+     memory->bounds_checks = kExplicitBoundsChecks;
+   } else if (memory->is_memory64() && !v8_flags.wasm_memory64_trap_handling) {
+     memory->bounds_checks = kExplicitBoundsChecks;
++  } else if (memory->is_shared) {
++    memory->bounds_checks = kExplicitBoundsChecks;
+   } else if (trap_handler::IsTrapHandlerEnabled()) {
+     if constexpr (kSystemPointerSize == 4) UNREACHABLE();
+     memory->bounds_checks = kTrapHandler;

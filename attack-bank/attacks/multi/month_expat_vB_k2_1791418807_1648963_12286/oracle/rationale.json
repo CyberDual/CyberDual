@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "e54e4f7c7d2456466eecb12f84c60aa9b2b0bf93",
+      "edited_message": null,
+      "patch": "diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c\n--- a/expat/lib/xmlparse.c\n+++ b/expat/lib/xmlparse.c\n@@ -2513,7 +2513,12 @@\n \n   // whether or not the request succeeds, `len` seems to be the app's preferred\n   // buffer fill size; remember it.\n-  parser->m_lastBufferRequestSize = len;\n+  const bool repeatedEmptyRequest\n+      = parser->m_buffer != NULL && parser->m_bufferPtr == parser->m_buffer\n+        && parser->m_bufferEnd == parser->m_buffer\n+        && parser->m_lastBufferRequestSize == len;\n+  parser->m_lastBufferRequestSize\n+      = len + (repeatedEmptyRequest && len < INT_MAX);\n   if (len > EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd)\n       || parser->m_buffer == NULL) {\n     /* Do not invoke signed arithmetic overflow: */\n"
+    },
+    {
+      "sha": "8c7a81a4aaab6725434cd677f708ddd685efd5cc",
+      "edited_message": null,
+      "patch": "diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c\n--- a/expat/lib/xmlparse.c\n+++ b/expat/lib/xmlparse.c\n@@ -2441,7 +2441,10 @@\n \n   start = parser->m_bufferPtr;\n   parser->m_positionPtr = start;\n-  parser->m_bufferEnd += len;\n+  parser->m_bufferEnd\n+      += (len == EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd))\n+             ? parser->m_lastBufferRequestSize\n+             : len;\n   parser->m_parseEndPtr = parser->m_bufferEnd;\n   parser->m_parseEndByteIndex += len;\n   parser->m_parsingStatus.finalBuffer = (XML_Bool)isFinal;\n"
+    }
+  ],
+  "coupling": "The first edit changes m_lastBufferRequestSize into a one-byte-larger reparse hint after a repeated request for an empty buffer. By itself that hint affects scheduling only. The second edit uses the hint as the consumed byte count when XML_ParseBuffer fills the remaining capacity; with the original exact request size this equals len. Together, a valid 2048-byte fill makes m_bufferEnd point one byte beyond the allocation and the tokenizer reads that byte. Repair requires keeping the heuristic request hint separate from the actual number of bytes supplied to XML_ParseBuffer across the two commit boundaries.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "XML_ParserCreate / XML_GetBuffer / XML_ParseBuffer",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

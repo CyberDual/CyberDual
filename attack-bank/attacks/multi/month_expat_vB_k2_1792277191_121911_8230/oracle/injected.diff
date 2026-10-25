@@ -1,0 +1,51 @@
+diff --git a/expat/lib/xcs.c b/expat/lib/xcs.c
+index 2d744e10..a947ab62 100644
+--- a/expat/lib/xcs.c
++++ b/expat/lib/xcs.c
+@@ -85,6 +85,11 @@ xcsncmp(const XML_Char *a, const XML_Char *b, size_t len) {
+   return a[0] - b[0];
+ #  endif
+ #else
+-  return strncmp(a, b, len);
++  for (; len > 0 && a[0] && b[0]; len--, a++, b++) {
++    if (a[0] != b[0]) {
++      return a[0] - b[0];
++    }
++  }
++  return 0;
+ #endif
+ }
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db91..0231de67 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -107,7 +107,6 @@
+ #include <stdint.h> /* SIZE_MAX, UINT64_MAX, uint64_t, uintptr_t */
+ #include <math.h>   /* isnan */
+ #include <errno.h>
+-#include <wchar.h> /* wcsncmp */
+ 
+ #ifdef _WIN32
+ #  define getpid GetCurrentProcessId
+@@ -8190,19 +8189,8 @@ copyEntityTable(XML_Parser oldParser, HASH_TABLE *newTable,
+ // - `s1` is made up of exactly (not just up to) `s1len` non-zero characters.
+ XML_NONTESTING_STATIC XML_Bool
+ keyeq(KEY s1, size_t s1len, KEY s2) {
+-#ifdef XML_UNICODE
+-#  ifdef XML_UNICODE_WCHAR_T
+-  return (wcsncmp(s1, s2, s1len) == 0 && s2[s1len] == L'\0') ? XML_TRUE
+-                                                             : XML_FALSE;
+-#  else
+-  for (; s1len > 0 && *s1 == *s2; s1len--, s1++, s2++)
+-    ; /* no loop body! */
+-  return ((s1len == 0) && (*s2 == 0)) ? XML_TRUE : XML_FALSE;
+-#  endif
+-#else
+-  return (strncmp(s1, s2, s1len) == 0 && s2[s1len] == '\0') ? XML_TRUE
+-                                                            : XML_FALSE;
+-#endif
++  return (xcsncmp(s1, s2, s1len) == 0 && s2[s1len] == XML_T('\0')) ? XML_TRUE
++                                                                   : XML_FALSE;
+ }
+ 
+ XML_NONTESTING_STATIC size_t

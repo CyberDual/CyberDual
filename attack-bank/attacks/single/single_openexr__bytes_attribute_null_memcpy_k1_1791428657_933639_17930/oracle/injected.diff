@@ -1,0 +1,70 @@
+diff --git a/src/lib/OpenEXR/ImfBytesAttribute.cpp b/src/lib/OpenEXR/ImfBytesAttribute.cpp
+index ee6a6f5755528de870b2b75de0e20a2030273493..827c616330d886156a8cdac85952528bd9968966 100644
+--- a/src/lib/OpenEXR/ImfBytesAttribute.cpp
++++ b/src/lib/OpenEXR/ImfBytesAttribute.cpp
+@@ -34,19 +34,21 @@ BytesAttribute::BytesAttribute (
+     {
+         THROW (IEX_NAMESPACE::ArgExc, "Invalid data pointer.");
+     }
+-    memcpy (
+-        (unsigned char*) _data,
+-        (const unsigned char*) data,
+-        size);
++    if (size)
++        memcpy (
++            (unsigned char*) _data,
++            (const unsigned char*) data,
++            size);
+ }
+ 
+ BytesAttribute::BytesAttribute (const BytesAttribute& other)
+     : typeHint (other.typeHint), _data (other._data.size ())
+ {
+-    memcpy (
+-        (unsigned char*) _data,
+-        (const unsigned char*) other._data,
+-        other._data.size ());
++    if (other._data.size ())
++        memcpy (
++            (unsigned char*) _data,
++            (const unsigned char*) other._data,
++            other._data.size ());
+ }
+ 
+ // Note the destructor is defined here and not in the header file to
+@@ -61,7 +63,7 @@ BytesAttribute::operator==(const BytesAttribute& other) const
+     if (_data.size() != other._data.size())
+         return false;
+ 
+-    if (memcmp(_data, other._data, _data.size()) != 0)
++    if (_data.size() && memcmp(_data, other._data, _data.size()) != 0)
+         return false;
+ 
+     return typeHint == other.typeHint;
+@@ -133,7 +135,9 @@ BytesAttribute::readValueFrom (
+     // implementations in the OpenEXR library. An error in the underlying
+     // stream read is very rare, it's much more likely that an exception
+     // will be thrown.
+-    Xdr::readUnsignedChars<StreamIO> (is, _data, dataSize);
++    if (dataSize)
++        Xdr::readUnsignedChars<StreamIO> (
++            is, _data, size - sizeof (hintLength));
+ }
+ 
+ void
+@@ -154,10 +158,11 @@ BytesAttribute::copyValueFrom (const Attribute& other)
+ 
+     typeHint = oa->typeHint;
+     _data.resizeErase (oa->_data.size ());
+-    memcpy (
+-        (unsigned char*) _data,
+-        (const unsigned char*) oa->_data,
+-        oa->_data.size ());
++    if (oa->_data.size ())
++        memcpy (
++            (unsigned char*) _data,
++            (const unsigned char*) oa->_data,
++            oa->_data.size ());
+ }
+ 
+ Attribute*

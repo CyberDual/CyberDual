@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "45f90346d03d682f850e96a909796f32b84cb470",
+      "edited_message": "free unneeded huffman_image and size the root Huffman segment\n\nWhen num_htree_groups == 1, all pixels map to group 0 so huffman_image can be freed immediately and huffman_subsample_bits reset to 0.\n\nStart the root HuffmanTables segment at one group; the table builder can extend the segment list when a stream needs more groups.\n",
+      "patch": "diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c\nindex c9de3b83..0b412293 100644\n--- a/src/dec/vp8l_dec.c\n+++ b/src/dec/vp8l_dec.c\n@@ -487,12 +487,9 @@ int ReadHuffmanCodesHelper(int color_cache_bits, int num_htree_groups,\n       (int*)WebPSafeCalloc((uint64_t)max_alphabet_size, sizeof(*code_lengths));\n   *htree_groups = VP8LHtreeGroupsNew(num_htree_groups);\n \n-  // MAX_HUFF_IMAGE_SIZE is above what the libwebp encoder allows so something\n-  // fishy might be happening. Do not allocate too much yet.\n-  total_huffman_table_size =\n-      (num_htree_groups > MAX_HUFF_IMAGE_SIZE ? MAX_HUFF_IMAGE_SIZE\n-                                              : num_htree_groups) *\n-      table_size;\n+  // Start with one group; VP8LBuildHuffmanTable() extends the segment list as\n+  // more groups are read.\n+  total_huffman_table_size = table_size;\n   if (*htree_groups == NULL || code_lengths == NULL ||\n       !VP8LHuffmanTablesAllocate(total_huffman_table_size, huffman_tables)) {\n     VP8LSetError(dec, VP8_STATUS_OUT_OF_MEMORY);\n"
+    },
+    {
+      "sha": "90108ab9207f105366603b9d5e333b5d43f88fc4",
+      "edited_message": "allocate HTreeGroup::packed_table from HuffmanTables\n\nReplace the inline 512-byte packed_table array in HTreeGroup with a HuffmanCode32 pointer carved out of the global HuffmanTables segment linked list, reducing sizeof(HTreeGroup) from 568 bytes to 64 bytes without per-group allocations.\n\nThe root segment is sized by ReadHuffmanCodesHelper, so capacity extension only needs to handle linked segments.\n",
+      "patch": "diff --git a/src/utils/huffman_utils.c b/src/utils/huffman_utils.c\nindex 2cc5ca63..cb733cc6 100644\n--- a/src/utils/huffman_utils.c\n+++ b/src/utils/huffman_utils.c\n@@ -234,6 +234,7 @@ static int BuildHuffmanTable(HuffmanCode* const WEBP_BIDI_INDEXABLE root_table,\n #define SORTED_SIZE_CUTOFF 512\n int VP8LHuffmanTablesEnsureCapacity(int size,\n                                     HuffmanTables* const huffman_tables) {\n+  if (huffman_tables->curr_segment == &huffman_tables->root) return 1;\n   if (huffman_tables->curr_segment->curr_table + size >\n       huffman_tables->curr_segment->start +\n           huffman_tables->curr_segment->size) {\n"
+    }
+  ],
+  "coupling": "The first edited commit sizes the HuffmanTables root segment for only one Huffman group, which is safe by itself because VP8LBuildHuffmanTable() can still extend the linked segment list when a stream needs more groups. The second edited commit changes VP8LHuffmanTablesEnsureCapacity() to trust the root segment as already large enough and only extend linked segments. With the original root sizing, that assumption is safe; with the first commit\u2019s one-group root, a multi-group lossless stream writes past the root segment. A correct fix must restore either the original root sizing or root-segment capacity extension; changing only one of the two edited commits leaves the bug reachable.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "WebPEncodeLosslessRGBA + WebPDecodeRGBA",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

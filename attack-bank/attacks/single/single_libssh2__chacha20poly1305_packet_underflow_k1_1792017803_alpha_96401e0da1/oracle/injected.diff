@@ -1,0 +1,22 @@
+diff --git a/src/crypt.c b/src/crypt.c
+index 11efd28a8873f23f1ae2527957e70db3c7efcec8..fa6c028ea07509b7a5a52154315df4b9b1697a65 100644
+--- a/src/crypt.c
++++ b/src/crypt.c
+@@ -433,13 +433,16 @@ static int crypt_encrypt_chacha20_poly_buffer(LIBSSH2_SESSION *session,
+         else {
+             /* buf is full packet including size and auth tag but buf_len
+                does not include size */
++            if(buf_len < 4)
++                return 1;
++
+             ret = chachapoly_crypt(&ctx->chachapoly_ctx, seqno, buf, buf,
+                                    buf_len, 4, ctx->encrypt);
+ 
+             /* the api expects the size field to already be removed
+                from the decrypted packet so we help it out */
+             if(ret == 0)
+-                memmove(buf, buf + 4, buf_len - 4);
++                memmove(buf, buf + 4, buf_len - buf[4]);
+         }
+     }
+ 

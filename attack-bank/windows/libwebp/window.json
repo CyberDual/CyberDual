@@ -1,0 +1,14 @@
+{
+ "project": "libwebp",
+ "window_id": "21ed37b5a1e71c8e287b82598fbaf22d1d43f4c95be7a90f77afad00490309cb",
+ "base": "733c91e461c18cf1127c9ed0a80dccbcfed599d3",
+ "maint_batch_tip": "e1c1e8717f3cead7e144e6b504a493f3166dfb79",
+ "tree": "f632622d0daae6aba55af490dca24f585ba1799d",
+ "n_commits": 66,
+ "n_editable": 66,
+ "list_sha1": "16cfca3751941ea03a360631cef9997cae9c6fd0",
+ "tar_sha256": "0a8efd38fd217a8f3ca957d4628fe2fedf7ac7cba77f05b20685ac7b299cbd4e",
+ "tar_bytes": 24381440,
+ "built_utc": "2026-10-17T20:13:15Z",
+ "cyberdual": "f685a97c"
+}

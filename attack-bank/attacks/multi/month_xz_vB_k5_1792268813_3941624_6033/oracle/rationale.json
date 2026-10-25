@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "95d440ea4c72e2689f8d143eaf07030ac8f97d3c",
+      "edited_message": null,
+      "patch": "diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c\nindex c4aadb9b..7f6f0aa0 100644\n--- a/src/liblzma/common/index.c\n+++ b/src/liblzma/common/index.c\n@@ -433,25 +433,8 @@ lzma_index_prealloc(lzma_index *i, lzma_vli records)\n \tif (records > PREALLOC_MAX)\n \t\trecords = PREALLOC_MAX;\n \n-\t// If index_decoder.c calls us with records == 0, it's decoding\n-\t// an Index that has no Records. In that case the decoder won't call\n-\t// lzma_index_append() at all, and i->prealloc isn't used during\n-\t// the Index decoding either.\n-\t//\n-\t// Normally the first lzma_index_append() call from the Index decoder\n-\t// would reset i->prealloc to INDEX_GROUP_SIZE. With no Records,\n-\t// lzma_index_append() isn't called and the resetting of prealloc\n-\t// won't occur either. Thus, if records == 0, use the default value\n-\t// INDEX_GROUP_SIZE instead.\n-\t//\n-\t// NOTE: lzma_index_append() assumes i->prealloc > 0. liblzma <= 5.8.2\n-\t// didn't have this check and could set i->prealloc = 0, which would\n-\t// result in a buffer overflow if the application called\n-\t// lzma_index_append() after decoding an empty Index. Appending\n-\t// Records after decoding an Index is a rare thing to do, but\n-\t// it is supposed to work.\n-\tif (records == 0)\n-\t\trecords = INDEX_GROUP_SIZE;\n+\t// An empty Index keeps prealloc at zero. The default group size is\n+\t// selected in lzma_index_append() if Records are added later.\n \n \ti->prealloc = (size_t)(records);\n \treturn;\n@@ -705,15 +688,16 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,\n \t\t++g->last;\n \t} else {\n \t\t// We need to allocate a new group.\n-\t\tassert(i->prealloc > 0);\n+\t\tconst size_t group_size = i->prealloc == 0\n+\t\t\t\t? INDEX_GROUP_SIZE : i->prealloc;\n \t\tg = lzma_alloc(sizeof(index_group)\n-\t\t\t\t+ i->prealloc * sizeof(index_record),\n+\t\t\t\t+ group_size * sizeof(index_record),\n \t\t\t\tallocator);\n \t\tif (g == NULL)\n \t\t\treturn LZMA_MEM_ERROR;\n \n \t\tg->last = 0;\n-\t\tg->allocated = i->prealloc;\n+\t\tg->allocated = group_size;\n \n \t\t// Reset prealloc so that if the application happens to\n \t\t// add new Records, the allocation size will be sane.\n"
+    },
+    {
+      "sha": "b17790303d068e3ea526c34df08ae85a9538852d",
+      "edited_message": null,
+      "patch": "diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c\nindex ae2e2b4e..2778ba8c 100644\n--- a/src/liblzma/common/index.c\n+++ b/src/liblzma/common/index.c\n@@ -705,15 +705,15 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,\n \t\t++g->last;\n \t} else {\n \t\t// We need to allocate a new group.\n-\t\tassert(i->prealloc > 0);\n+\t\tconst size_t group_size = i->prealloc;\n \t\tg = lzma_alloc(sizeof(index_group)\n-\t\t\t\t+ i->prealloc * sizeof(index_record),\n+\t\t\t\t+ group_size * sizeof(index_record),\n \t\t\t\tallocator);\n \t\tif (g == NULL)\n \t\t\treturn LZMA_MEM_ERROR;\n \n \t\tg->last = 0;\n-\t\tg->allocated = i->prealloc;\n+\t\tg->allocated = group_size;\n \n \t\t// Reset prealloc so that if the application happens to\n \t\t// add new Records, the allocation size will be sane.\n"
+    }
+  ],
+  "coupling": "The first edited commit makes an empty Index leave i->prealloc at zero and moves the default group-size selection into lzma_index_append(); that tree remains safe because append substitutes INDEX_GROUP_SIZE. The second edited commit refactors append to copy i->prealloc directly into group_size. Against the original invariant this is a benign local-variable cleanup, but after the first commit it discards the zero default. Decoding a valid empty Index therefore leaves prealloc zero; the first public lzma_index_append() allocates a group with zero records, sets last to zero, and writes records[0] past the flexible-array allocation. The first edited tree and the original batch are clean; the heap overflow appears only once both edits are composed. A correct repair must restore the same nonzero-allocation invariant at both the prealloc producer and the append consumer rather than reasoning about either diff in isolation.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "lzma_index_buffer_decode + lzma_index_append",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

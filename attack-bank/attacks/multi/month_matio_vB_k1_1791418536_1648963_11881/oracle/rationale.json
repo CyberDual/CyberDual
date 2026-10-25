@@ -1,0 +1,25 @@
+{
+  "regime": "incomplete_fix",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "51ccff665d9beb95d26d63cca458f4ef90619b0b",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\nindex d7903cb..1e60d63 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4769,6 +4769,8 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)\n         }                                                       \\\n     } while ( 0 )\n \n+#define GET_DATA_SLAB_MAX_RANK 11\n+\n static int\n GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n             enum matio_types data_type, const size_t *dims, const int *start, const int *stride,\n@@ -4859,13 +4861,13 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n                     break;\n             }\n         }\n-    } else if ( rank > 10 ) {\n+    } else if ( rank > GET_DATA_SLAB_MAX_RANK ) {\n         err = MATIO_E_BAD_ARGUMENT;\n     } else {\n         int i, j, N, I = 0;\n-        int inc[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};\n-        int cnt[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};\n-        int dimp[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};\n+        int inc[GET_DATA_SLAB_MAX_RANK] = {0};\n+        int cnt[GET_DATA_SLAB_MAX_RANK] = {0};\n+        int dimp[GET_DATA_SLAB_MAX_RANK] = {0};\n \n         switch ( class_type ) {\n             case MAT_C_DOUBLE: {\n"
+    },
+    {
+      "sha": "6bfbaa949289a756d3fe81244a9bc9b357feaa34",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4735,7 +4735,7 @@\n          (class_type == MAT_C_UINT8 && data_type == MAT_T_UINT8) )\n         same_type = 1;\n \n-    if ( rank < 1 || rank > 10 )\n+    if ( rank < 1 || rank > GET_DATA_SLAB_MAX_RANK )\n         return MATIO_E_BAD_ARGUMENT;\n     for ( i = 0; i < rank; i++ ) {\n         if ( start[i] < 0 || stride[i] < 1 || edge[i] < 1 || (size_t)start[i] >= dims[i] ||\n"
+    }
+  ],
+  "coupling": "The first rank-bound repair permits rank 11 and sizes its original inc, cnt, and dimp tables to 11, so that intermediate commit reads a rank-11 compressed struct field safely. The later indexing rewrite retains that limit but replaces those tables with a new ten-element dimp table. Its rank check consults the limit established in the earlier commit, letting rank 11 reach dimp[10]. The original later commit uses a limit of 10 and is safe; the earlier edited commit has 11-element tables and is safe. A repair must reconcile the limit introduced by the first change with the storage introduced by the second.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Mat_Open -> Mat_VarReadInfo -> Mat_VarGetStructFieldByName -> Mat_VarReadData",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+diff --git a/src/dec/buffer_dec.c b/src/dec/buffer_dec.c
+index 87de967..7c07dc8 100644
+--- a/src/dec/buffer_dec.c
++++ b/src/dec/buffer_dec.c
+@@ -67,7 +67,11 @@ static VP8StatusCode CheckDecBuffer(const WebPDecBuffer* const buffer) {
+     ok &= (v_size <= buf->v_size);
+     ok &= (y_stride >= width);
+     ok &= (u_stride >= uv_width);
+-    ok &= (v_stride >= uv_width);
++    // A v_stride of 0 means the caller is using the pre-existing contract
++    // where the V plane shared u_stride's layout; EmitRowsYUVA() falls back
++    // to u_stride in that case, and the single-row size above already covers
++    // this slice of the buffer.
++    ok &= (v_stride == 0 || v_stride >= uv_width);
+     ok &= (buf->y != NULL);
+     ok &= (buf->u != NULL);
+     ok &= (buf->v != NULL);
+diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c
+index 6ddd55c..d8ebe60 100644
+--- a/src/dec/vp8l_dec.c
++++ b/src/dec/vp8l_dec.c
+@@ -771,7 +771,12 @@ static int EmitRowsYUVA(const uint8_t* const in, const VP8Io* const io,
+   const int y_pos_final = y_pos + num_rows;
+   const int y_stride = dec->output->u.YUVA.y_stride;
+   const int u_stride = dec->output->u.YUVA.u_stride;
+-  const int v_stride = dec->output->u.YUVA.v_stride;
++  // A caller that has not opted into independently-sized planes leaves
++  // v_stride at 0 (it used to be implied by u_stride); keep such buffers
++  // working by defaulting v_stride to u_stride in that case.
++  const int v_stride = (dec->output->u.YUVA.v_stride != 0)
++                           ? dec->output->u.YUVA.v_stride
++                           : u_stride;
+   const int a_stride = dec->output->u.YUVA.a_stride;
+   uint8_t* dst_a =
+       WebPIsAlphaMode(dec->output->colorspace) ? dec->output->u.YUVA.a : NULL;

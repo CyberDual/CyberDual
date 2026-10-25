@@ -1,0 +1,31 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db91..0d569385 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -1057,6 +1057,14 @@ expat_realloc(XML_Parser parser, void *ptr, size_t size, int sourceLine) {
+ }
+ #endif // XML_GE == 1
+ 
++static int
++growBufferSize(int bufferSize, int neededSize) {
++  do {
++    bufferSize = (int)(2U * (unsigned)bufferSize);
++  } while (bufferSize < neededSize && bufferSize > 0);
++  return bufferSize;
++}
++
+ XML_Parser XMLCALL
+ XML_ParserCreate(const XML_Char *encodingName) {
+   return XML_ParserCreate_MM(encodingName, NULL, NULL);
+@@ -2590,10 +2598,7 @@ XML_GetBuffer(XML_Parser parser, int len) {
+           = (int)EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_buffer);
+       if (bufferSize == 0)
+         bufferSize = INIT_BUFFER_SIZE;
+-      do {
+-        /* Do not invoke signed arithmetic overflow: */
+-        bufferSize = (int)(2U * (unsigned)bufferSize);
+-      } while (bufferSize < neededSize && bufferSize > 0);
++      bufferSize = growBufferSize(bufferSize, neededSize - 1);
+       if (bufferSize <= 0) {
+         parser->m_errorCode = XML_ERROR_NO_MEMORY;
+         return NULL;

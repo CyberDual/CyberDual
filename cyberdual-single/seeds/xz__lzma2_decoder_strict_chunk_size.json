@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "c077edfd1867b473a38fb2283c6cac545a9ea857",
+  "parent_sha": "c077edfd1867b473a38fb2283c6cac545a9ea857",
+  "project": "xz",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/tukaani-project/xz",
+  "repo_url": "https://github.com/tukaani-project/xz",
+  "source": "reselect",
+  "target": "xz",
+  "task": "Public .xz stream decode: LZMA2 decoder passed the whole remaining input (not compressed_size+1) to the inner LZMA decoder, so a crafted chunk header with an undersized compressed size silently decodes bytes from the next chunk as junk output instead of flagging LZMA_DATA_ERROR; single file src/liblzma/lzma/lzma2_decoder.c.",
+  "task_iid": "xz__lzma2_decoder_strict_chunk_size",
+  "vuln_desc": "Public .xz stream decode: LZMA2 decoder passed the whole remaining input (not compressed_size+1) to the inner LZMA decoder, so a crafted chunk header with an undersized compressed size silently decodes bytes from the next chunk as junk output instead of flagging LZMA_DATA_ERROR; single file src/liblzma/lzma/lzma2_decoder.c."
+}

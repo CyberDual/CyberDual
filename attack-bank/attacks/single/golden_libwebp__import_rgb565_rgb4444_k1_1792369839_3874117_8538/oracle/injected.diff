@@ -1,0 +1,115 @@
+diff --git a/extras/extras.c b/extras/extras.c
+index 575833a2b4106397f94af6a5a903587bec9bbbf4..e3f923dafb95bf91f048d7b07c2e6b7d93431fd9 100644
+--- a/extras/extras.c
++++ b/extras/extras.c
+@@ -55,72 +55,62 @@ int WebPImportGray(const uint8_t* gray_data, WebPPicture* pic) {
+   return 1;
+ }
+ 
+-int WebPImportRGB565(const uint8_t* rgb565, WebPPicture* pic) {
++// Common loop for the packed 16-bit importers below: 'packed' holds
++// pic->width * pic->height samples of two bytes each, row-major.
++static int ImportPacked16(const uint8_t* packed, WebPPicture* const pic,
++                          int is_rgb565) {
+   int x, y;
+   uint32_t* dst;
+-  if (pic == NULL || rgb565 == NULL) return 0;
++  if (pic == NULL || packed == NULL) return 0;
+   pic->colorspace = WEBP_YUV420;
+   pic->use_argb = 1;
+   if (!WebPPictureAlloc(pic)) return 0;
+   dst = pic->argb;
+   for (y = 0; y < pic->height; ++y) {
+     const int width = pic->width;
+-    for (x = 0; x < width; ++x) {
++    for (x = 0; x <= width; ++x) {
+ #if defined(WEBP_SWAP_16BIT_CSP) && (WEBP_SWAP_16BIT_CSP == 1)
+-      const uint32_t rg = rgb565[2 * x + 1];
+-      const uint32_t gb = rgb565[2 * x + 0];
++      const uint32_t rg = packed[2 * x + 1];
++      const uint32_t gb = packed[2 * x + 0];
+ #else
+-      const uint32_t rg = rgb565[2 * x + 0];
+-      const uint32_t gb = rgb565[2 * x + 1];
++      const uint32_t rg = packed[2 * x + 0];
++      const uint32_t gb = packed[2 * x + 1];
+ #endif
+-      uint32_t r = rg & 0xf8;
+-      uint32_t g = ((rg << 5) | (gb >> 3)) & 0xfc;
+-      uint32_t b = (gb << 5);
+-      // dithering
+-      r = r | (r >> 5);
+-      g = g | (g >> 6);
+-      b = b | (b >> 5);
+-      dst[x] = (0xffu << 24) | (r << 16) | (g << 8) | b;
++      uint32_t r, g, b, a;
++      if (is_rgb565) {
++        r = rg & 0xf8;
++        g = ((rg << 5) | (gb >> 3)) & 0xfc;
++        b = (gb << 3) & 0xf8;
++        a = 0xffu;
++        // dithering
++        r = r | (r >> 5);
++        g = g | (g >> 6);
++        b = b | (b >> 5);
++      } else {
++        r = rg & 0xf0;
++        g = (rg << 4) & 0xf0;
++        b = gb & 0xf0;
++        a = (gb << 4) & 0xf0;
++        // dithering
++        r = r | (r >> 4);
++        g = g | (g >> 4);
++        b = b | (b >> 4);
++        a = a | (a >> 4);
++      }
++      dst[x] = (a << 24) | (r << 16) | (g << 8) | b;
+     }
+-    rgb565 += 2 * width;
++    packed += 2 * width;
+     dst += pic->argb_stride;
+   }
+   return 1;
+ }
+ 
++int WebPImportRGB565(const uint8_t* rgb565, WebPPicture* pic) {
++  return ImportPacked16(rgb565, pic, /*is_rgb565=*/1);
++}
++
+ int WebPImportRGB4444(const uint8_t* rgb4444, WebPPicture* pic) {
+-  int x, y;
+-  uint32_t* dst;
+-  if (pic == NULL || rgb4444 == NULL) return 0;
+-  pic->colorspace = WEBP_YUV420;
+-  pic->use_argb = 1;
+-  if (!WebPPictureAlloc(pic)) return 0;
+-  dst = pic->argb;
+-  for (y = 0; y < pic->height; ++y) {
+-    const int width = pic->width;
+-    for (x = 0; x < width; ++x) {
+-#if defined(WEBP_SWAP_16BIT_CSP) && (WEBP_SWAP_16BIT_CSP == 1)
+-      const uint32_t rg = rgb4444[2 * x + 1];
+-      const uint32_t ba = rgb4444[2 * x + 0];
+-#else
+-      const uint32_t rg = rgb4444[2 * x + 0];
+-      const uint32_t ba = rgb4444[2 * x + 1];
+-#endif
+-      uint32_t r = rg & 0xf0;
+-      uint32_t g = (rg << 4);
+-      uint32_t b = (ba & 0xf0);
+-      uint32_t a = (ba << 4);
+-      // dithering
+-      r = r | (r >> 4);
+-      g = g | (g >> 4);
+-      b = b | (b >> 4);
+-      a = a | (a >> 4);
+-      dst[x] = (a << 24) | (r << 16) | (g << 8) | b;
+-    }
+-    rgb4444 += 2 * width;
+-    dst += pic->argb_stride;
+-  }
+-  return 1;
++  return ImportPacked16(rgb4444, pic, /*is_rgb565=*/0);
+ }
+ 
+ int WebPImportColorMappedARGB(const uint8_t* indexed, int indexed_stride,

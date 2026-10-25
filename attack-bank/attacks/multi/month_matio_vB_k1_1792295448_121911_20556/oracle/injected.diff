@@ -1,0 +1,24 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 5d3bbb2..478b5c6 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -3384,6 +3384,10 @@ Mat_VarReadNumeric5(mat_t *mat, matvar_t *matvar, void *data, size_t N)
+             nBytes = tag[1];
+         }
+     }
++    /* Numeric data is converted to the class type on read, but keep the type
++     * it was stored as when it is narrower than the class */
++    if ( Mat_SizeOf(packed_type) < Mat_SizeOf(matvar->data_type) )
++        matvar->data_type = packed_type;
+     if ( nBytes == 0 ) {
+         matvar->nbytes = 0;
+         return err;
+@@ -5346,6 +5350,8 @@ Mat_VarReadDataLinear5(mat_t *mat, matvar_t *matvar, void *data, int start, int
+         Mat_Critical("Integer multiplication overflow");
+         return err;
+     }
++    if ( NULL != matvar->internal->data && 0 != Mat_SizeOf(matvar->data_type) )
++        nelems = matvar->nbytes / Mat_SizeOf(matvar->data_type);
+     if ( (size_t)stride * (edge - 1) + start + 1 > nelems )
+         return MATIO_E_BAD_ARGUMENT;
+ 

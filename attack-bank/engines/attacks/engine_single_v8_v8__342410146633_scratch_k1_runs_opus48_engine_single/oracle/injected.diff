@@ -1,0 +1,41 @@
+diff --git a/src/wasm/baseline/liftoff-compiler.cc b/src/wasm/baseline/liftoff-compiler.cc
+index 8c8c46a4..900a7636 100644
+--- a/src/wasm/baseline/liftoff-compiler.cc
++++ b/src/wasm/baseline/liftoff-compiler.cc
+@@ -4278,10 +4278,13 @@ class LiftoffCompiler {
+ 
+     __ LoadConstant(end_offset_reg, WasmValue::ForUintPtr(end_offset));
+ 
+-    // If the end offset is larger than the smallest memory, dynamically check
+-    // the end offset against the actual memory size, which is not known at
+-    // compile time. Otherwise, only one check is required (see below).
+-    if (end_offset > memory->min_memory_size) {
++    // The memory size loaded above is the dynamic, possibly concurrently grown
++    // size (for shared memories it can change under us at any time). If the end
++    // offset can exceed that dynamic size, guard the effective-size computation
++    // below against underflow with an explicit check. When the end offset is
++    // provably within the memory's guaranteed size, this extra check can be
++    // elided and a single comparison suffices (see below).
++    if (end_offset > memory->max_memory_size) {
+       __ emit_cond_jump(kUnsignedGreaterThanEqual, trap.label(), kIntPtrKind,
+                         end_offset_reg.gp(), mem_size.gp(), trap.frozen());
+     }
+diff --git a/src/wasm/turboshaft-graph-interface.cc b/src/wasm/turboshaft-graph-interface.cc
+index 3fd52e63..425e4f68 100644
+--- a/src/wasm/turboshaft-graph-interface.cc
++++ b/src/wasm/turboshaft-graph-interface.cc
+@@ -8272,9 +8272,11 @@ class TurboshaftGraphBuildingInterface
+ #endif  // V8_TRAP_HANDLER_SUPPORTED
+ 
+     V<WordPtr> memory_size = MemSize(memory->index);
+-    if (end_offset > memory->min_memory_size) {
+-      // The end offset is larger than the smallest memory.
+-      // Dynamically check the end offset against the dynamic memory size.
++    if (end_offset > memory->max_memory_size) {
++      // The end offset can exceed the dynamic memory size (which may have been
++      // grown concurrently for shared memories). Dynamically check the end
++      // offset against the current memory size so the effective-size
++      // subtraction below cannot underflow.
+       __ TrapIfNot(
+           __ UintPtrLessThan(__ UintPtrConstant(end_offset), memory_size),
+           TrapId::kTrapMemOutOfBounds);

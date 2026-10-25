@@ -1,0 +1,101 @@
+diff --git a/fixture.mat b/fixture.mat
+new file mode 100644
+index 0000000000000000000000000000000000000000..a74546d823e4b88ddd29badbf4c034d3f306245e
+GIT binary patch
+literal 192
+zcmeZu4DoSvQZUssQ1EpO(M`+DN!3vZ$Vn_o%P-2cQmC*ni#IdTElAe&$;>OQ&{1$M
+zN=+<DO;Jdyv{J~)Ov+6x$;?+MGt@H!8jzo-5L}w4;GbNgU}&LWWMpMvVP#;VU}Ruq
+z#>Jq32^bhXefby|7%YI84Tw2_m<5PIfE9>Ad`38CWT*hL1%Q|th#xhr0g?<10NIcv
+A6951J
+
+literal 0
+HcmV?d00001
+
+diff --git a/malformed-count.mat b/malformed-count.mat
+new file mode 100644
+index 0000000000000000000000000000000000000000..ff43359e94ed17965d1d6659d6c83f0309ee909b
+GIT binary patch
+literal 192
+zcmeZu4DoSvQZUssQ1EpO(M`+DN!3vZ$Vn_o%P-2cQmC*ni#IdTElAe&$;>OQ&{1$M
+zN=+<DO;Jdyv{J~)Ov+6x$;?+MGt@H!8jzo-5L}w4;GbNgU}&LWWMpMvVP#;VU}Ruq
+z#>Jq32^bhXefby|7%YI84Tw2_m<5PIfE9>Ad?p}f1Y<^q3Lq^26+6@bWB>sG)Q%%X
+
+literal 0
+HcmV?d00001
+
+diff --git a/malformed.mat b/malformed.mat
+new file mode 100644
+index 0000000000000000000000000000000000000000..1afc6d9a9d150011e7bdba2b31509e22926d3709
+GIT binary patch
+literal 192
+zcmeZu4DoSvQZUssQ1EpO(M`+DN!3vZ$Vn_o%P-2cQmC*ni#IdTElAe&$;>OQ&{1$M
+zN=+<DO;Jdyv{J~)Ov+6x$;?+MGt@H!8jzo-5L}w4;GbNgU}&LWWMpMvVP#;VU}Ruq
+z#>Jq32^bhXefby|7%YI84Tw2_m<5PIfE9>Ad?p}f1Y<^q3Lq^2#LPhasA&z5WMBXQ
+D*{~!O
+
+literal 0
+HcmV?d00001
+
+diff --git a/src/mat5.c b/src/mat5.c
+index 9726ba2b9bd6c8e0b690100e98a46b3b961e60d9..4eef76ec8e4358f553fda3b2041093ddcca9398f 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -3453,6 +3453,43 @@ Mat_VarReadNumeric5(mat_t *mat, matvar_t *matvar, void *data, size_t N)
+     return err;
+ }
+ 
++/** @brief Validates UTF-8 character data
++ *
++ * Checks that every multi-byte sequence in @c nbytes bytes is complete.
++ *
++ * @ingroup mat_internal
++ * @param data pointer to the UTF-8 data
++ * @param nbytes number of bytes in @c data
++ * @retval MATIO_E_NO_ERROR if the data is valid, MATIO_E_FILE_FORMAT_VIOLATION otherwise
++ */
++static int
++ValidateUtf8CharData(const mat_uint8_t *data, size_t nbytes)
++{
++    size_t i = 0;
++
++    while ( i < nbytes ) {
++        const mat_uint8_t c = data[i];
++        size_t len;
++
++        if ( c <= 0x7F )
++            len = 1;
++        else if ( (c & 0xE0) == 0xC0 )
++            len = 2;
++        else if ( (c & 0xF0) == 0xE0 )
++            len = 3;
++        else if ( (c & 0xF8) == 0xF0 )
++            len = 4;
++        else
++            return MATIO_E_FILE_FORMAT_VIOLATION;
++
++        if ( len > nbytes - i )
++            return MATIO_E_FILE_FORMAT_VIOLATION;
++        i += len;
++    }
++
++    return MATIO_E_NO_ERROR;
++}
++
+ /** @if mat_devman
+  * @brief Reads the data of a version 5 MAT variable
+  *
+@@ -3700,6 +3737,14 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                 }
+ #endif
+             }
++            if ( matvar->data_type == MAT_T_UTF8 ) {
++                err = ValidateUtf8CharData((const mat_uint8_t *)matvar->data, matvar->nbytes);
++                if ( err ) {
++                    free(matvar->data);
++                    matvar->data = NULL;
++                    matvar->nbytes = 0;
++                }
++            }
+             break;
+         case MAT_C_STRUCT: {
+             matvar_t **fields;

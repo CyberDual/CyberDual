@@ -1,0 +1,54 @@
+diff --git a/src/mat73.c b/src/mat73.c
+index f9dbfc414f02aad863100456eb614f10d2897ee7..780f1c1eed78a0dde7ea064ea106ca007a0d2a76 100644
+--- a/src/mat73.c
++++ b/src/mat73.c
+@@ -130,6 +130,8 @@ static int Mat_VarWriteRef(hid_t id, matvar_t *matvar, enum matio_compression co
+ 
+ /** Maximum recursion depth when reading HDF5 references */
+ #define MAX_REF_DEPTH 32
++/** Maximum length in bytes of the prefix kept of a MATLAB_class string */
++#define MAX_CLASS_NAME_LEN 128
+ /** Phase-change threshold: use dense (indexed) link storage from the start */
+ #define REFS_LINK_PHASE_CHANGE_MAX_COMPACT 0
+ #define REFS_LINK_PHASE_CHANGE_MIN_DENSE 0
+@@ -573,6 +575,28 @@ Mat_H5ReadVarInfo(matvar_t *matvar, hid_t dset_id)
+         return MATIO_E_FAIL_TO_IDENTIFY;
+     }
+     class_len = H5Tget_size(type_id);
++    /* The class of a variable is stored as a single, fixed-length string.
++       Do not read attributes of any other type or shape: a non-scalar or
++       variable-length string would be read into the buffer allocated for
++       a single string below. */
++    {
++        hid_t space_id = H5Aget_space(attr_id);
++        hssize_t npoints;
++
++        if ( space_id < 0 ) {
++            H5Tclose(type_id);
++            H5Aclose(attr_id);
++            return MATIO_E_FAIL_TO_IDENTIFY;
++        }
++        npoints = H5Sget_simple_extent_npoints(space_id);
++        H5Sclose(space_id);
++        if ( 1 != npoints || H5T_STRING != H5Tget_class(type_id) ||
++             H5Tis_variable_str(type_id) || 0 == class_len ) {
++            H5Tclose(type_id);
++            H5Aclose(attr_id);
++            return MATIO_E_FILE_FORMAT_VIOLATION;
++        }
++    }
+     mem_type_id = H5Tcopy(H5T_C_S1);
+     if ( mem_type_id == H5I_INVALID_HID ) {
+         H5Tclose(type_id);
+@@ -586,6 +610,11 @@ Mat_H5ReadVarInfo(matvar_t *matvar, hid_t dset_id)
+         H5Aclose(attr_id);
+         return MATIO_E_FAIL_TO_IDENTIFY;
+     }
++    /* Keep a bounded prefix of class names that exceed the identifier
++       length used by MATLAB */
++    if ( MAX_CLASS_NAME_LEN < class_len ) {
++        class_len = MAX_CLASS_NAME_LEN;
++    }
+     class_str = (char *)calloc(class_len + 1, 1);
+     if ( NULL != class_str ) {
+         herr_t herr = H5Aread(attr_id, mem_type_id, class_str);

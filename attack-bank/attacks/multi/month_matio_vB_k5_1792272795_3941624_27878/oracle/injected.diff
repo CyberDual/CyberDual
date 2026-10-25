@@ -1,0 +1,39 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 5d3bbb2..fa12446 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -4598,6 +4598,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+ }
+ 
+ #if HAVE_ZLIB
++#define MAX_RANK (10)
+ #define GET_DATA_SLAB2(T)                              \
+     do {                                               \
+         ptr_in += start[1] * dims[0] + start[0];       \
+@@ -4618,7 +4619,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+             size_t input_index = (size_t)start[0];                                                \
+             for ( j = 1; j < rank; j++ ) {                                                        \
+                 const size_t coordinate = block % (size_t)edge[j];                                \
+-                input_index += ((size_t)start[j] + coordinate * (size_t)stride[j]) * dimp[j - 1]; \
++                input_index += ((size_t)start[j] + coordinate * (size_t)stride[j]) * dimp[j]; \
+                 block /= (size_t)edge[j];                                                         \
+             }                                                                                     \
+             for ( k = 0; k < edge[0]; k++ )                                                       \
+@@ -4800,7 +4801,7 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+          (class_type == MAT_C_UINT8 && data_type == MAT_T_UINT8) )
+         same_type = 1;
+ 
+-    if ( rank < 1 || rank > 10 )
++    if ( rank < 1 || rank > MAX_RANK + 1 )
+         return MATIO_E_BAD_ARGUMENT;
+     for ( i = 0; i < rank; i++ ) {
+         if ( start[i] < 0 || stride[i] < 1 || edge[i] < 1 || (size_t)start[i] >= dims[i] ||
+@@ -4878,7 +4879,7 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+     } else {
+         int j;
+         size_t N = (size_t)edge[0];
+-        size_t dimp[10] = {dims[0], 0, 0, 0, 0, 0, 0, 0, 0, 0};
++        size_t dimp[MAX_RANK] = {1, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+ 
+         for ( j = 1; j < rank; j++ ) {
+             err = Mul(&dimp[j], dimp[j - 1], dims[j]);

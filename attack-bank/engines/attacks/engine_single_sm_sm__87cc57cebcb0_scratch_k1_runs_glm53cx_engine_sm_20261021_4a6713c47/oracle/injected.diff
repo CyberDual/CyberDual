@@ -1,0 +1,50 @@
+diff --git a/js/src/irregexp/RegExpAPI.cpp b/js/src/irregexp/RegExpAPI.cpp
+index cb0f70e111..7c3424a621 100644
+--- a/js/src/irregexp/RegExpAPI.cpp
++++ b/js/src/irregexp/RegExpAPI.cpp
+@@ -867,10 +867,12 @@ bool CompilePattern(JSContext* cx, MutableHandleRegExpShared re,
+   return true;
+ }
+ 
+-RegExpRunStatus ExecuteRaw(jit::JitCode* code, Handle<JSLinearString*> input,
+-                           size_t startIndex, VectorMatchPairs* matches) {
++RegExpRunStatus ExecuteRaw(JSContext* cx, jit::JitCode* code,
++                           Handle<JSLinearString*> input, size_t startIndex,
++                           VectorMatchPairs* matches) {
+   bool canResume = true;
+   InputOutputData data(input, startIndex, matches, canResume);
++  Rooted<jit::JitCode*> rootedCode(cx, code);
+ 
+   static_assert(static_cast<int32_t>(RegExpRunStatus::Error) ==
+                 v8::internal::RegExp::kInternalRegExpException);
+@@ -880,7 +882,7 @@ RegExpRunStatus ExecuteRaw(jit::JitCode* code, Handle<JSLinearString*> input,
+                 v8::internal::RegExp::kInternalRegExpFailure);
+ 
+   using RegExpCodeSignature = int (*)(InputOutputData*);
+-  auto function = reinterpret_cast<RegExpCodeSignature>(code->raw());
++  auto function = reinterpret_cast<RegExpCodeSignature>(rootedCode->raw());
+   return (RegExpRunStatus)CALL_GENERATED_1(function, &data);
+ }
+ 
+@@ -923,7 +925,7 @@ RegExpRunStatus Execute(JSContext* cx, MutableHandleRegExpShared re,
+   irregexp::RegExpStackScope stackScope(cx->isolate);
+ 
+   if (isCompiled) {
+-    return ExecuteRaw(jitCode, input, startIndex, matches);
++    return ExecuteRaw(cx, jitCode, input, startIndex, matches);
+   }
+ 
+   return Interpret(cx, re, input, startIndex, matches);
+diff --git a/js/src/irregexp/RegExpNativeMacroAssembler.cpp b/js/src/irregexp/RegExpNativeMacroAssembler.cpp
+index c5e2df004c..e9dcccd9f2 100644
+--- a/js/src/irregexp/RegExpNativeMacroAssembler.cpp
++++ b/js/src/irregexp/RegExpNativeMacroAssembler.cpp
+@@ -1585,7 +1585,7 @@ uint32_t SMRegExpMacroAssembler::CaseInsensitiveCompareUnicode(
+ bool SMRegExpMacroAssembler::GrowBacktrackStack(Stack* regexp_stack) {
+   js::AutoUnsafeCallWithABI unsafe;
+   size_t size = regexp_stack->memory_size();
+-  return !!regexp_stack->EnsureCapacity(size * 2);
++  return !!regexp_stack->EnsureCapacity(size / 2);
+ }
+ 
+ bool SMRegExpMacroAssembler::CanReadUnaligned() const {

@@ -1,0 +1,25 @@
+diff --git a/src/objects/js-array-buffer-inl.h b/src/objects/js-array-buffer-inl.h
+index 5e90240d..b8776a91 100644
+--- a/src/objects/js-array-buffer-inl.h
++++ b/src/objects/js-array-buffer-inl.h
+@@ -155,12 +155,19 @@ void JSArrayBuffer::set_extension(ArrayBufferExtension* extension) {
+   ExternalPointerTable& table = isolate.GetExternalPointerTableFor(tag);
+   ExternalPointerHandle current_handle =
+       base::AsAtomic32::Relaxed_Load(extension_handle_location());
+-  if (current_handle == kNullExternalPointerHandle) {
++  const bool current_handle_is_valid =
++      current_handle != kNullExternalPointerHandle &&
++      table.GetTag(current_handle) == tag;
++  if (!current_handle_is_valid) {
+     ExternalPointerHandle handle = table.AllocateAndInitializeEntry(
+         isolate.GetExternalPointerTableSpaceFor(tag, address()), value, tag);
+     base::AsAtomic32::Relaxed_Store(extension_handle_location(), handle);
+     WriteBarrier::ForExternalPointer(this, ExternalPointerSlot(&extension_));
+   } else {
++    if (extension == nullptr) {
++      delete reinterpret_cast<ArrayBufferExtension*>(
++          table.Get(current_handle, tag));
++    }
+     table.Set(current_handle, value, tag);
+   }
+ #else

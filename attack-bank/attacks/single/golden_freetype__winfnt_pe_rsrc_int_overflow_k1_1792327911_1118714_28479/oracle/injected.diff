@@ -1,0 +1,138 @@
+diff --git a/src/winfonts/winfnt.c b/src/winfonts/winfnt.c
+index 264185058ab8c5ab094a0e3d078932b88f0c5eb7..42fe62261eaf6bf3419c0901d0456750ba0044b6 100644
+--- a/src/winfonts/winfnt.c
++++ b/src/winfonts/winfnt.c
+@@ -279,6 +279,7 @@
+     FT_Memory        memory = FT_FACE( face )->memory;
+     WinMZ_HeaderRec  mz_header;
+     FT_Long          face_index;
++    FT_Byte*         lang_dir_entries = NULL;
+ 
+ 
+     face->font = NULL;
+@@ -421,6 +422,8 @@
+         WinPE_RsrcDataEntryRec  data_entry;
+ 
+         FT_ULong   root_dir_offset, name_dir_offset, lang_dir_offset;
++        FT_ULong   lang_dir_count;
++        FT_Byte*   p;
+         FT_UShort  i, j, k;
+ 
+ 
+@@ -479,6 +482,13 @@
+              FT_STREAM_READ_FIELDS( winpe_rsrc_dir_fields, &root_dir ) )
+           goto Exit;
+ 
++        if ( root_dir.number_of_id_entries >
++               0xFFFF - root_dir.number_of_named_entries )
++        {
++          error = FT_THROW( Invalid_File_Format );
++          goto Exit;
++        }
++
+         root_dir_offset = pe32_section.pointer_to_raw_data;
+ 
+         for ( i = 0; i < root_dir.number_of_named_entries +
+@@ -505,6 +515,13 @@
+                FT_STREAM_READ_FIELDS( winpe_rsrc_dir_fields, &name_dir ) )
+             goto Exit;
+ 
++          if ( name_dir.number_of_id_entries >
++                 0xFFFF - name_dir.number_of_named_entries )
++          {
++            error = FT_THROW( Invalid_File_Format );
++            goto Exit;
++          }
++
+           for ( j = 0; j < name_dir.number_of_named_entries +
+                              name_dir.number_of_id_entries; j++ )
+           {
+@@ -524,23 +541,31 @@
+             lang_dir_offset = pe32_section.pointer_to_raw_data +
+                                 dir_entry2.offset;
+ 
+-            if ( FT_STREAM_SEEK( pe32_section.pointer_to_raw_data +
+-                                   dir_entry2.offset )                     ||
+-                 FT_STREAM_READ_FIELDS( winpe_rsrc_dir_fields, &lang_dir ) )
++            if ( FT_STREAM_SEEK( lang_dir_offset )               ||
++                 FT_STREAM_READ_FIELDS( winpe_rsrc_dir_fields,
++                                        &lang_dir )              )
++              goto Exit;
++
++            /* load the whole directory at once */
++            lang_dir_count = (FT_ULong)lang_dir.number_of_named_entries +
++                             lang_dir.number_of_id_entries;
++
++            if ( FT_STREAM_SEEK( lang_dir_offset + 16 )      ||
++                 FT_FRAME_EXTRACT( lang_dir_count * 8,
++                                   lang_dir_entries )        )
+               goto Exit;
+ 
+-            for ( k = 0; k < lang_dir.number_of_named_entries +
+-                               lang_dir.number_of_id_entries; k++ )
++            p = lang_dir_entries;
++
++            for ( k = 0; k < lang_dir_count; k++ )
+             {
+-              if ( FT_STREAM_SEEK( lang_dir_offset + 16 + k * 8 )      ||
+-                   FT_STREAM_READ_FIELDS( winpe_rsrc_dir_entry_fields,
+-                                          &dir_entry3 )                )
+-                goto Exit;
++              dir_entry3.name   = FT_NEXT_ULONG_LE( p );
++              dir_entry3.offset = FT_NEXT_ULONG_LE( p );
+ 
+               if ( dir_entry2.offset & 0x80000000UL /* DataIsDirectory */ )
+               {
+                 error = FT_THROW( Invalid_File_Format );
+-                goto Exit;
++                goto Fail2;
+               }
+ 
+               if ( dir_entry1.name == 8 /* RT_FONT */ )
+@@ -548,7 +573,7 @@
+                 if ( FT_STREAM_SEEK( root_dir_offset + dir_entry3.offset ) ||
+                      FT_STREAM_READ_FIELDS( winpe_rsrc_data_entry_fields,
+                                             &data_entry )                  )
+-                  goto Exit;
++                  goto Fail2;
+ 
+                 FT_TRACE2(( "found font #%lu, offset %04lx, "
+                             "size %04lx, cp %lu\n",
+@@ -561,7 +586,7 @@
+                 if ( face_index == face->root.num_faces )
+                 {
+                   if ( FT_NEW( face->font ) )
+-                    goto Exit;
++                    goto Fail2;
+ 
+                   face->font->offset   = pe32_section.pointer_to_raw_data +
+                                            data_entry.offset_to_data -
+@@ -573,7 +598,7 @@
+                   {
+                     FT_TRACE2(( "font #%lu load error 0x%x\n",
+                                 dir_entry2.name, error ));
+-                    goto Fail;
++                    goto Fail2;
+                   }
+                   else
+                     FT_TRACE2(( "font #%lu successfully loaded\n",
+@@ -583,6 +608,8 @@
+                 face->root.num_faces++;
+               }
+             }
++
++            FT_FRAME_RELEASE( lang_dir_entries );
+           }
+         }
+       }
+@@ -601,6 +628,10 @@
+       }
+     }
+ 
++  Fail2:
++    FT_FRAME_RELEASE( lang_dir_entries );
++    goto Fail;
++
+   Fail:
+     if ( error )
+       fnt_font_done( face );

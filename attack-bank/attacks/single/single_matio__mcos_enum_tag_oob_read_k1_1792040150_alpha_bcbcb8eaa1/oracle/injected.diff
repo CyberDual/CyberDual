@@ -1,0 +1,36 @@
+diff --git a/src/mcos.c b/src/mcos.c
+index 5b7582866920c4b9ada50d1488fe8312baaab62a..3aa021767574cfb59e1d1ef476152cbf5a1841ad 100644
+--- a/src/mcos.c
++++ b/src/mcos.c
+@@ -1550,7 +1550,9 @@ IsMCOSEncoded(const matvar_t *matvar)
+ /** @brief Check if a matvar_t is an enumeration instance struct
+  *
+  * Enumeration instance arrays are stored as structs carrying an
+- * "EnumerationInstanceTag" field equal to the MCOS reference value.
++ * "EnumerationInstanceTag" field equal to the MCOS reference value.  The tag
++ * is normally written as uint32, but files written by some tools store it
++ * with a narrower unsigned integer class.
+  *
+  * @param matvar  The variable to check
+  * @return 1 if an enumeration struct, 0 otherwise
+@@ -1564,7 +1566,19 @@ IsEnumStruct(const matvar_t *matvar)
+         return 0;
+ 
+     tag = Mat_VarGetStructFieldByName(matvar, "EnumerationInstanceTag", 0);
+-    if ( tag == NULL || tag->class_type != MAT_C_UINT32 || tag->data == NULL )
++    if ( tag == NULL || tag->data == NULL )
++        return 0;
++
++    switch ( tag->class_type ) {
++        case MAT_C_UINT32:
++        case MAT_C_UINT16:
++        case MAT_C_UINT8:
++            break;
++        default:
++            return 0;
++    }
++
++    if ( tag->nbytes < Mat_SizeOfClass(tag->class_type) )
+         return 0;
+ 
+     return ((const mat_uint32_t *)tag->data)[0] == MCOS_REF_VALUE;

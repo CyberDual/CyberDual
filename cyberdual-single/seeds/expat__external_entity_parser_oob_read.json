@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-125",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "1fdf06c6aec31035fe437f52451dd13319b38931",
+  "parent_sha": "1fdf06c6aec31035fe437f52451dd13319b38931",
+  "project": "expat",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/libexpat/libexpat",
+  "repo_url": "https://github.com/libexpat/libexpat",
+  "source": "reuse",
+  "target": "expat",
+  "task": "Public XML_ExternalEntityParserCreate parser that parses elements whose attributes have DTD-declared defaults inherited from the parent parser's DTD -> OOB read from hash-table entries created by dtdCopy; fixed by PR #1331 (merge 208c7045, first-parent==parent 1fdf06c6).",
+  "task_iid": "expat__external_entity_parser_oob_read",
+  "vuln_desc": "Public XML_ExternalEntityParserCreate parser that parses elements whose attributes have DTD-declared defaults inherited from the parent parser's DTD -> OOB read from hash-table entries created by dtdCopy; fixed by PR #1331 (merge 208c7045, first-parent==parent 1fdf06c6)."
+}

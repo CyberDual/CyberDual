@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="CyberDual">
+  <!-- Janus as two AI agents: one robot head with an attacker face (red) and a reviewer face (blue), back to back -->
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="#F4F1EA"/>
+  <g transform="translate(64 66) scale(0.96) translate(-50 -52)">
+    <g id="attacker">
+      <line x1="36" y1="24" x2="36" y2="13" stroke="#7E2418" stroke-width="2.6"/>
+      <circle cx="36" cy="11" r="3.6" fill="#C43E2C"/>
+      <path d="M50,24 H28 Q18,24 18,34 V44 L11,49 V55 L18,57 V64 Q18,72 28,72 H50 Z" fill="#C43E2C"/>
+      <rect x="31" y="72" width="19" height="7" fill="#7E2418"/>
+      <path d="M50,79 H32 Q24,79 24,87 V95 H50 Z" fill="#C43E2C"/>
+      <rect x="22" y="38" width="15" height="8" rx="4" fill="#F4F1EA"/>
+      <rect x="26" y="62" width="2" height="5" rx="1" fill="#7E2418"/>
+      <rect x="30" y="62" width="2" height="5" rx="1" fill="#7E2418"/>
+      <rect x="34" y="62" width="2" height="5" rx="1" fill="#7E2418"/>
+      <circle cx="44" cy="48" r="2.6" fill="#7E2418"/>
+    </g>
+    <g id="reviewer" transform="translate(100 0) scale(-1 1)">
+      <line x1="36" y1="24" x2="36" y2="13" stroke="#1B3F70" stroke-width="2.6"/>
+      <circle cx="36" cy="11" r="3.6" fill="#26589C"/>
+      <path d="M50,24 H28 Q18,24 18,34 V44 L11,49 V55 L18,57 V64 Q18,72 28,72 H50 Z" fill="#26589C"/>
+      <rect x="31" y="72" width="19" height="7" fill="#1B3F70"/>
+      <path d="M50,79 H32 Q24,79 24,87 V95 H50 Z" fill="#26589C"/>
+      <rect x="22" y="38" width="15" height="8" rx="4" fill="#F4F1EA"/>
+      <rect x="26" y="62" width="2" height="5" rx="1" fill="#1B3F70"/>
+      <rect x="30" y="62" width="2" height="5" rx="1" fill="#1B3F70"/>
+      <rect x="34" y="62" width="2" height="5" rx="1" fill="#1B3F70"/>
+      <circle cx="44" cy="48" r="2.6" fill="#1B3F70"/>
+    </g>
+    <rect x="49.2" y="9" width="1.6" height="87" fill="#F4F1EA"/>
+  </g>
+</svg>

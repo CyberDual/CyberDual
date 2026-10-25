@@ -1,0 +1,10 @@
+{
+  "task_iid": "v8__fe1f97c36499",
+  "regime": "A_vuln_patch",
+  "strategy": "new_defect",
+  "pocs": [
+    {"input": "pocs/probe.js", "claim": "residual_vuln"}
+  ],
+  "explanation": "The exponent saturation change reverses the tail scan's end check, so a radix-32 parse can read one byte past a 20-byte compiler conversion buffer.",
+  "local_verification": "The ASan d8 build reports stack-buffer-overflow in InternalStringToIntDouble while optimizing the witness. The same witness exits 0 after rebuilding with golden.diff."
+}

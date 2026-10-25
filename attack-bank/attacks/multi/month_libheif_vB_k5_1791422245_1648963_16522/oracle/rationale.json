@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "e2638c39156403c99dd7270e80ee9041b5abeece",
+      "edited_message": "Reject shrink requests and pad smaller alpha planes when extending images",
+      "patch": "--- a/libheif/image/pixelimage.cc\n+++ b/libheif/image/pixelimage.cc\n@@ -643,11 +643,14 @@\n   for (auto& component : m_storage) {\n     // See extend_padding_to_size(): get_subsampled_size() assumes a non-Cb/Cr\n     // component has the full logical image size, so we cannot compute a correct\n-    // target size for a component that does not follow that assumption.\n+    // target size for a component that does not follow that assumption. A\n+    // smaller alpha plane can be padded to the requested image size.\n+    bool smaller_alpha = component.m_channel == heif_channel_Alpha &&\n+                         component.m_width <= m_width && component.m_height <= m_height;\n     if ((component.m_width != m_width ||\n          component.m_height != m_height) &&\n         (component.m_channel != heif_channel_Cb &&\n-         component.m_channel != heif_channel_Cr)) {\n+         component.m_channel != heif_channel_Cr) && !smaller_alpha) {\n       return Error{heif_error_Unsupported_feature,\n                    heif_suberror_Unspecified,\n                    \"Cannot extend an image with non-uniform component sizes.\"};\n"
+    },
+    {
+      "sha": "76f2a2375b6930084353ea26be367dc612ab8d01",
+      "edited_message": "Reject mismatched Cb/Cr planes and validate extension dimensions",
+      "patch": "--- a/libheif/image/pixelimage.cc\n+++ b/libheif/image/pixelimage.cc\n@@ -755,7 +755,10 @@\n \n       // copy the visible part of the old plane into the new plane\n \n-      for (uint32_t y = 0; y < component.m_height; y++) {\n+      uint32_t copy_height = (component.m_channel == heif_channel_Cb ||\n+                              component.m_channel == heif_channel_Cr)\n+                                 ? component.m_height : m_height;\n+      for (uint32_t y = 0; y < copy_height; y++) {\n         memcpy(static_cast<uint8_t*>(newPlane.mem) + y * newPlane.stride,\n                static_cast<uint8_t*>(component.mem) + y * component.stride,\n                component.m_width * bytes_per_pixel);\n"
+    }
+  ],
+  "coupling": "The earlier extension change accepts a smaller alpha plane and safely pads it using the plane's own height. The later chroma validation change copies nonchroma planes using the logical image height during reallocation, an assumption that held before the earlier change. A tall image with a short alpha plane crosses both changes and reads beyond the alpha allocation. Reverting either change prevents this particular reachability, but a correct repair must preserve support for smaller alpha planes while deriving the copy extent from each plane's actual height, and retain the independent chroma dimension validation.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "heif_image_create / heif_image_add_plane / heif_image_extend_to_size_fill_with_zero",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

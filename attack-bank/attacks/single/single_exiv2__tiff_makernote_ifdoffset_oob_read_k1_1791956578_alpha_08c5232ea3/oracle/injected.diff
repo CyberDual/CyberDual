@@ -1,0 +1,24 @@
+diff --git a/src/tiffvisitor_int.cpp b/src/tiffvisitor_int.cpp
+index 9930b876d38765d2f96f4697ddd1174f92c40867..dca607d5a317444120dd899d47a233fb0b50c475 100644
+--- a/src/tiffvisitor_int.cpp
++++ b/src/tiffvisitor_int.cpp
+@@ -1210,7 +1210,9 @@ void TiffReader::visitIfdMakernote(TiffIfdMakernote* object) {
+     return;
+   }
+ 
+-  object->ifd_.setStart(object->start() + object->ifdOffset());
++  const size_t offset = object->ifdOffset();
++  enforce(offset <= static_cast<size_t>(pLast_ - object->start()), ErrorCode::kerCorruptedMetadata);
++  object->ifd_.setStart(object->start() + offset);
+ 
+   // Modify reader for Makernote peculiarities, byte order and offset
+   object->mnOffset_ = object->start() - pData_;
+@@ -1309,7 +1311,7 @@ void TiffReader::readTiffEntry(TiffEntryBase* object) {
+                   // cast to make MSVC happy
+                   << size - static_cast<size_t>(pLast_ - pData) << " Bytes; truncating the entry\n";
+ #endif
+-        size = 0;
++        size = static_cast<size_t>(pLast_ - pData + 1);
+       }
+     }
+     auto v = Value::create(typeId);

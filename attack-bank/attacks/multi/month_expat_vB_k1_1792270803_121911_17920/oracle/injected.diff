@@ -1,0 +1,27 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db91..c5b7f3f6 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -1600,10 +1600,7 @@ XML_ParserReset(XML_Parser parser, const XML_Char *encodingName) {
+ 
+   if (parser->m_parentParser)
+     return XML_FALSE;
+-  // The application-defined release callback may access the parser, so it
+-  // must run before any parser state is freed.
+-  if (parser->m_unknownEncodingRelease)
+-    callUnknownEncodingRelease(parser);
++  FREE(parser, parser->m_unknownEncodingMem);
+   /* move m_tagStack to m_freeTagList */
+   tStk = parser->m_tagStack;
+   while (tStk) {
+@@ -1622,8 +1619,9 @@ XML_ParserReset(XML_Parser parser, const XML_Char *encodingName) {
+   /* move m_openValueEntities to m_freeEntities (i.e. same task but for value
+    * entities) */
+   moveEntityList(&parser->m_freeEntities, &parser->m_openValueEntities);
++  if (parser->m_unknownEncodingRelease)
++    callUnknownEncodingRelease(parser);
+   moveToFreeBindingList(parser, parser->m_inheritedBindings);
+-  FREE(parser, parser->m_unknownEncodingMem);
+   poolClear(&parser->m_tempPool);
+   poolClear(&parser->m_temp2Pool);
+   FREE(parser, (void *)parser->m_protocolEncodingName);

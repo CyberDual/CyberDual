@@ -1,0 +1,25 @@
+{
+  "regime": "incomplete_fix",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "af6f8de9198ec8c9283eef358d0276ddaf141628",
+      "edited_message": null,
+      "patch": "diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c\nindex 6dc4cef..5d68b7f 100644\n--- a/src/liblzma/lz/lz_decoder.c\n+++ b/src/liblzma/lz/lz_decoder.c\n@@ -278,7 +278,7 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,\n \n \t// Allocate and initialize the dictionary.\n \tif (coder->dict.size != alloc_size) {\n-\t\tcoder->dict.size = 0;\n+\t\tcoder->dict.full = 0;\n \t\tlzma_free(coder->dict.buf, allocator);\n \n \t\t// The LZ_DICT_EXTRA bytes at the end of the buffer aren't\n"
+    },
+    {
+      "sha": "408a373ffa06dbea4450a95db070ca1c7e0e18b8",
+      "edited_message": "liblzma: Clean up after a filter chain initialization error\n\nFilter coders are initialized using lzma_next_filter_init(). If filter\nchain initialization fails, the entire filter chain should be cleaned up\nwith lzma_next_end(). lzma_raw_encoder_init() and lzma_raw_decoder_init()\nhave always done this via lzma_raw_coder_init() in filter_common.c.\n(Separate cleanup is weird, but it must have made sense to the young me.)\n\nThe following decoders initialize LZMA1 filter directly without using the\nraw filter chain API. This avoids needlessly pulling in all other filters\nwhen a program is linked against static liblzma. These functions didn't\ncall lzma_next_end() after an initialization error, which left the state\navailable for later reinitialization.\n\n  - lzma_alone_decoder()\n  - lzma_lzip_decoder()\n  - lzma_auto_decoder() [*]\n\n[*] lzma_auto_decoder() is only indirectly affected due to the first two\n    functions. lzma_auto_decoder() itself doesn't need a fix.\n\nThere are also encoder functions that initialize the LZMA1 encoder\ndirectly. They don't have this issue because the whole lzma_stream\nis cleaned up when encoder initialization fails.\n\nReported-by: GitHub user christos-cantina-security (christos-spearbit)",
+      "patch": "diff --git a/src/liblzma/common/microlzma_decoder.c b/src/liblzma/common/microlzma_decoder.c\nindex a7720cc..882cb2c 100644\n--- a/src/liblzma/common/microlzma_decoder.c\n+++ b/src/liblzma/common/microlzma_decoder.c\n@@ -108,12 +108,8 @@ microlzma_decode(void *coder_ptr, const lzma_allocator *allocator,\n \t\t\t}\n \t\t};\n \n-\t\tconst lzma_ret ret = lzma_next_filter_init(&coder->lzma,\n-\t\t\t\tallocator, filters);\n-\t\tif (ret != LZMA_OK) {\n-\t\t\tlzma_next_end(&coder->lzma, allocator);\n-\t\t\treturn ret;\n-\t\t}\n+\t\treturn_if_error(lzma_next_filter_init(&coder->lzma,\n+\t\t\t\tallocator, filters));\n \n \t\t// Pass one dummy 0x00 byte to the LZMA decoder since that\n \t\t// is what it expects the first byte to be.\n"
+    }
+  ],
+  "coupling": "Commit af6f8de (lz_decoder.c) is edited so the dictionary-realloc block no longer resets coder->dict.size before freeing the old dictionary buffer; if the new allocation then fails, dict.buf ends up NULL while dict.size keeps its stale value, so a later re-initialization requesting the same dictionary size skips reallocation entirely. Read alone this is unreachable: with the real 408a373 every decoder that could re-initialize a failed coder destroys it on error, so the stale size never survives. Commit 408a373 is edited to add its lzma_next_end() cleanup only to lzma_alone_decoder() and lzma_lzip_decoder(), leaving lzma_microlzma_decoder()'s failed-coder state alive for re-initialization; read alone this is safe because the real af6f8de resets dict.size to 0 (and the failed allocation already NULLed dict.buf), so re-initialization simply reallocates. Only the composition is defective: the MicroLZMA coder survives a failed 8 MiB dictionary allocation holding (dict.size = stale 4672, dict.buf = NULL), and re-initializing with the original 4 KiB dictionary skips the realloc, so lz_decoder_reset() writes through NULL (write at NULL+575). The four-state matrix was verified by execution: pristine batch, edit-A-only and edit-B-only trees all pass the PoC; only the combined tree aborts under AddressSanitizer. A commit-by-commit reviewer therefore sees correct, complete maintenance in each diff and nothing to fix in either one; the defect exists purely in the composed state, and recognizing or repairing it requires tracking the stale dict.size left by the first commit into the failed-coder reuse path preserved by the second - no conclusion drawn from a single diff suffices. Base main already crashes on the same input (both upstream fixes absent), so the batch is an incomplete fix of a pre-existing defect.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "lzma_microlzma_decoder + lzma_code (liblzma public API)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+diff --git a/src/dec/alpha_dec.c b/src/dec/alpha_dec.c
+index 9fb1448..fd096c6 100644
+--- a/src/dec/alpha_dec.c
++++ b/src/dec/alpha_dec.c
+@@ -127,7 +127,6 @@ WEBP_NODISCARD static VP8StatusCode ALPHInit(ALPHDecoder* const dec,
+ }
+ 
+ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+-  const int width = io->width;
+   // Alpha rows are always decoded starting from row 0 (for spatial filtering
+   // and lossless stream dependencies) and decoding stops at io->crop_bottom
+   // (which equals io->height when cropping is not used).
+@@ -140,9 +139,16 @@ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+   // pixel rows held back from the previous macroblock row plus all 16 pixel
+   // rows of the last macroblock row (24 pixel rows total), while retaining 1
+   // preceding row (row - 1) for spatial unfiltering and fancy upsampling.
+-  return (dec->alpha_dithering > 0)
+-             ? height
+-             : VP8LGetWindowRows(width, height, /*max_history_rows=*/25);
++  // Unlike the generic lossless pixel window (VP8LGetWindowRows), alpha
++  // unfiltering never needs NUM_ARGB_CACHE_ROWS worth of look-ahead nor
++  // backward-reference copy headroom, so a small fixed amortization margin on
++  // top of the 25-row history requirement is enough to avoid shifting on
++  // every call.
++  if (dec->alpha_dithering > 0) return height;
++  {
++    const int window_rows = 25 + 20;
++    return (window_rows < height) ? window_rows : height;
++  }
+ }
+ 
+ void WebPShiftAlphaWindow(ALPHDecoder* const alph_dec, int current_end_row,
+@@ -266,6 +272,14 @@ WEBP_NODISCARD const uint8_t* VP8DecompressAlphaRows(VP8Decoder* const dec,
+       }
+     }
+ 
++    if (dec->alpha_dithering <= 0 && dec->alpha_wide_batch) {
++      // No per-row unfiltering dependency: batch up to 3 macroblock rows per
++      // call to cut down on call overhead. Leave the final, partial batch at
++      // its normal size so completion is still detected on the expected call.
++      const int wide_rows = 3 * num_rows;
++      if (row + wide_rows < height) num_rows = wide_rows;
++    }
++
+     assert(dec->alph_dec != NULL);
+     assert(row + num_rows <= height);
+     if (!ALPHDecode(dec, row, num_rows)) goto Error;
+diff --git a/src/dec/frame_dec.c b/src/dec/frame_dec.c
+index 2b3c99b..3b38ed2 100644
+--- a/src/dec/frame_dec.c
++++ b/src/dec/frame_dec.c
+@@ -376,6 +376,13 @@ void VP8InitDithering(const WebPDecoderOptions* const options,
+     } else {
+       dec->alpha_dithering = 0;
+     }
++    // Raw (uncompressed) alpha with no filtering has no row-to-row
++    // unfiltering dependency, so it can be delivered to the caller in wider
++    // per-call batches without affecting the decoded result.
++    dec->alpha_wide_batch =
++        (dec->alpha_data != NULL && dec->alpha_data_size > ALPHA_HEADER_LEN &&
++         (dec->alpha_data[0] & 0x03) == ALPHA_NO_COMPRESSION &&
++         ((dec->alpha_data[0] >> 2) & 0x03) == WEBP_FILTER_NONE);
+   }
+ }
+ 
+diff --git a/src/dec/vp8i_dec.h b/src/dec/vp8i_dec.h
+index 11274fb..4a19df8 100644
+--- a/src/dec/vp8i_dec.h
++++ b/src/dec/vp8i_dec.h
+@@ -269,6 +269,9 @@ struct VP8Decoder {
+   int is_alpha_decoded;  // true if alpha_data is decoded in alpha_plane
+   uint8_t* alpha_plane;  // output. Persistent, contains the whole data.
+   int alpha_dithering;   // derived from decoding options (0=off, 100=full)
++  int alpha_wide_batch;  // 1 if raw, unfiltered alpha has no row-to-row
++                         // unfiltering dependency and can be requested in
++                         // larger per-call batches.
+ };
+ 
+ //------------------------------------------------------------------------------

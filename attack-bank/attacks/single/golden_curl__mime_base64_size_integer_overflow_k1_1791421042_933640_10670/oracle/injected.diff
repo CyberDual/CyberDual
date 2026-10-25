@@ -1,0 +1,36 @@
+diff --git a/lib/mime.c b/lib/mime.c
+index 11eb66207de747a24d7ca5e8d4b69882377938ba..f5b230111ebc41cbc49e3bf3b09bd10028449c98 100644
+--- a/lib/mime.c
++++ b/lib/mime.c
+@@ -365,7 +365,7 @@ static size_t encoder_base64_read(char *buffer, size_t size, bool ateof,
+     }
+ 
+     /* Be sure there is enough space and input data for a base64 group. */
+-    if(size < 4) {
++    if(size < 3) {
+       if(!cursize)
+         return STOP_FILLING;
+       break;
+@@ -419,6 +419,11 @@ static size_t encoder_base64_read(char *buffer, size_t size, bool ateof,
+   return cursize;
+ }
+ 
++/* The maximum input size that does not cause an overflow. */
++#define BASE64_MAX_INPUT_SIZE                                           \
++  (((CURL_OFF_T_MAX / (MAX_ENCODED_LINE_LENGTH + 2)) *                  \
++    MAX_ENCODED_LINE_LENGTH / 4) * 3 - 3)
++
+ static curl_off_t encoder_base64_size(curl_mimepart *part)
+ {
+   curl_off_t size = part->datasize;
+@@ -426,6 +431,10 @@ static curl_off_t encoder_base64_size(curl_mimepart *part)
+   if(size <= 0)
+     return size;    /* Unknown size or no data. */
+ 
++  /* Prevent integer overflows */
++  if(size > BASE64_MAX_INPUT_SIZE)
++    return -1;
++
+   /* Compute base64 character count. */
+   size = 4 * (1 + ((size - 1) / 3));
+ 

@@ -1,0 +1,52 @@
+diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c
+index 25f38b2..c2e2510 100644
+--- a/src/media_tools/crypt_tools.c
++++ b/src/media_tools/crypt_tools.c
+@@ -104,7 +104,7 @@ static char *crypt_xml_get_text(const GF_XMLNode *node)
+ 	for (i=0; i<gf_list_count(node->content); i++) {
+ 		child = (GF_XMLNode *) gf_list_get(node->content, i);
+ 		if (child && ((child->type == GF_XML_TEXT_TYPE) || (child->type == GF_XML_CDATA_TYPE))) {
+-			if (strlen(child->name))
++			if (strspn(child->name, " \t\r\n") != strlen(child->name))
+ 				return child->name;
+ 		}
+ 	}
+@@ -263,6 +263,28 @@ static GF_Err crypt_cpix_parse_pssh(const char *b64, GF_CryptDRMInfo *drm)
+ 	return GF_OK;
+ }
+ 
++static GF_Err crypt_cpix_parse_pssh_node(const GF_XMLNode *node, GF_CryptDRMInfo *drm)
++{
++	GF_XMLNode *first = NULL, *child;
++	char *text;
++	GF_Err e;
++	u32 i;
++
++	if (!node || !node->content) return GF_BAD_PARAM;
++	for (i=0; i<gf_list_count(node->content); i++) {
++		child = (GF_XMLNode *) gf_list_get(node->content, i);
++		if (child && ((child->type == GF_XML_TEXT_TYPE) || (child->type == GF_XML_CDATA_TYPE)) && child->name[0]) {
++			first = child;
++			break;
++		}
++	}
++	if (!first) return GF_BAD_PARAM;
++	text = (gf_list_count(node->content) == 1) ? first->name : crypt_xml_get_text(node);
++	e = text ? crypt_cpix_parse_pssh(text, drm) : GF_BAD_PARAM;
++	if (text && (text != first->name)) gf_free(text);
++	return e;
++}
++
+ static char *crypt_cpix_hls_info(const char *b64)
+ {
+ 	GF_Err e;
+@@ -526,8 +548,7 @@ static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)
+ 			}
+ 			pssh_node = crypt_xml_get_child(drm_node, "PSSH");
+ 			if (pssh_node) {
+-				text = crypt_xml_get_text(pssh_node);
+-				e = text ? crypt_cpix_parse_pssh(text, drm) : GF_BAD_PARAM;
++				e = crypt_cpix_parse_pssh_node(pssh_node, drm);
+ 				if (e) {
+ 					crypt_cpix_drm_del(drm);
+ 					goto exit;

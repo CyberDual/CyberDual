@@ -1,0 +1,33 @@
+diff --git a/src/preview.cpp b/src/preview.cpp
+index eda5c1a..3b4382f 100644
+--- a/src/preview.cpp
++++ b/src/preview.cpp
+@@ -839,8 +839,8 @@ bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize) {
+   if (pixels > std::numeric_limits<size_t>::max() / bytesPerPixel)
+     return false;
+ 
+-  rgbSize = pixels * bytesPerPixel;
+-  return rgbSize <= maxAi7ThumbnailSize;
++  rgbSize = pixels;
++  return rgbSize <= maxAi7ThumbnailSize / bytesPerPixel;
+ }
+ 
+ DataBuf decodeHex(const byte* src, size_t srcSize) {
+@@ -955,7 +955,7 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {
+         value = imageData[i++];
+       }
+     }
+-    Internal::enforce(expectedSize - destPos >= static_cast<size_t>(num) * 3, ErrorCode::kerCorruptedMetadata);
++    Internal::enforce(expectedSize - destPos / 3 >= static_cast<size_t>(num), ErrorCode::kerCorruptedMetadata);
+     const auto c0 = colorTable[value * 3];
+     const auto c1 = colorTable[value * 3 + 1];
+     const auto c2 = colorTable[value * 3 + 2];
+@@ -965,7 +965,7 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {
+       destData[destPos++] = c2;
+     }
+   }
+-  Internal::enforce(destPos == expectedSize, ErrorCode::kerCorruptedMetadata);
++  Internal::enforce(destPos == expectedSize * 3, ErrorCode::kerCorruptedMetadata);
+   return dest;
+ }
+ 

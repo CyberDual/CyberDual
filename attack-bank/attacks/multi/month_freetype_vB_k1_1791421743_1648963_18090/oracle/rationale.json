@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "091f067e22ca7314e6506d73b19554d3c2492fd7",
+      "edited_message": null,
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 6947b3d..5970979 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -279,7 +279,10 @@\n       {\n         error = read_pfb_tag( stream, &tag, &size );\n         if ( error )\n+        {\n+          FT_FREE( priv_dict );\n           goto Fail;\n+        }\n \n         if ( tag != 0x8002U )\n           break;\n"
+    },
+    {
+      "sha": "7cc855f4ad521f40c74ce9631f170198d50bcf4b",
+      "edited_message": null,
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 151aeac..aab5a20 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -279,7 +279,12 @@\n       {\n         error = read_pfb_tag( stream, &tag, &size );\n         if ( error )\n+        {\n+          FT_FREE( priv_dict );\n+          if ( !priv_len )\n+            goto Fail;\n           break;\n+        }\n \n         if ( tag != 0x8002U || size > stream->size - stream->pos )\n           break;\n"
+    }
+  ],
+  "coupling": "The segment-merging commit adds cleanup of the temporary private dictionary on a tag-read error before its then-fatal exit. The later size-check commit makes that read error a recoverable end of the segment run when prior segment data exists. Together, the recovery path retains a nonzero length after cleanup, publishes a null buffer as the private dictionary, and the subsequent decrypt/initialization writes through it. The repair has to reconcile ownership and partial-segment recovery across the two commits: either preserve the accumulated buffer on recovery or keep the error fatal after cleanup.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "FT_New_Memory_Face",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

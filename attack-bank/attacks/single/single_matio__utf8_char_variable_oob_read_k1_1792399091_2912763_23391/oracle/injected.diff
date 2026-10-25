@@ -1,0 +1,54 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 9726ba2b9bd6c8e0b690100e98a46b3b961e60d9..34698b43a4d7a0d0ee13fe830c88282af0121ad7 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -3684,6 +3684,13 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                     matvar->nbytes = 0;
+                     break;
+                 }
++                if ( matvar->internal->z->avail_out != 0 ) {
++                    /* Reject truncated char data */
++                    free(matvar->data);
++                    matvar->data = NULL;
++                    matvar->nbytes = 0;
++                    break;
++                }
+                 /*
+                  * If the data was in the tag we started on a 4-byte
+                  * boundary so add 4 to make it an 8-byte
+@@ -3700,6 +3707,35 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                 }
+ #endif
+             }
++            if ( !err && matvar->data_type == MAT_T_UTF8 && matvar->data != NULL ) {
++                /* Reject char data ending with a truncated UTF-8 character */
++                const mat_uint8_t *data = (const mat_uint8_t *)matvar->data;
++                size_t i = 0;
++                while ( i < matvar->nbytes ) {
++                    size_t charlen = 1, j;
++                    if ( data[i] >= 0xf0 )
++                        charlen = 4;
++                    else if ( data[i] >= 0xe0 )
++                        charlen = 3;
++                    else if ( data[i] >= 0xc0 )
++                        charlen = 2;
++                    for ( j = 1; j < charlen; j++ ) {
++                        if ( (data[i + j] & 0xc0) != 0x80 ) {
++                            err = MATIO_E_FILE_FORMAT_VIOLATION;
++                            break;
++                        }
++                    }
++                    if ( err )
++                        break;
++                    i += charlen;
++                }
++                if ( err ) {
++                    free(matvar->data);
++                    matvar->data = NULL;
++                    matvar->nbytes = 0;
++                    break;
++                }
++            }
+             break;
+         case MAT_C_STRUCT: {
+             matvar_t **fields;

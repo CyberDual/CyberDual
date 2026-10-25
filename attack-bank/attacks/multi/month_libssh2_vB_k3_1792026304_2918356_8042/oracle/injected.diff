@@ -1,0 +1,96 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5b..0c8c2cdd 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -123,6 +123,9 @@ static struct libssh2_knownhost *knownhost_to_external(struct known_host *node)
+ 
+ #define KNOWNHOST_MAX_LEN  (1024 * 1024)
+ 
++/* longest IPv6 text form accepted in a plain entry, zone id included */
++#define KNOWNHOST_IPV6_MAX  64
++
+ static int knownhost_add(LIBSSH2_KNOWNHOSTS *hosts,
+                          const char *host, const char *salt,
+                          const char *key_type_name, size_t key_type_len,
+@@ -386,9 +389,9 @@ static int knownhost_hex_value(char c)
+     return -1;
+ }
+ 
+-static int knownhost_parse_ipv4(const char *src, const char *end,
+-                                unsigned char result[4])
++static int knownhost_parse_ipv4(const char *src, unsigned char result[4])
+ {
++    const char *end = src + strlen(src);
+     unsigned int value = 0;
+     size_t digits = 0;
+     size_t count = 0;
+@@ -419,17 +422,16 @@ static int knownhost_parse_ipv4(const char *src, const char *end,
+     return 1;
+ }
+ 
+-static int knownhost_parse_ipv6(const char *src, size_t len,
+-                                unsigned char result[16])
++static int knownhost_parse_ipv6(const char *src, unsigned char result[16])
+ {
+     unsigned short words[8];
+     const char *p = src;
+-    const char *end = src + len;
++    const char *end = src + strlen(src);
+     size_t count = 0;
+     int compressed = -1;
+     size_t i;
+ 
+-    if(!len)
++    if(p == end)
+         return 0;
+ 
+     memset(words, 0, sizeof(words));
+@@ -458,7 +460,7 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+         if(p < end && *p == '.') {
+             unsigned char ipv4[4];
+ 
+-            if(count > 6 || !knownhost_parse_ipv4(part, end, ipv4))
++            if(count > 6 || !knownhost_parse_ipv4(part, ipv4))
+                 return 0;
+ 
+             words[count++] =
+@@ -552,6 +554,8 @@ static int knownhost_plain_match(const char *host, const char *known)
+     const char *known_suffix;
+     size_t host_len;
+     size_t known_len;
++    char host_addr[46]; /* INET6_ADDRSTRLEN */
++    char known_addr[46];
+     unsigned char host_binary[16];
+     unsigned char known_binary[16];
+ 
+@@ -561,14 +565,28 @@ static int knownhost_plain_match(const char *host, const char *known)
+     if((host[0] == '[') != (known[0] == '['))
+         return 0;
+ 
++    /* quick reject: no IPv6 literal is this long, zone id included */
++    if(strlen(host) > KNOWNHOST_IPV6_MAX || strlen(known) > KNOWNHOST_IPV6_MAX)
++        return 0;
++
+     if(!knownhost_ipv6_part(host, &host_address, &host_len, &host_suffix) ||
+        !knownhost_ipv6_part(known, &known_address, &known_len,
+                             &known_suffix) ||
+        strcmp(host_suffix, known_suffix))
+         return 0;
+ 
+-    if(!knownhost_parse_ipv6(host_address, host_len, host_binary) ||
+-       !knownhost_parse_ipv6(known_address, known_len, known_binary))
++    /* the parsers work on NUL-terminated strings; literals with a zone id
++       can grow past INET6_ADDRSTRLEN, so allow the documented maximum */
++    if(host_len > KNOWNHOST_IPV6_MAX || known_len > KNOWNHOST_IPV6_MAX)
++        return 0;
++
++    memcpy(host_addr, host_address, host_len);
++    host_addr[host_len] = '\0';
++    memcpy(known_addr, known_address, known_len);
++    known_addr[known_len] = '\0';
++
++    if(!knownhost_parse_ipv6(host_addr, host_binary) ||
++       !knownhost_parse_ipv6(known_addr, known_binary))
+         return 0;
+ 
+     return !memcmp(host_binary, known_binary, sizeof(host_binary));

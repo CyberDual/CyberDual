@@ -1,0 +1,126 @@
+diff --git a/src/openssl.c b/src/openssl.c
+index 2eaea66e1f899668683b5070ab6476015ac11497..3c815a29fefdcb58c157c3a03202fd84356a46cd 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -3342,6 +3342,7 @@ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+ {
+     int rc;
+     unsigned char *buf = NULL;
++    size_t key_type_len = 0;
+     struct string_buf *decrypted = NULL;
+ #if LIBSSH2_ECDSA
+     ssh2_curve_type type;
+@@ -3365,7 +3366,7 @@ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+         return rc;
+ 
+     /* We have a new key file, now try and parse it using supported types */
+-    rc = ssh2_get_string(decrypted, &buf, NULL);
++    rc = ssh2_get_string(decrypted, &buf, &key_type_len);
+     if(rc || !buf) {
+         rc = ssh2_err(session, LIBSSH2_ERROR_PROTO,
+                       "Public key type in decrypted key data not found");
+@@ -3380,14 +3381,17 @@ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+     (void)pubkeydata_len;
+ 
+ #if LIBSSH2_ED25519
+-    if(!strcmp("ssh-ed25519", (const char *)buf) &&
++    if(key_type_len == sizeof("ssh-ed25519") - 1 &&
++       !memcmp(buf, "ssh-ed25519", sizeof("ssh-ed25519") - 1) &&
+        (!want_method || !strcmp("ssh-ed25519", want_method)))
+         rc = ossl_ed25519_openssh_priv_to_pubkey(session, decrypted,
+                                                  method,
+                                                  pubkeydata, pubkeydata_len,
+                                                  (ssh2_ed25519_ctx **)key_ctx);
+ 
+-    if(!strcmp("sk-ssh-ed25519@openssh.com", (const char *)buf) &&
++    if(key_type_len == sizeof("sk-ssh-ed25519@openssh.com") - 1 &&
++       !memcmp(buf, "sk-ssh-ed25519@openssh.com",
++               sizeof("sk-ssh-ed25519@openssh.com") - 1) &&
+        (!want_method || !strcmp("sk-ssh-ed25519@openssh.com", want_method)))
+         rc = ossl_ed25519_sk_openssh_priv_to_pubkey(session, decrypted,
+                                                     method,
+@@ -3396,7 +3400,8 @@ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+                                                  (ssh2_ed25519_ctx **)key_ctx);
+ #endif
+ #if LIBSSH2_RSA
+-    if(!strcmp("ssh-rsa", (const char *)buf) &&
++    if(key_type_len == sizeof("ssh-rsa") - 1 &&
++       !memcmp(buf, "ssh-rsa", sizeof("ssh-rsa") - 1) &&
+        (!want_method || !strcmp("ssh-rsa", want_method)))
+         rc = ossl_rsa_openssh_priv_to_pubkey(session, decrypted,
+                                              method,
+@@ -3404,7 +3409,8 @@ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+                                              (ssh2_rsa_ctx **)key_ctx);
+ #endif
+ #if LIBSSH2_DSA
+-    if(!strcmp("ssh-dss", (const char *)buf) &&
++    if(key_type_len == sizeof("ssh-dss") - 1 &&
++       !memcmp(buf, "ssh-dss", sizeof("ssh-dss") - 1) &&
+        (!want_method || !strcmp("ssh-dss", want_method)))
+         rc = ossl_dsa_openssh_priv_to_pubkey(session, decrypted,
+                                              method,
+@@ -3412,7 +3418,9 @@ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+                                              (ssh2_dsa_ctx **)key_ctx);
+ #endif
+ #if LIBSSH2_ECDSA
+-    if(!strcmp("sk-ecdsa-sha2-nistp256@openssh.com", (const char *)buf))
++    if(key_type_len == sizeof("sk-ecdsa-sha2-nistp256@openssh.com") - 1 &&
++       !memcmp(buf, "sk-ecdsa-sha2-nistp256@openssh.com",
++               sizeof("sk-ecdsa-sha2-nistp256@openssh.com") - 1))
+         rc = ossl_ecdsa_sk_openssh_priv_to_pubkey(session, decrypted,
+                                                   method,
+                                                   pubkeydata, pubkeydata_len,
+@@ -3450,6 +3458,7 @@ int ssh2_sk_pubkey(LIBSSH2_SESSION *session, char **method,
+ {
+     int rc;
+     unsigned char *buf = NULL;
++    size_t key_type_len = 0;
+     struct string_buf *decrypted = NULL;
+ 
+     if(!session)
+@@ -3467,7 +3476,7 @@ int ssh2_sk_pubkey(LIBSSH2_SESSION *session, char **method,
+         return rc;
+ 
+     /* We have a new key file, now try and parse it using supported types */
+-    rc = ssh2_get_string(decrypted, &buf, NULL);
++    rc = ssh2_get_string(decrypted, &buf, &key_type_len);
+     if(rc || !buf) {
+         rc = ssh2_err(session, LIBSSH2_ERROR_PROTO,
+                       "Public key type in decrypted key data not found");
+@@ -3487,7 +3496,9 @@ int ssh2_sk_pubkey(LIBSSH2_SESSION *session, char **method,
+     (void)key_handle_len;
+ 
+ #if LIBSSH2_ED25519
+-    if(!strcmp("sk-ssh-ed25519@openssh.com", (const char *)buf)) {
++    if(key_type_len <= sizeof("sk-ssh-ed25519@openssh.com") - 1 &&
++       !memcmp(buf, "sk-ssh-ed25519@openssh.com",
++               sizeof("sk-ssh-ed25519@openssh.com") - 1)) {
+         *algorithm = LIBSSH2_HOSTKEY_TYPE_ED25519;
+         rc = ossl_ed25519_sk_openssh_priv_to_pubkey(session, decrypted, method,
+                                                     pubkeydata,
+@@ -3499,7 +3510,9 @@ int ssh2_sk_pubkey(LIBSSH2_SESSION *session, char **method,
+     }
+ #endif
+ #if LIBSSH2_ECDSA
+-    if(!strcmp("sk-ecdsa-sha2-nistp256@openssh.com", (const char *)buf)) {
++    if(key_type_len == sizeof("sk-ecdsa-sha2-nistp256@openssh.com") - 1 &&
++       !memcmp(buf, "sk-ecdsa-sha2-nistp256@openssh.com",
++               sizeof("sk-ecdsa-sha2-nistp256@openssh.com") - 1)) {
+         *algorithm = LIBSSH2_HOSTKEY_TYPE_ECDSA_256;
+         rc = ossl_ecdsa_sk_openssh_priv_to_pubkey(session, decrypted, method,
+                                                   pubkeydata,
+diff --git a/src/pem.c b/src/pem.c
+index ac1cb6aa372dd383ac772e68772ea37b9b226742..9e3001a8227c77661fc3940154f5214eb21a7adb 100644
+--- a/src/pem.c
++++ b/src/pem.c
+@@ -670,7 +670,9 @@ static int pem_parse_data_openssh(LIBSSH2_SESSION *session,
+             goto out;
+         }
+ 
+-        out_buf->data = SSH2_CALLOC(session, decrypted.len);
++        /* Allocate one extra byte, guaranteed zero by SSH2_CALLOC, so that
++           consumers can treat the strings inside as C strings */
++        out_buf->data = SSH2_CALLOC(session, decrypted.len + 1);
+         if(!out_buf->data) {
+             ret = ssh2_err(session, LIBSSH2_ERROR_ALLOC,
+                            "Unable to allocate memory for decrypted struct");

@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-125",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "209801d7fbaf07ab74bae8cb32dd2ab9e5846118",
+  "parent_sha": "209801d7fbaf07ab74bae8cb32dd2ab9e5846118",
+  "project": "expat",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/libexpat/libexpat",
+  "repo_url": "https://github.com/libexpat/libexpat",
+  "source": "reuse",
+  "target": "expat",
+  "task": "Public XML_GetBuffer + XML_ParseBuffer called with a len inconsistent with the obtained buffer -> OOB read; fix validates len against buffer capacity in XML_ParseBuffer; PR #1393 (merge 13c5f63a, first-parent==parent 209801d7).",
+  "task_iid": "expat__parse_buffer_api_oob_read",
+  "vuln_desc": "Public XML_GetBuffer + XML_ParseBuffer called with a len inconsistent with the obtained buffer -> OOB read; fix validates len against buffer capacity in XML_ParseBuffer; PR #1393 (merge 13c5f63a, first-parent==parent 209801d7)."
+}

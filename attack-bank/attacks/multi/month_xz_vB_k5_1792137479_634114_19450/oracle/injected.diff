@@ -1,0 +1,64 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index 3fbb5b1..9ae7a95 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -516,6 +516,8 @@ lzma_index_prealloc(lzma_index *i, lzma_vli records)
+ 	// it is supposed to work.
+ 	if (records == 0)
+ 		records = INDEX_GROUP_SIZE;
++	else if (records > INDEX_GROUP_SIZE)
++		records = INDEX_GROUP_SIZE - 1;
+ 
+ 	i->prealloc = (size_t)(records);
+ 	return false;
+@@ -765,17 +767,24 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,
+ 	if (g != NULL && g->last + 1 < g->allocated) {
+ 		// There is space in the last group at least for one Record.
+ 		++g->last;
++	} else if (g != NULL && g->allocated + 1 == INDEX_GROUP_SIZE) {
++		// One Record short of a full chunk: keep it in this group.
++		++g->last;
+ 	} else {
+-		// We need to allocate a new group.
+-		assert(i->prealloc > 0);
++		// We need to allocate a new group. A group bigger than the
++		// default chunk keeps one spare slot.
++		const size_t slots = i->prealloc
++				+ (i->prealloc > INDEX_GROUP_SIZE
++				&& i->prealloc < PREALLOC_MAX ? 1 : 0);
++		assert(slots > 0);
+ 		g = lzma_alloc(sizeof(index_group)
+-				+ i->prealloc * sizeof(index_record),
++				+ slots * sizeof(index_record),
+ 				allocator);
+ 		if (g == NULL)
+ 			return LZMA_MEM_ERROR;
+ 
+ 		g->last = 0;
+-		g->allocated = i->prealloc;
++		g->allocated = slots;
+ 
+ 		// Reset prealloc so that if the application happens to
+ 		// add new Records, the allocation size will be sane.
+@@ -1012,9 +1021,19 @@ index_dup_stream(const index_stream *src, const lzma_allocator *allocator)
+ 	const index_group *srcg = (const index_group *)(src->groups.leftmost);
+ 	size_t i = 0;
+ 	do {
++		// Groups that are not the default chunk size store the
++		// last Record in the final allocated slot.
++		size_t n = srcg->last + 1;
++		if (src->record_count > INDEX_GROUP_SIZE) {
++			if (srcg->allocated + 1 == INDEX_GROUP_SIZE)
++				n = srcg->allocated + 1;
++			else if (srcg->allocated > INDEX_GROUP_SIZE
++					&& srcg->allocated != n)
++				n = srcg->allocated;
++		}
+ 		memcpy(destg->records + i, srcg->records,
+-				(srcg->last + 1) * sizeof(index_record));
+-		i += srcg->last + 1;
++				n * sizeof(index_record));
++		i += n;
+ 		srcg = index_tree_next(&srcg->node);
+ 	} while (srcg != NULL);
+ 

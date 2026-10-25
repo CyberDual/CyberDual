@@ -1,0 +1,27 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 08ef9f72d53db713126e3461acab78c1578eb8c3..d18c379c7521856a86020c1be37be4f6443d318e 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2434,6 +2434,13 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal) {
+     return XML_STATUS_ERROR;
+   }
+ 
++  // Ensure that the caller is not parsing past the end of the region
++  // obtained from XML_GetBuffer.
++  if (len > EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd)) {
++    parser->m_errorCode = XML_ERROR_INVALID_ARGUMENT;
++    return XML_STATUS_ERROR;
++  }
++
+   start = parser->m_bufferPtr;
+   parser->m_positionPtr = start;
+   parser->m_bufferEnd += len;
+@@ -2582,8 +2589,6 @@ XML_GetBuffer(XML_Parser parser, int len) {
+       }
+       setParserBuffer(parser, newBuf, bufferSize, keep);
+     }
+-    parser->m_eventPtr = parser->m_eventEndPtr = NULL;
+-    parser->m_positionPtr = NULL;
+   }
+   return parser->m_bufferEnd;
+ }

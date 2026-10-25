@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "122dc75a49059d066e4d84c5edc07a47d41618b5",
+      "edited_message": null,
+      "patch": "diff --git a/expat/lib/internal.h b/expat/lib/internal.h\nindex 3e2c796..f1e5e85 100644\n--- a/expat/lib/internal.h\n+++ b/expat/lib/internal.h\n@@ -114,11 +114,11 @@\n #  define EXPAT_ALLOC_TRACKER_ACTIVATION_THRESHOLD_DEFAULT                     \\\n     67108864 // 64 MiB, 2^26\n \n-// NOTE: If function expat_alloc was user facing, EXPAT_MALLOC_ALIGNMENT would\n-//       have to take sizeof(long double) into account\n+// Keep allocations aligned for scalar and pointer types.\n union expat_align {\n   long long l;\n   void *p;\n+  long double ld;\n };\n #  define EXPAT_MALLOC_ALIGNMENT sizeof(union expat_align)\n #  define EXPAT_MALLOC_PADDING ((EXPAT_MALLOC_ALIGNMENT) - sizeof(size_t))\n"
+    },
+    {
+      "sha": "c96ba76dc055b5961d7ca060de3d24425a87e2dc",
+      "edited_message": null,
+      "patch": "diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c\nindex 8d5d86e..b1f0737 100644\n--- a/expat/lib/xmlparse.c\n+++ b/expat/lib/xmlparse.c\n@@ -980,7 +980,7 @@ expat_realloc(XML_Parser parser, void *ptr, size_t size, int sourceLine) {\n \n   // Extract original size (to the eyes of the caller) and the original\n   // pointer returned by malloc/realloc\n-  void *mallocedPtr = (char *)ptr - EXPAT_MALLOC_PADDING - sizeof(size_t);\n+  void *mallocedPtr = (char *)ptr - sizeof(size_t);\n   const size_t prevSize = *(size_t *)mallocedPtr;\n \n   // Classify upcoming change\n"
+    }
+  ],
+  "coupling": "The alignment maintenance commit makes the allocator reserve padding between its stored size header and the pointer returned to parser code. The later realloc maintenance commit recovers the allocation base by subtracting only the size-header width, an assumption that holds when the padding is zero. With both edits, a normal attribute-array growth passes an interior pointer to realloc. The allocator layout and the realloc base-pointer calculation must be checked together to repair it.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "XML_ParserCreate / XML_Parse",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

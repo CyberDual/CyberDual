@@ -1,0 +1,31 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "39b774775420d3bbb5d80906a1ce4d5c852c7a0d",
+      "edited_message": "Remove unnecessary resize\n\ntagDecoder() and everything it dispatches to only ever look at the first\nfour bytes of buf, so growing it to the full box size before the call was\ndead code.\n\nWhile confirming that, also right-size the buffer in\nimageDescDecoder(): the largest read into it is CompressorName's 32\nbytes, so 40 bytes was never needed. One extra byte is kept so the\nstring stored from buf.data() stays terminated by the initial memset.",
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 6b5f65a..9fa6a96 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -1234,7 +1234,7 @@ void QuickTimeVideo::audioDescDecoder() {\n }  // QuickTimeVideo::audioDescDecoder\n \n void QuickTimeVideo::imageDescDecoder() {\n-  DataBuf buf(40);\n+  DataBuf buf(32 + 1);\n   std::memset(buf.data(), 0x0, buf.size());\n   buf.data()[4] = '\\0';\n   io_->readOrThrow(buf.data(), 4);\n"
+    },
+    {
+      "sha": "f57d04060a6e7f770f8ecba50d1417d9acf74853",
+      "edited_message": "Nul-terminate strings\n\nSeveral decoders read fixed-width fields into a DataBuf and then store\nbuf.data() as a C string, so the buffer needs one byte more than the\nfield and an explicit terminator instead of stale memset padding.\n\nimageDescDecoder() also stopped one byte short of the CompressorName\nfield: the field is length-prefixed (a 1-byte length followed by the\n32-byte name), so read the full 33 bytes and terminate the string\nexplicitly.",
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 513f94b..733c069 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -1278,8 +1278,9 @@ void QuickTimeVideo::imageDescDecoder() {\n         size -= 3;\n         break;\n       case CompressorName:\n-        io_->readOrThrow(buf.data(), 32);\n-        size -= 32;\n+        io_->readOrThrow(buf.data(), 33);\n+        buf.data()[33] = '\\0';  // nul-terminate string\n+        size -= 33;\n         xmpData_[\"Xmp.video.Compressor\"] = buf.data();\n         break;\n       default:\n"
+    }
+  ],
+  "coupling": "The defect is a 1-byte heap out-of-bounds WRITE in Exiv2::QuickTimeVideo::imageDescDecoder() (src/quicktimevideo.cpp), reached through the public API (Exiv2::ImageFactory::open() + Image::readMetadata()) when parsing the video sample description of a well-formed QuickTime/MOV file. It is delocalized across two real maintenance commits on the same file, and neither edited commit contains a defect on its own - the overflow exists only in their composition:\n\n- 39b7747 \"Remove unnecessary resize\" (edited): alongside its genuine maintenance (deleting a dead buf.resize() in decodeBlock()), it right-sizes imageDescDecoder()'s scratch buffer from DataBuf buf(40) to DataBuf buf(32 + 1) = 33 bytes, justified in the message by the largest field read into it. That justification is TRUE in this commit's tree: at this point in history the CompressorName case reads only 32 bytes, and the function's initial std::memset guarantees the extra byte is a terminator. Tree with only this edit: ASan-clean on the PoC (verified).\n- f57d040 \"Nul-terminate strings\" (edited): alongside its genuine maintenance (adding explicit nul terminators to several decoders), it corrects imageDescDecoder()'s CompressorName handling to consume the length-prefixed Pascal field in full - io_->readOrThrow(buf.data(), 33) for the 1-byte length plus the 32-byte name, an explicit raw-pointer terminator buf.data()[33] = '\\0' (the same raw idiom the function already uses for buf.data()[4]), and size -= 33. Against the 40-byte buffer present in this commit's tree, both the 33-byte read and the index-33 store are in bounds. Tree with only this edit: ASan-clean on the PoC (verified).\n\nOnly when both edits are combined does imageDescDecoder() allocate exactly 33 bytes and then write its terminator at index 33 - one byte past the end of the heap buffer (ASan: heap-buffer-overflow WRITE of size 1, 0 bytes to the right of a 33-byte region allocated at quicktimevideo.cpp:1241, written at quicktimevideo.cpp:1282). Verified empirically: original batch tree ASan-clean (PoC exits 0), A-only tree clean, B-only tree clean, composed tree aborts (SIGABRT, rc 134).\n\nWhy a correct fix is non-local: the two commits jointly and implicitly define a buffer-size contract. 39b7747 encodes \"largest read = 32, plus 1 for the terminator\" and sizes the buffer accordingly; f57d040 encodes \"the field is 33 bytes and the terminator goes immediately after them\". Each statement is consistent with the buffer that exists in its own tree, so a commit-by-commit reviewer finds nothing wrong in either diff - there is no wrong line to flag in either commit taken alone; the bug is the disagreement between two size decisions made in two different commits. Repairing it requires reconciling them: grow the buffer to at least 34 (34 = 33 field bytes + terminator) in the commit that sizes it, or restructure the read/terminator in the commit that decodes the field - either way the fixer must know both commits' reasoning, not just one diff. Note also that the most local-looking patch to f57d040 alone (moving the terminator store to index 32) still yields a wrong result: the 33-byte read fills all 33 buffer bytes with file data, so index 32 is the last name byte, not slack - the terminator silently truncates the field; correctness depends on the buffer size decided in the other commit.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "api",
+      "fires_on": "modified_tree",
+      "credited": true
+    },
+    {
+      "input": "pocs/poc.mov",
+      "entry_point": "cli",
+      "fires_on": "modified_tree",
+      "credited": false
+    }
+  ]
+}

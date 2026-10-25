@@ -1,0 +1,88 @@
+diff --git a/libarchive/archive_read.c b/libarchive/archive_read.c
+index 8f913c8e1a3ac418155311af97ae8397d75ba011..21078cc4b5b7ee386e8c83b91e1883a48df8d22f 100644
+--- a/libarchive/archive_read.c
++++ b/libarchive/archive_read.c
+@@ -527,8 +527,25 @@ archive_read_open1(struct archive *_a)
+ 
+ 	a->archive.state = ARCHIVE_STATE_HEADER;
+ 
+-	/* Ensure libarchive starts from the first node in a multivolume set */
+-	client_switch_proxy(a->filter, 0);
++	/*
++	 * Ensure libarchive starts from the first node in a multivolume
++	 * set.  Format bidding may have switched to a later volume, and
++	 * switching back releases the client buffer of that volume.  Any
++	 * data the bottom filter still holds from it must be discarded;
++	 * the reader fetches it again from the freshly opened volume.
++	 */
++	if (a->client.cursor != 0) {
++		client_switch_proxy(a->filter, 0);
++		f = a->filter;
++		while (f->upstream != NULL)
++			f = f->upstream;
++		f->avail = 0;
++		f->next = f->buffer;
++		f->client_avail = 0;
++		f->client_total = 0;
++		f->client_next = f->client_buff = NULL;
++		f->end_of_file = 0;
++	}
+ 	return (e);
+ }
+ 
+diff --git a/libarchive/archive_read_open_filename.c b/libarchive/archive_read_open_filename.c
+index 91f64b694a0cba345b8a03aa604598dc9bfe4d77..a39668a31b35063f81f38927f850da7e52fee600 100644
+--- a/libarchive/archive_read_open_filename.c
++++ b/libarchive/archive_read_open_filename.c
+@@ -96,6 +96,21 @@ static int64_t	file_seek(struct archive *, void *, int64_t request, int);
+ static int64_t	file_skip(struct archive *, void *, int64_t request);
+ static int64_t	file_skip_lseek(struct archive *, void *, int64_t request);
+ 
++static struct read_file_data *
++read_file_data_new(size_t name_len, size_t block_size)
++{
++	struct read_file_data *mine;
++
++	mine = calloc(1, sizeof(*mine) + name_len);
++	if (mine == NULL)
++		return (NULL);
++	mine->block_size = block_size;
++	mine->fd = -1;
++	mine->buffer = NULL;
++	mine->st_mode = mine->use_lseek = 0;
++	return (mine);
++}
++
+ int
+ archive_read_open_file(struct archive *a, const char *filename,
+     size_t block_size)
+@@ -129,14 +144,10 @@ archive_read_open_filenames(struct archive *a, const char **filenames,
+ 		if (filename == NULL)
+ 			filename = "";
+ 		len = strlen(filename);
+-		mine = calloc(1, sizeof(*mine) + len);
++		mine = read_file_data_new(len, block_size);
+ 		if (mine == NULL)
+ 			goto no_memory;
+ 		memcpy(mine->filename.m, filename, len + 1);
+-		mine->block_size = block_size;
+-		mine->fd = -1;
+-		mine->buffer = NULL;
+-		mine->st_mode = mine->use_lseek = 0;
+ 		if (filename == NULL || filename[0] == '\0') {
+ 			mine->filename_type = FNT_STDIN;
+ 		} else
+@@ -183,12 +194,9 @@ archive_read_open_filenames_w(struct archive *a, const wchar_t **wfilenames,
+ 	{
+ 		if (wfilename == NULL)
+ 			wfilename = L"";
+-		mine = calloc(1,
+-			sizeof(*mine) + wcslen(wfilename) * MB_LEN_MAX);
++		mine = read_file_data_new(wcslen(wfilename), block_size);
+ 		if (mine == NULL)
+ 			goto no_memory;
+-		mine->block_size = block_size;
+-		mine->fd = -1;
+ 
+ 		if (wfilename == NULL || wfilename[0] == L'\0') {
+ 			mine->filename_type = FNT_STDIN;

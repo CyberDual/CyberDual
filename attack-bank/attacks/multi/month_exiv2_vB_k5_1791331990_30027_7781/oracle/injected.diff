@@ -1,0 +1,22 @@
+diff --git a/src/tiffvisitor_int.cpp b/src/tiffvisitor_int.cpp
+index de668f4..386b6ec 100644
+--- a/src/tiffvisitor_int.cpp
++++ b/src/tiffvisitor_int.cpp
+@@ -1270,7 +1270,7 @@ void TiffReader::readTiffEntry(TiffEntryBase* object) {
+     size_t size = typeSize * count;
+     size_t offset = getULong(p, byteOrder());
+     byte* pData = p;
+-    if (size > 4 && Safe::add<size_t>(baseOffset(), offset) >= size_) {
++    if (size > 4 && baseOffset() >= size_ - offset) {
+       // #1143
+       if (object->tag() == 0x2001 && std::string(groupName(object->group())) == "Sony1") {
+         // This tag is Exif.Sony1.PreviewImage, which refers to a preview image which is
+@@ -1298,7 +1298,7 @@ void TiffReader::readTiffEntry(TiffEntryBase* object) {
+     if (size > 4) {
+       // setting pData to pData_ + baseOffset() + offset can result in pData pointing to invalid memory,
+       // as offset can be arbitrarily large
+-      if (Safe::add<size_t>(baseOffset(), offset) > static_cast<size_t>(pLast_ - pData_)) {
++      if (baseOffset() > static_cast<size_t>(pLast_ - pData_) - offset) {
+         throw Error(ErrorCode::kerCorruptedMetadata);
+       }
+       pData = const_cast<byte*>(pData_) + baseOffset() + offset;

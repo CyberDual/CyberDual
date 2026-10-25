@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "75b472cf0e8b790d60d485d5b2332a957beaa2d7",
+  "parent_sha": "75b472cf0e8b790d60d485d5b2332a957beaa2d7",
+  "project": "libssh2",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/libssh2/libssh2",
+  "repo_url": "https://github.com/libssh2/libssh2",
+  "source": "reselect",
+  "target": "libssh2",
+  "task": "Feature: implement the new public API libssh2_channel_has_exit_status() reporting whether the peer delivered an exit-status for the channel; core impl in src/channel.c + exit-status tracking in src/packet.c, documented behaviour with a dedicated held-out channel test (tests/test_exit_status.c).",
+  "task_iid": "libssh2__channel_has_exit_status_api",
+  "vuln_desc": "Feature: implement the new public API libssh2_channel_has_exit_status() reporting whether the peer delivered an exit-status for the channel; core impl in src/channel.c + exit-status tracking in src/packet.c, documented behaviour with a dedicated held-out channel test (tests/test_exit_status.c)."
+}

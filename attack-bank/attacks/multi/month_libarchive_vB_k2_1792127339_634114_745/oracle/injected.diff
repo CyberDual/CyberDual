@@ -1,0 +1,123 @@
+diff --git a/libarchive/archive_read_support_format_ar.c b/libarchive/archive_read_support_format_ar.c
+index 2445e7b..d55fbe4 100644
+--- a/libarchive/archive_read_support_format_ar.c
++++ b/libarchive/archive_read_support_format_ar.c
+@@ -60,6 +60,9 @@ struct ar {
+ 	int64_t	 entry_padding;
+ 	char	*strtab;
+ 	size_t	 strtab_size;
++	/* Bytes actually copied into strtab. The logical size may
++	 * count a pad that was not stored. */
++	size_t	 strtab_alloc;
+ 	char	 read_global_header;
+ };
+ 
+@@ -310,7 +313,21 @@ _ar_read_header(struct archive_read *a, struct archive_entry *entry,
+ 			return (ARCHIVE_FATAL);
+ 
+ 		/* Parse the filename table. */
+-		return (ar_parse_gnu_filename_table(a));
++		{
++			int r;
++
++			r = ar_parse_gnu_filename_table(a);
++			/*
++			 * Even-sized tables are padded by two bytes
++			 * that are not part of the copied image.
++			 * Publish that length; long-name lookup
++			 * clamps back to the image.
++			 */
++			if (r == ARCHIVE_OK && ar->strtab_size >= 2 &&
++			    (ar->strtab_size & 1) == 0)
++				ar->strtab_size += 2;
++			return (r);
++		}
+ 	}
+ 
+ 	/*
+@@ -320,13 +337,47 @@ _ar_read_header(struct archive_read *a, struct archive_entry *entry,
+ 	 * by "/9xyz" XXX
+ 	 */
+ 	if (filename[0] == '/' && filename[1] >= '0' && filename[1] <= '9') {
++		size_t limit;
++
+ 		number = ar_atol10(h + AR_name_offset + 1, AR_name_size - 1);
++		/* Clamp long-name offsets to the copied image. */
++		limit = ar->strtab_size;
++		/*
++		 * An even logical length counts the two pad bytes
++		 * that were not copied into the image.
++		 */
++		if (limit >= 2 && (limit & 1) == 0)
++			limit -= 2;
++		if (ar->strtab_alloc > 0 && ar->strtab_alloc < limit)
++			limit = ar->strtab_alloc;
++		/* A Windows table keeps its pad, so the tail after
++		 * the last terminator is not a name. */
++		if (ar->strtab != NULL && limit > 0 &&
++		    ar->strtab[limit - 1] != '\0') {
++			size_t end = limit;
++
++			while (end > 0 && ar->strtab[end - 1] != '\0')
++				end--;
++			limit = end;
++		}
+ 		/* Fail if we can't look up the real name. */
+-		if (ar->strtab == NULL || number >= ar->strtab_size) {
++		if (ar->strtab == NULL || number >= limit) {
+ 			archive_set_error(&a->archive, EINVAL,
+ 			    "Can't find long filename for GNU/SVR4 archive entry");
+ 			return (ARCHIVE_FATAL);
+ 		}
++		/* Offset landed on a terminator of an extended table:
++		 * the name is the pad, which is empty. */
++		if (ar->strtab_alloc > 0 &&
++		    ar->strtab_size > ar->strtab_alloc &&
++		    (size_t)number < ar->strtab_alloc &&
++		    ar->strtab[(size_t)number] == '\0')
++			number = ar->strtab_alloc - 1;
++		/* A separator is not a name. The tail of the table is
++		 * empty when the image is terminated. */
++		if ((size_t)number < ar->strtab_size &&
++		    ar->strtab[(size_t)number] == '\0')
++			number = ar->strtab_size - 1;
+ 
+ 		archive_entry_copy_pathname(entry, &ar->strtab[(size_t)number]);
+ 		return (ARCHIVE_OK);
+@@ -528,13 +579,19 @@ ar_parse_gnu_filename_table(struct archive_read *a)
+ 	struct ar *ar = a->format->data;
+ 	char *p;
+ 	size_t size;
++	int windows = 0;
+ 
+ 	size = ar->strtab_size;
++	/* Copied image length, before any logical pad is counted. */
++	if (ar->strtab_alloc == 0)
++		ar->strtab_alloc = size;
+ 
+ 	for (p = ar->strtab; p < ar->strtab + size - 1; ++p) {
+ 		/* Normalize backslash, even before separator check. */
+-		if (*p == '\\')
++		if (*p == '\\') {
++			windows = 1;
+ 			*p = '/';
++		}
+ 		if (*p == '/' && *(p + 1) == '\n') {
+ 			*p++ = '\0';
+ 			*p = '\0';
+@@ -548,8 +605,13 @@ ar_parse_gnu_filename_table(struct archive_read *a)
+ 	if (p != ar->strtab + size && *p != '\n' && *p != '`' && *p != '\0')
+ 		goto bad_string_table;
+ 
+-	/* Enforce zero termination. */
+-	ar->strtab[size - 1] = '\0';
++	/*
++	 * GNU ar overwrites the pad so the image is terminated.
++	 * Windows tables are already NUL-separated; overwriting
++	 * the pad would replace a byte lib.exe keeps.
++	 */
++	if (!windows || memchr(ar->strtab, '\0', size) == NULL)
++		ar->strtab[size - 1] = '\0';
+ 
+ 	return (ARCHIVE_OK);
+ 

@@ -1,0 +1,114 @@
+diff --git a/libarchive/archive_read_support_format_zip.c b/libarchive/archive_read_support_format_zip.c
+index 7fa0f52bec6c5503c669f4b8211e95c63a7ed6ad..ae8d9f8f32b262538f1a4fce9ab4c5d896f2681c 100644
+--- a/libarchive/archive_read_support_format_zip.c
++++ b/libarchive/archive_read_support_format_zip.c
+@@ -97,6 +97,10 @@ struct zip_entry {
+ 	time_t			mtime;
+ 	time_t			atime;
+ 	time_t			ctime;
++	time_t			btime;
++	uint32_t		mtime_ns;
++	uint32_t		atime_ns;
++	uint32_t		btime_ns;
+ 	uint32_t		crc32;
+ 	uint16_t		mode;
+ 	uint16_t		zip_flags; /* From GP Flags Field */
+@@ -136,6 +140,8 @@ struct trad_enc_ctx {
+ /* Bits used in flags. */
+ #define LA_USED_ZIP64	(1 << 0)
+ #define LA_FROM_CENTRAL_DIRECTORY (1 << 1)
++#define LA_MTIME_FROM_EXTRA (1 << 2)
++#define LA_NTFS_BTIME (1 << 3)
+ 
+ /*
+  * See "WinZip - AES Encryption Information"
+@@ -776,6 +782,62 @@ process_extra(struct archive_read *a, struct archive_entry *entry,
+ 			 * on which file starts, but we don't handle
+ 			 * multi-volume Zip files. */
+ 			break;
++		case 0x000a:
++		{
++			unsigned sub_offset = offset;
++			unsigned sub_remaining = datasize;
++
++			if (sub_remaining < 4)
++				break;
++			sub_offset += 4;
++			sub_remaining -= 4;
++
++			while (sub_remaining >= 4) {
++				unsigned short tag =
++				    archive_le16dec(p + sub_offset);
++				unsigned short size =
++				    archive_le16dec(p + sub_offset + 2);
++				uint64_t raw;
++				int64_t secs;
++				uint32_t nsecs;
++
++				sub_offset += 4;
++				sub_remaining -= 4;
++				if (size > sub_remaining)
++					break;
++				if (tag == 1 && size == 24) {
++					raw = archive_le64dec(p + sub_offset);
++					if (raw != 0) {
++						__archive_ntfs_to_unix(raw,
++						    &secs, &nsecs);
++						zip_entry->mtime = (time_t)secs;
++						zip_entry->mtime_ns = nsecs;
++						zip_entry->flags |=
++						    LA_MTIME_FROM_EXTRA;
++					}
++
++					raw = archive_le64dec(p + sub_offset + 8);
++					if (raw != 0) {
++						__archive_ntfs_to_unix(raw,
++						    &secs, &nsecs);
++						zip_entry->atime = (time_t)secs;
++						zip_entry->atime_ns = nsecs;
++					}
++
++					raw = archive_le64dec(p + sub_offset + 17);
++					if (raw != 0) {
++						__archive_ntfs_to_unix(raw,
++						    &secs, &nsecs);
++						zip_entry->btime = (time_t)secs;
++						zip_entry->btime_ns = nsecs;
++						zip_entry->flags |= LA_NTFS_BTIME;
++					}
++				}
++				sub_offset += size;
++				sub_remaining -= size;
++			}
++			break;
++		}
+ 		case 0x000d:
+ 			/* PKWARE Unix Extra Field fixed metadata. */
+ 			if (datasize >= 12) {
+@@ -1186,7 +1248,10 @@ zip_read_local_file_header(struct archive_read *a, struct archive_entry *entry,
+ 	}
+ 	zip->init_decryption = (zip_entry->zip_flags & ZIP_ENCRYPTED);
+ 	zip_entry->compression = (char)archive_le16dec(p + 8);
+-	zip_entry->mtime = __archive_dos_to_unix(archive_le32dec(p + 10));
++	if (!(zip_entry->flags & LA_MTIME_FROM_EXTRA)) {
++		zip_entry->mtime = __archive_dos_to_unix(archive_le32dec(p + 10));
++		zip_entry->mtime_ns = 0;
++	}
+ 	zip_entry->crc32 = archive_le32dec(p + 14);
+ 	if (zip_entry->zip_flags & ZIP_LENGTH_AT_END)
+ 		zip_entry->decdat = p[11];
+@@ -1381,9 +1446,12 @@ zip_read_local_file_header(struct archive_read *a, struct archive_entry *entry,
+ 	archive_entry_set_mode(entry, zip_entry->mode);
+ 	archive_entry_set_uid(entry, zip_entry->uid);
+ 	archive_entry_set_gid(entry, zip_entry->gid);
+-	archive_entry_set_mtime(entry, zip_entry->mtime, 0);
++	archive_entry_set_mtime(entry, zip_entry->mtime, zip_entry->mtime_ns);
+ 	archive_entry_set_ctime(entry, zip_entry->ctime, 0);
+-	archive_entry_set_atime(entry, zip_entry->atime, 0);
++	archive_entry_set_atime(entry, zip_entry->atime, zip_entry->atime_ns);
++	if (zip_entry->flags & LA_NTFS_BTIME)
++		archive_entry_set_birthtime(entry, zip_entry->btime,
++		    zip_entry->btime_ns);
+ 
+ 	if ((zip->entry->mode & AE_IFMT) == AE_IFLNK) {
+ 		size_t linkname_length;

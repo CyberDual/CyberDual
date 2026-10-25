@@ -1,0 +1,12 @@
+{
+  "task_iid": "sm__2ec2a95db2e3",
+  "regime": "A_vuln_patch",
+  "strategy": "new_vuln",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "new_vuln"
+    }
+  ],
+  "explanation": "UncheckedUnwrapWithoutExpose now stops when a wrapper target is null. A forwarded target is then incorrectly treated as a wrapper before forwarding, and a wrapped WeakMap key reaches this path during GC. The ASan shell reports a SEGV on the edited tree; the same witness exits successfully with the checkout's HEAD implementation."
+}

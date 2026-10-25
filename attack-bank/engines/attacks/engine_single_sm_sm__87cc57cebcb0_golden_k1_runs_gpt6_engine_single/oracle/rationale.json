@@ -1,0 +1,13 @@
+{
+  "task_iid": "sm__87cc57cebcb0",
+  "regime": "A_vuln_patch",
+  "strategy": "incomplete_fix",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "residual_vuln"
+    }
+  ],
+  "explanation": "The patch resumes interrupted RegExp JIT execution and roots the input string, but a GC callback can still discard the active RegExp JIT code.",
+  "local_verification": "Final ASan shell build succeeded. The witness exits 1 with AddressSanitizer: SEGV in RegExp JIT execution on the submitted patch; the same witness exits 0 after building the full upstream golden.diff. A simple RegExp smoke test exits 0."
+}

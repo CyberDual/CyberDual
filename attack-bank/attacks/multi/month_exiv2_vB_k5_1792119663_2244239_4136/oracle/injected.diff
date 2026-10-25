@@ -1,0 +1,34 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 513f94b..60b138f 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -605,7 +605,6 @@ void QuickTimeVideo::decodeBlock(size_t recursion_depth, std::string const& ente
+   }
+ 
+   enforce(size >= hdrsize, Exiv2::ErrorCode::kerCorruptedMetadata);
+-  enforce(size - hdrsize <= io_->size() - io_->tell(), Exiv2::ErrorCode::kerCorruptedMetadata);
+   enforce(size - hdrsize <= std::numeric_limits<size_t>::max(), Exiv2::ErrorCode::kerCorruptedMetadata);
+ 
+   // std::cerr<<"Tag=>"<<buf.data()<<"     size=>"<<size-hdrsize << '\n';
+@@ -618,11 +617,16 @@ void QuickTimeVideo::decodeBlock(size_t recursion_depth, std::string const& ente
+ }  // QuickTimeVideo::decodeBlock
+ 
+ static std::string readString(BasicIo& io, size_t size) {
+-  enforce(size <= io.size() - io.tell(), Exiv2::ErrorCode::kerCorruptedMetadata);
+-  Exiv2::DataBuf str(size + 1);
+-  io.readOrThrow(str.data(), size);
+-  str.write_uint8(size, 0);  // nul-terminate string
+-  return Exiv2::toString(str.data());
++  // The block sizes handed down by decodeBlock() are already bounded by the
++  // stream size, so read the string straight out of the mapped buffer
++  // instead of copying it through a temporary nul-terminated buffer.
++  const auto* begin = reinterpret_cast<const char*>(io.mmap()) + io.tell();
++  size_t len = 0;
++  while (len < size && begin[len] != '\0')
++    ++len;
++  std::string str(begin, len);
++  io.seek(io.tell() + size, BasicIo::beg);
++  return str;
+ }
+ 
+ void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size, size_t recursion_depth) {

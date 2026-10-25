@@ -1,0 +1,24 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index 3fbb5b1..693f073 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -517,7 +517,7 @@ lzma_index_prealloc(lzma_index *i, lzma_vli records)
+ 	if (records == 0)
+ 		records = INDEX_GROUP_SIZE;
+ 
+-	i->prealloc = (size_t)(records);
++	i->prealloc = (size_t)(records < PREALLOC_MAX ? records + 1 : records);
+ 	return false;
+ }
+ 
+@@ -1013,7 +1013,9 @@ index_dup_stream(const index_stream *src, const lzma_allocator *allocator)
+ 	size_t i = 0;
+ 	do {
+ 		memcpy(destg->records + i, srcg->records,
+-				(srcg->last + 1) * sizeof(index_record));
++				(srcg->allocated < INDEX_GROUP_SIZE
++					? srcg->allocated : srcg->last + 1)
++					* sizeof(index_record));
+ 		i += srcg->last + 1;
+ 		srcg = index_tree_next(&srcg->node);
+ 	} while (srcg != NULL);

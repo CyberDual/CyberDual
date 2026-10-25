@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "082bce59b73b6bcfcdd58438e3cab8cd739141ff",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\nindex d7903cb..ecf2e0c 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4859,8 +4859,6 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n                     break;\n             }\n         }\n-    } else if ( rank > 10 ) {\n-        err = MATIO_E_BAD_ARGUMENT;\n     } else {\n         int i, j, N, I = 0;\n         int inc[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};\n@@ -5054,6 +5052,9 @@ int\n Mat_VarReadData5(mat_t *mat, matvar_t *matvar, void *data, const int *start, const int *stride,\n                  const int *edge)\n {\n+    if ( matvar->rank > 10 )\n+        return MATIO_E_BAD_ARGUMENT;\n+\n     int err = MATIO_E_NO_ERROR, real_bytes = 0;\n     mat_uint32_t tag[2] = {0, 0};\n #if HAVE_ZLIB\n"
+    },
+    {
+      "sha": "60b36171b91f1e4d462c3bcd3eda4f021576f832",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\nindex 1c86d8b..3a9ad73 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4735,7 +4735,7 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n          (class_type == MAT_C_UINT8 && data_type == MAT_T_UINT8) )\n         same_type = 1;\n \n-    if ( rank < 1 || rank > 10 )\n+    if ( rank < 1 )\n         return MATIO_E_BAD_ARGUMENT;\n     for ( i = 0; i < rank; i++ ) {\n         if ( start[i] < 0 || stride[i] < 1 || edge[i] < 1 || (size_t)start[i] >= dims[i] ||\n@@ -5087,6 +5087,9 @@ Mat_VarReadData5(mat_t *mat, matvar_t *matvar, void *data, const int *start, con\n         }\n #endif\n     }\n+    if ( matvar->rank > 10 )\n+        return MATIO_E_BAD_ARGUMENT;\n+\n     if ( real_bytes % 8 )\n         real_bytes += (8 - (real_bytes % 8));\n \n"
+    }
+  ],
+  "coupling": "The first edited commit relocates the rank upper bound from GetDataSlab to the Mat_VarReadData5 entry point. The second edited commit removes the now-redundant helper-side upper bound while moving the entry bound after the compressed preloaded-data fast path as part of the rank-N indexing fix. Either edit alone leaves rank 11 rejected: the first-edited tree uses the entry guard, and the second edit atop the original first commit still retains the original helper guard. Only their composition lets a compressed preloaded rank-11 field return into GetDataSlab before the relocated entry check, where the rank loop writes past the ten-element dimp stack array. A correct fix must restore a bound on the preloaded fast path across both changes; restoring either original commit removes the reachable overflow.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Mat_Open -> Mat_VarReadInfo -> Mat_VarGetStructFieldByName -> Mat_VarReadData",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

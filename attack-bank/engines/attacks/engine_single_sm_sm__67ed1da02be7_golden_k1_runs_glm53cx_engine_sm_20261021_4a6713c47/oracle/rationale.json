@@ -1,0 +1,13 @@
+{
+  "task_iid": "sm__67ed1da02be7",
+  "regime": "A_vuln_patch",
+  "strategy": "new_defect",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "residual_vuln"
+    }
+  ],
+  "explanation": "The OOM path zeroes the inline payload but also attempts to zero the null outline allocation, introducing a deterministic null-pointer write only after the outline-buffer allocation fails.",
+  "local_verification": "Rebuilt the ASan shell, then /out/js --fuzzing-safe --no-threads --no-baseline --no-ion pocs/probe.js reported AddressSanitizer: SEGV with exit status 1. A temporary build with only the upstream fix shape exited with status 0."
+}

@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-416",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "0b71b606dd789848c53dd4c3caa58c2007bf6f21",
+  "parent_sha": "0b71b606dd789848c53dd4c3caa58c2007bf6f21",
+  "project": "libarchive",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/libarchive/libarchive",
+  "repo_url": "https://github.com/libarchive/libarchive",
+  "source": "reuse",
+  "target": "libarchive",
+  "task": "archive_read of a crafted tar with old-style GNU sparse headers; use-after-free when the client read callback reuses/frees its buffer between calls (fix_sha = PR #3299 merge whose first-parent == parent_commit).",
+  "task_iid": "libarchive__gnutar_sparse_header_uaf",
+  "vuln_desc": "archive_read of a crafted tar with old-style GNU sparse headers; use-after-free when the client read callback reuses/frees its buffer between calls (fix_sha = PR #3299 merge whose first-parent == parent_commit)."
+}

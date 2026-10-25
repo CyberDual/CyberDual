@@ -1,0 +1,25 @@
+diff --git a/js/src/intgemm/IntegerGemmIntrinsic.cpp b/js/src/intgemm/IntegerGemmIntrinsic.cpp
+index 94f780009e..883fb7801d 100644
+--- a/js/src/intgemm/IntegerGemmIntrinsic.cpp
++++ b/js/src/intgemm/IntegerGemmIntrinsic.cpp
+@@ -447,7 +447,19 @@ int32_t js::intgemm::IntrI8SelectColumnsOfB(wasm::Instance* instance,
+                                     sizeof(int8_t)) ||
+       !CheckMatrixBound(colIndexList, sizeColIndexList, wasmBufferSize,
+                         sizeof(uint32_t)) ||
+-      !CheckMatrixBound(output, sizeOutput, wasmBufferSize, sizeof(int8_t))) {
++      !CheckMatrixBound(output, sizeColIndexList, wasmBufferSize,
++                        sizeof(int8_t))) {
++    return -1;
++  }
++
++  auto overlaps = [](uint32_t first, uint64_t firstSize, uint32_t second,
++                     uint64_t secondSize) {
++    return uint64_t(first) < uint64_t(second) + secondSize &&
++           uint64_t(second) < uint64_t(first) + firstSize;
++  };
++  if (overlaps(output, sizeOutput, inputMatrixBPrepared, sizeB) ||
++      overlaps(output, sizeOutput, colIndexList,
++               uint64_t(sizeColIndexList) * sizeof(uint32_t))) {
+     return -1;
+   }
+ 

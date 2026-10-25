@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "07076dfc669686c4b012d7ff12a0866095549231",
+      "edited_message": "rar5: correct extra-field length checks\n\nTwo corrections to RAR5 extra-field parsing:\n\n - In process_head_file_extra(), reject an extra-field size that\n   exceeds the remaining extra-field data before subtracting it, so\n   the running counter can't underflow.\n\n - In parse_file_extra_redir(), the link target is copied into a\n   MAX_NAME_IN_BYTES buffer, but its length was rejected once it grew\n   past MAX_NAME_IN_CHARS.  Compare against the buffer's byte capacity\n   instead, so valid long link targets are no longer refused.\n\n(cherry picked from commit 36a093b7e475f9260d1eddceca7985f7824ffee6)",
+      "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\nindex 708cf39..4cfbd0e 100644\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -1485,7 +1485,7 @@ static int parse_file_extra_redir(struct archive_read* a,\n \t\treturn ARCHIVE_EOF;\n \t*extra_data_size -= (int64_t)(target_size + varint_len);\n \n-\tif(target_size > (MAX_NAME_IN_CHARS - 1)) {\n+\tif(target_size > (MAX_NAME_IN_BYTES - 1)) {\n \t\tarchive_set_error(&a->archive, ARCHIVE_ERRNO_FILE_FORMAT,\n \t\t    \"Link target is too long\");\n \t\treturn ARCHIVE_FATAL;\n"
+    },
+    {
+      "sha": "e8a2270f29d4a8b437111dd2d5b541133cbe03b2",
+      "edited_message": "rar5: Adjust read_var/read_var_sized return values\n\nUSE ARCHIVE_OK, ARCHIVE_EOF, and ARCHIVE_FATAL for improved error\nhandling. Integer overflows must not be considered \"end of file\".\n\nHandle different error message on 32 bit systems in tests.\n\nWhile here, size the redirect target buffer to MAX_NAME_IN_CHARS so it\nmatches the enforced filename character limit instead of over-reserving\nstack.\n\nSigned-off-by: Tobias Stoeckmann <tobias@stoeckmann.org>\n(cherry picked from commit 07599ddf8d50830a375b5a3f927c4020fcb4036d)",
+      "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\nindex 42903f2..6eb1a8c 100644\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -1507,7 +1507,7 @@ static int parse_file_extra_redir(struct archive_read* a,\n \tuint64_t value_size = 0;\n \tsize_t varint_len = 0;\n \tsize_t target_size = 0;\n-\tchar target_utf8_buf[MAX_NAME_IN_BYTES];\n+\tchar target_utf8_buf[MAX_NAME_IN_CHARS];\n \tconst uint8_t* p;\n \tint r;\n \n"
+    }
+  ],
+  "coupling": "The defect is a stack-buffer overflow of target_utf8_buf in parse_file_extra_redir() (archive_read_support_format_rar5.c), triggered by the memcpy(target_utf8_buf, p, target_size). Its reachability is split across the two edited commits, and each diff is individually consistent and benign:\n\n- Commit 07076df (earlier) only CHANGES THE LENGTH CHECK from `target_size > MAX_NAME_IN_CHARS - 1` to `target_size > MAX_NAME_IN_BYTES - 1`. At that point in history the destination buffer is still declared `char target_utf8_buf[MAX_NAME_IN_BYTES]` (8192 bytes), so the widened limit exactly matches the buffer capacity -- the diff reads as a correct relaxation that stops rejecting valid long link targets, and copies of up to 8191 bytes still fit.\n\n- Commit e8a2270 (later) only CHANGES THE BUFFER declaration from `MAX_NAME_IN_BYTES` (8192) to `MAX_NAME_IN_CHARS` (2048). Read on its own, sizing a 'utf8 name' buffer to the filename character limit looks like a correct, stack-saving tidy-up; the length-check line is not part of this diff, and the character limit (MAX_NAME_IN_CHARS) is the constant the check historically used, so the change appears to preserve the buffer>=limit invariant.\n\nNeither commit is wrong in isolation: reverting either one restores a matching (limit, buffer) pair and the overflow disappears (verified: reverting only the check -> clean ARCHIVE_FATAL rejection; reverting only the buffer -> 4000-byte target fits the 8192-byte buffer, clean). The bug exists only because 07076df widened the accepted length on the assumption the buffer stayed MAX_NAME_IN_BYTES, while e8a2270 shrank the buffer on the assumption the limit stayed MAX_NAME_IN_CHARS. A correct fix must reconcile BOTH commits (recognise that the length check and the buffer size now reference different constants) -- fixing either single diff in isolation leaves a (limit, buffer) pair that one reviewer would consider internally correct, which is why no per-commit review catches it. MAX_NAME_IN_BYTES is defined as 4 * MAX_NAME_IN_CHARS, so the composed window admits targets up to 8191 bytes into a 2048-byte stack buffer.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "driver",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+diff --git a/src/dec/alpha_dec.c b/src/dec/alpha_dec.c
+index 9fb1448..db97190 100644
+--- a/src/dec/alpha_dec.c
++++ b/src/dec/alpha_dec.c
+@@ -251,7 +251,7 @@ WEBP_NODISCARD const uint8_t* VP8DecompressAlphaRows(VP8Decoder* const dec,
+                     "Alpha decoder initialization failed.");
+         return NULL;
+       }
+-      dec->alph_dec->num_output_rows = WebPGetAlphaWindowRows(dec, io);
++      dec->alph_dec->num_output_rows = dec->alpha_plane_rows;
+       {
+         const VP8StatusCode status =
+             ALPHInit(dec->alph_dec, dec->alpha_data, dec->alpha_data_size, io,
+diff --git a/src/dec/frame_dec.c b/src/dec/frame_dec.c
+index 2b3c99b..d74dc64 100644
+--- a/src/dec/frame_dec.c
++++ b/src/dec/frame_dec.c
+@@ -798,6 +798,7 @@ WEBP_NODISCARD static int AllocateMemory(VP8Decoder* const dec,
+ 
+   // alpha plane
+   dec->alpha_plane = alpha_size ? mem : NULL;
++  dec->alpha_plane_rows = (dec->alpha_data != NULL) ? dec->pic_hdr.height : 0;
+   mem += alpha_size;
+   assert(mem <= (uint8_t*)dec->mem + dec->mem_size);
+ 
+diff --git a/src/dec/vp8i_dec.h b/src/dec/vp8i_dec.h
+index 11274fb..0a50fed 100644
+--- a/src/dec/vp8i_dec.h
++++ b/src/dec/vp8i_dec.h
+@@ -268,6 +268,7 @@ struct VP8Decoder {
+   size_t alpha_data_size;
+   int is_alpha_decoded;  // true if alpha_data is decoded in alpha_plane
+   uint8_t* alpha_plane;  // output. Persistent, contains the whole data.
++  int alpha_plane_rows;  // number of rows allocated in alpha_plane
+   int alpha_dithering;   // derived from decoding options (0=off, 100=full)
+ };
+ 

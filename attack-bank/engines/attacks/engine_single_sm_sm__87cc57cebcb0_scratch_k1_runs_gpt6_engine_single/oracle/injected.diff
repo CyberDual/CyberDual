@@ -1,0 +1,106 @@
+diff --git a/js/src/irregexp/RegExpAPI.cpp b/js/src/irregexp/RegExpAPI.cpp
+index cb0f70e111..18b05b9b16 100644
+--- a/js/src/irregexp/RegExpAPI.cpp
++++ b/js/src/irregexp/RegExpAPI.cpp
+@@ -923,7 +923,12 @@ RegExpRunStatus Execute(JSContext* cx, MutableHandleRegExpShared re,
+   irregexp::RegExpStackScope stackScope(cx->isolate);
+ 
+   if (isCompiled) {
+-    return ExecuteRaw(jitCode, input, startIndex, matches);
++    if (!re->enterJitCodeExecution(cx, latin1)) {
++      return RegExpRunStatus::Error;
++    }
++    RegExpRunStatus status = ExecuteRaw(jitCode, input, startIndex, matches);
++    re->leaveJitCodeExecution(latin1);
++    return status;
+   }
+ 
+   return Interpret(cx, re, input, startIndex, matches);
+diff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp
+index 7ee71d3eca..acd6d02270 100644
+--- a/js/src/vm/RegExpObject.cpp
++++ b/js/src/vm/RegExpObject.cpp
+@@ -21,6 +21,7 @@
+ #include "js/Printer.h"               // js::GenericPrinter
+ #include "js/RegExp.h"
+ #include "js/RegExpFlags.h"  // JS::RegExpFlags
++#include "js/Utility.h"
+ #include "util/StringBuilder.h"
+ #include "util/Unicode.h"
+ #include "vm/JSONPrinter.h"  // js::JSONPrinter
+@@ -656,15 +657,42 @@ void RegExpShared::traceChildren(JSTracer* trc) {
+ }
+ 
+ void RegExpShared::discardJitCode() {
+-  for (auto& comp : compilationArray) {
+-    comp.jitCode = nullptr;
++  bool hasActiveCode = false;
++  for (size_t i = 0; i < 2; i++) {
++    if (!compilationArray[i].jitCode) {
++      continue;
++    }
++    if (activeJitCodeCounts_ && activeJitCodeCounts_[i]) {
++      hasActiveCode = true;
++    } else {
++      compilationArray[i].jitCode = nullptr;
++    }
+   }
+ 
+-  // We can also purge the tables used by JIT code.
+-  tables.clearAndFree();
++  if (!hasActiveCode) {
++    tables.clearAndFree();
++  }
++}
++
++bool RegExpShared::enterJitCodeExecution(JSContext* cx, bool latin1) {
++  if (!activeJitCodeCounts_) {
++    activeJitCodeCounts_ = static_cast<uint32_t*>(js_calloc(sizeof(uint32_t)));
++    if (!activeJitCodeCounts_) {
++      ReportOutOfMemory(cx);
++      return false;
++    }
++  }
++  activeJitCodeCounts_[CompilationIndex(latin1)]++;
++  return true;
++}
++
++void RegExpShared::leaveJitCodeExecution(bool latin1) {
++  MOZ_ASSERT(activeJitCodeCounts_[CompilationIndex(latin1)]);
++  activeJitCodeCounts_[CompilationIndex(latin1)]--;
+ }
+ 
+ void RegExpShared::finalize(JS::GCContext* gcx) {
++  js_free(activeJitCodeCounts_);
+   for (auto& comp : compilationArray) {
+     if (comp.byteCode) {
+       size_t length = comp.byteCodeLength();
+@@ -967,6 +995,7 @@ size_t RegExpShared::sizeOfExcludingThis(mozilla::MallocSizeOf mallocSizeOf) {
+   }
+ 
+   n += tables.sizeOfExcludingThis(mallocSizeOf);
++  n += mallocSizeOf(activeJitCodeCounts_);
+   for (size_t i = 0; i < tables.length(); i++) {
+     n += mallocSizeOf(tables[i].get());
+   }
+diff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h
+index 62b64350cb..4d9106b62f 100644
+--- a/js/src/vm/RegExpShared.h
++++ b/js/src/vm/RegExpShared.h
+@@ -141,6 +141,7 @@ class RegExpShared
+ 
+   // Tables referenced by JIT code.
+   JitCodeTables tables;
++  uint32_t* activeJitCodeCounts_ = nullptr;
+ 
+   /* Internal functions. */
+   RegExpShared(JSAtom* source, JS::RegExpFlags flags);
+@@ -263,6 +264,8 @@ class RegExpShared
+   bool isCompiled() const { return isCompiled(true) || isCompiled(false); }
+ 
+   void traceChildren(JSTracer* trc);
++  bool enterJitCodeExecution(JSContext* cx, bool latin1);
++  void leaveJitCodeExecution(bool latin1);
+   void discardJitCode();
+   void finalize(JS::GCContext* gcx);
+ 

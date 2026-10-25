@@ -1,0 +1,41 @@
+diff --git a/src/liblzma/common/alone_decoder.c b/src/liblzma/common/alone_decoder.c
+index 174b3b1..8ebbbe8 100644
+--- a/src/liblzma/common/alone_decoder.c
++++ b/src/liblzma/common/alone_decoder.c
+@@ -152,12 +152,8 @@ alone_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 			}
+ 		};
+ 
+-		const lzma_ret ret = lzma_next_filter_init(&coder->next,
+-				allocator, filters);
+-		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->next, allocator);
+-			return ret;
+-		}
++		return_if_error(lzma_next_filter_init(&coder->next,
++				allocator, filters));
+ 
+ 		coder->sequence = SEQ_CODE;
+ 		break;
+diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c
+index 6dc4cef..fb01e5d 100644
+--- a/src/liblzma/lz/lz_decoder.c
++++ b/src/liblzma/lz/lz_decoder.c
+@@ -278,15 +278,14 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 
+ 	// Allocate and initialize the dictionary.
+ 	if (coder->dict.size != alloc_size) {
+-		coder->dict.size = 0;
+ 		lzma_free(coder->dict.buf, allocator);
+ 
+ 		// The LZ_DICT_EXTRA bytes at the end of the buffer aren't
+ 		// included in alloc_size. These extra bytes allow
+ 		// dict_repeat() to read and write more data than requested.
+ 		// Otherwise this extra space is ignored.
+-		coder->dict.buf = lzma_alloc(alloc_size + LZ_DICT_EXTRA,
+-				allocator);
++		const size_t buf_size = alloc_size + LZ_DICT_EXTRA;
++		coder->dict.buf = lzma_alloc(buf_size, allocator);
+ 		if (coder->dict.buf == NULL)
+ 			return LZMA_MEM_ERROR;
+ 

@@ -1,0 +1,31 @@
+diff --git a/lib/parsedate.c b/lib/parsedate.c
+index 3c11d76ad9..f4ffebf69a 100644
+--- a/lib/parsedate.c
++++ b/lib/parsedate.c
+@@ -344,7 +344,7 @@ UNITTEST int checktz(const char *check, size_t len)
+     return -1;
+   if(len == 1) {
+     /* short-cut single letter names */
+-    if((first > 'Z') || (first == 'J'))
++    if(first == 'J')
+       return -1; /* no such tz */
+     return tzone[first - 'A'] * 60;
+   }
+@@ -362,8 +362,6 @@ UNITTEST int checktz(const char *check, size_t len)
+     /* three-letter name */
+     const struct tzinfo *what;
+     struct tzinfo find;
+-    if(first > 'Y')
+-      return -1;
+     find.tz = MKTZ(first, check[1], check[2], 0);
+     what = bsearch(&find, tzthree, CURL_ARRAYSIZE(tzthree),
+                    sizeof(tzthree[0]), tzcompare);
+@@ -374,8 +372,6 @@ UNITTEST int checktz(const char *check, size_t len)
+     /* four-letter name */
+     const struct tzinfo *what;
+     struct tzinfo find;
+-    if(first > 'W')
+-      return -1;
+     find.tz = MKTZ(first, check[1], check[2], check[3]);
+     what = bsearch(&find, tzfoura, CURL_ARRAYSIZE(tzfoura),
+                    sizeof(tzfoura[0]), tzcompare);

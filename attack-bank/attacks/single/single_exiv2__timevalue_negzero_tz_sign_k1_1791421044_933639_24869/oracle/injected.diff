@@ -1,0 +1,51 @@
+diff --git a/src/value.cpp b/src/value.cpp
+index e7546cf3e8526adde8c770a39693c9fd24bcc587..8643e1ffc4fe04652a2892c0bc19ef675928a719 100644
+--- a/src/value.cpp
++++ b/src/value.cpp
+@@ -955,7 +955,9 @@ int TimeValue::read(const std::string& buf) {
+           int minute = std::stoi(format.substr(3));
+           if (minute < 0 || minute > 59)
+             return printWarning();
+-          time_.tzMinute = time_.tzHour < 0 ? -minute : minute;
++          time_.tzMinute = minute;
++        } else {
++          time_.tzMinute = 0;
+         }
+       } else {
+         // Basic format
+@@ -966,8 +968,11 @@ int TimeValue::read(const std::string& buf) {
+         int minute = std::stoi(format.substr(posColon + 1));
+         if (minute < 0 || minute > 59)
+           return printWarning();
+-        time_.tzMinute = time_.tzHour < 0 ? -minute : minute;
++        time_.tzMinute = minute;
+       }
++      const auto* offsetSign = format.substr(0, 1).c_str();
++      if (offsetSign[0] == '-')
++        time_.tzMinute = -time_.tzMinute;
+     }
+   } catch (std::exception&) {
+     // std::stoi might throw an exception if the syntax is invalid.
+diff --git a/unitTests/test_TimeValue.cpp b/unitTests/test_TimeValue.cpp
+index e5f7b6b709f0c8dc2bbaa5f2a9f300565bf14739..710eb0eab6c5db14a39c776e9335b4a56353bf73 100644
+--- a/unitTests/test_TimeValue.cpp
++++ b/unitTests/test_TimeValue.cpp
+@@ -129,6 +129,18 @@ TEST(ATimeValue, canBeReadFromExtendedStringWithTimeZoneDesignatorNegative) {
+   ASSERT_EQ(0, value.getTime().tzMinute);
+ }
+ 
++TEST(ATimeValue, preservesNegativeZeroHourTimeZone) {
++  TimeValue value;
++  ASSERT_EQ(0, value.read("23:55:02-00:30"));
++  ASSERT_EQ(0, value.getTime().tzHour);
++  ASSERT_EQ(-30, value.getTime().tzMinute);
++
++  value = TimeValue();
++  ASSERT_EQ(0, value.read("235502-0030"));
++  ASSERT_EQ(0, value.getTime().tzHour);
++  ASSERT_EQ(-30, value.getTime().tzMinute);
++}
++
+ TEST(ATimeValue, cannotBeReadFromStringWithTimeZoneDesignatorWithoutSymbol) {
+   TimeValue value;
+   const std::string hms("23:55:02?04:04");

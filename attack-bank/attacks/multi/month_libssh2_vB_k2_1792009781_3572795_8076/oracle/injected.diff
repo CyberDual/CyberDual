@@ -1,0 +1,75 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..9334b6d 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -521,14 +521,22 @@ static int knownhost_ipv6_part(const char *host, const char **address,
+         const char *close = strchr(host + 1, ']');
+         const char *port;
+ 
+-        if(!close || close == host + 1 || close[1] != ':' || !close[2])
++        if(!close || close == host + 1)
+             return 0;
+ 
+-        port = close + 2;
+-        while(*port) {
+-            if(*port < '0' || *port > '9')
++        port = close + 1;
++        if(*port) {
++            /* the port suffix is optional, but when present it must be
++               ':' followed by digits only */
++            if(*port != ':' || !port[1])
+                 return 0;
++
+             port++;
++            while(*port) {
++                if(*port < '0' || *port > '9')
++                    return 0;
++                port++;
++            }
+         }
+ 
+         *address = host + 1;
+@@ -544,6 +552,24 @@ static int knownhost_ipv6_part(const char *host, const char **address,
+     return 1;
+ }
+ 
++static int knownhost_port_equal(const char *host, const char *known)
++{
++    int host_port = 0;
++    int known_port = 0;
++
++    /* skip the ':' port separators */
++    host++;
++    known++;
++
++    while(*host >= '0' && *host <= '9')
++        host_port = host_port * 10 + (*host++ - '0');
++
++    while(*known >= '0' && *known <= '9')
++        known_port = known_port * 10 + (*known++ - '0');
++
++    return host_port == known_port && !*host && !*known;
++}
++
+ static int knownhost_plain_match(const char *host, const char *known)
+ {
+     const char *host_address;
+@@ -563,8 +589,16 @@ static int knownhost_plain_match(const char *host, const char *known)
+ 
+     if(!knownhost_ipv6_part(host, &host_address, &host_len, &host_suffix) ||
+        !knownhost_ipv6_part(known, &known_address, &known_len,
+-                            &known_suffix) ||
+-       strcmp(host_suffix, known_suffix))
++                            &known_suffix))
++        return 0;
++
++    if(host[0] == '[') {
++        /* bracketed entries carry ':port' suffixes; compare the ports
++           numerically so that :022 matches :22 */
++        if(!knownhost_port_equal(host_suffix, known_suffix))
++            return 0;
++    }
++    else if(strcmp(host_suffix, known_suffix))
+         return 0;
+ 
+     if(!knownhost_parse_ipv6(host_address, host_len, host_binary) ||

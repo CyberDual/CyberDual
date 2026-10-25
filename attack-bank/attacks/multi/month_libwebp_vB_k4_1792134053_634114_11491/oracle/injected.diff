@@ -1,0 +1,35 @@
+diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c
+index 6ddd55c..4630f9d 100644
+--- a/src/dec/vp8l_dec.c
++++ b/src/dec/vp8l_dec.c
+@@ -1177,7 +1177,10 @@ static int GetMaxDistanceRows(int width) {
+   const int max_plane_dist = 7 * width + 8;
+   const int max_dist =
+       (LZ77_WINDOW_SIZE > max_plane_dist) ? LZ77_WINDOW_SIZE : max_plane_dist;
+-  return (max_dist + width - 1) / width;
++  // max_dist pixels never span more than max_dist / width full rows above the
++  // current one: the leftover (max_dist % width) pixels fall inside the row
++  // currently being written, which the window always retains.
++  return max_dist / width;
+ }
+ 
+ int VP8LGetWindowRows(int width, int height, int max_history_rows) {
+@@ -1335,7 +1338,7 @@ WEBP_NODISCARD static int DecodeAlphaData(VP8LDecoder* const dec,
+         VP8LFillBitWindow(br);
+         dist_code = GetCopyDistance(dist_symbol, br);
+         dist = PlaneCodeToDistance(width, dist_code);
+-        if (src - data >= (ptrdiff_t)dist &&
++        if (GetAbsoluteOffset(dec, src - data) >= dist &&
+             src_end - src >= (ptrdiff_t)length) {
+           CopyBlock8b(src, dist, length);
+         } else {
+@@ -1486,7 +1489,8 @@ WEBP_NODISCARD static int DecodeImageData(VP8LDecoder* const dec,
+       dist = PlaneCodeToDistance(width, dist_code);
+ 
+       if (VP8LIsEndOfStream(br)) break;
+-      if (src - data < (ptrdiff_t)dist || src_end - src < (ptrdiff_t)length) {
++      if (GetAbsoluteOffset(dec, src - data) < dist ||
++          src_end - src < (ptrdiff_t)length) {
+         goto Error;
+       } else {
+         CopyBlock32b(src, dist, length);

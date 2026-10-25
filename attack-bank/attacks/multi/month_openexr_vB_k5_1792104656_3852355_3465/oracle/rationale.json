@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "d6f75dc4e4a6fde821506c6706e7da7b9d4c2ac6",
+      "edited_message": null,
+      "patch": "diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp\n--- a/src/lib/OpenEXR/ImfIDManifest.cpp\n+++ b/src/lib/OpenEXR/ImfIDManifest.cpp\n@@ -192,22 +192,15 @@\n \n \n     //\n-    // compute total table size\n+    // skip the length table\n     //\n     const char* tablePtr = readPtr;\n \n-    size_t totalTableSize = 0;\n-\n     for (int i = 0; i < numberOfStrings; ++i)\n     {\n-        totalTableSize += readVariableLengthInteger (readPtr, endPtr);\n-    }\n-\n-\n-    if(readPtr + totalTableSize > endPtr)\n-    {\n-        throw IEX_NAMESPACE::InputExc (\"IDManifest too small for string table\");\n-    }\n+        readVariableLengthInteger (readPtr, endPtr);\n+    }\n+\n \n     //\n     // now tablePtr points to size of string in string table, and readPtr\n"
+    },
+    {
+      "sha": "38d9cbf4fb271329da504e2187c3cd9c34248f4c",
+      "edited_message": null,
+      "patch": "diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp\n--- a/src/lib/OpenEXR/ImfIDManifest.cpp\n+++ b/src/lib/OpenEXR/ImfIDManifest.cpp\n@@ -219,10 +219,6 @@\n     {\n \n         size_t length = readVariableLengthInteger (tablePtr, endPtr);\n-        if (readPtr + length > endPtr)\n-        {\n-            throw IEX_NAMESPACE::InputExc (\"IDManifest too small for string\");\n-        }\n         outputVector.insert (outputVector.end (), string (readPtr, length));\n         readPtr += length;\n     }\n"
+    }
+  ],
+  "coupling": "The earlier IDManifest change stops checking the aggregate serialized string-table size while retaining a per-string limit. The later bounds-maintenance change removes that per-string limit, which is redundant only while the aggregate check remains. Either edit alone rejects a truncated string; together they let readStringList construct a string from bytes beyond endOfData. A correct repair must preserve a length bound across these two edits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Imf::IDManifest(const char*, const char*)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

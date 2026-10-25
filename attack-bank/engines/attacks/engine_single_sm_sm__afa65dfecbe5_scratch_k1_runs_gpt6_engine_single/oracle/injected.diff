@@ -1,0 +1,32 @@
+diff --git a/js/src/jit/MacroAssembler.cpp b/js/src/jit/MacroAssembler.cpp
+index 3adba89886..20d1a9f170 100644
+--- a/js/src/jit/MacroAssembler.cpp
++++ b/js/src/jit/MacroAssembler.cpp
+@@ -8036,8 +8036,10 @@ void MacroAssembler::wasmNewArrayObject(Register instance, Register result,
+     Label loop;
+     bind(&loop);
+     subPtr(Imm32(sizeof(void*)), current);
+-    storePtr(ImmWord(0), Address(current, 0));
+-    branchPtr(Assembler::NotEqual, current, inlineArrayData, &loop);
++    storePtr(ImmPtr(nullptr), Address(current, 0));
++    branchPtr(elemSize > sizeof(void*) ? Assembler::AboveOrEqual
++                                      : Assembler::NotEqual,
++              current, inlineArrayData, &loop);
+   }
+   bind(&zeroed);
+ 
+diff --git a/js/src/jit/arm64/MacroAssembler-arm64.h b/js/src/jit/arm64/MacroAssembler-arm64.h
+index 26d72ce5fa..10f23c82d0 100644
+--- a/js/src/jit/arm64/MacroAssembler-arm64.h
++++ b/js/src/jit/arm64/MacroAssembler-arm64.h
+@@ -847,6 +847,10 @@ class MacroAssemblerCompat : public vixl::MacroAssembler {
+     return storePtr(scratch, address);
+   }
+   void storePtr(ImmPtr imm, const Address& address) {
++    if (!imm.value) {
++      Str(vixl::xzr, toMemOperand(address));
++      return;
++    }
+     vixl::UseScratchRegisterScope temps(this);
+     const ARMRegister scratch64 = temps.AcquireX();
+     MOZ_ASSERT(scratch64.asUnsized() != address.base);

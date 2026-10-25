@@ -1,0 +1,81 @@
+diff --git a/src/OT/Layout/GPOS/PairPosFormat1.hh b/src/OT/Layout/GPOS/PairPosFormat1.hh
+index de1f036..a371be6 100644
+--- a/src/OT/Layout/GPOS/PairPosFormat1.hh
++++ b/src/OT/Layout/GPOS/PairPosFormat1.hh
+@@ -118,9 +118,9 @@ struct PairPosFormat1_3
+   void *external_cache_create () const
+   {
+     unsigned count = pairSet.len;
+-    unsigned size = sizeof (external_cache_t) -
+-		    HB_VAR_ARRAY * sizeof (hb_set_digest_t) +
+-		    count * sizeof (hb_set_digest_t);
++    unsigned size = hb_ot_layout_var_cache_size (sizeof (external_cache_t),
++						 sizeof (hb_set_digest_t),
++						 count);
+     external_cache_t *cache = (external_cache_t *) hb_malloc (size);
+     if (likely (cache))
+     {
+diff --git a/src/OT/Layout/types.hh b/src/OT/Layout/types.hh
+index 5cf9eb3..09c3b7c 100644
+--- a/src/OT/Layout/types.hh
++++ b/src/OT/Layout/types.hh
+@@ -35,6 +35,23 @@ static_assert (sizeof (hb_ot_layout_mapping_cache_t) == 512, "");
+ using hb_ot_layout_binary_cache_t = hb_cache_t<14, 1, 8>;
+ static_assert (sizeof (hb_ot_layout_binary_cache_t) == 256, "");
+ 
++/* Byte size for an external_cache_t struct whose declared sizeof() (with
++ * its one HB_VAR_ARRAY placeholder element) is struct_size, once the
++ * placeholder_bytes-sized placeholder is replaced by an actual trailing
++ * array occupying tail_bytes bytes. */
++static inline unsigned
++hb_ot_layout_var_cache_size_bytes (unsigned struct_size, unsigned placeholder_bytes, unsigned tail_bytes)
++{
++  return struct_size - placeholder_bytes + tail_bytes;
++}
++
++/* As above, for a trailing array of count elements of size elem_size. */
++static inline unsigned
++hb_ot_layout_var_cache_size (unsigned struct_size, unsigned elem_size, unsigned count)
++{
++  return hb_ot_layout_var_cache_size_bytes (struct_size, HB_VAR_ARRAY * elem_size, count * elem_size);
++}
++
+ namespace OT {
+ namespace Layout {
+ 
+diff --git a/src/hb-ot-layout-gsubgpos.hh b/src/hb-ot-layout-gsubgpos.hh
+index 73af70f..9b789a3 100644
+--- a/src/hb-ot-layout-gsubgpos.hh
++++ b/src/hb-ot-layout-gsubgpos.hh
+@@ -3879,9 +3879,12 @@ struct ContextFormat2_5
+   void *external_cache_create () const
+   {
+     unsigned count = ruleSet.len;
+-    unsigned size = sizeof (external_cache_t) -
+-		    HB_VAR_ARRAY * sizeof (hb_ot_layout_ruleset_digest_t) +
+-		    count * sizeof (hb_ot_layout_ruleset_digest_t);
++    /* Each digest is tiny, so the trailing array's byte size always fits
++     * in 16 bits for any RuleSet count this format can realistically have. */
++    uint16_t tail_bytes = (uint16_t) (count * sizeof (hb_ot_layout_ruleset_digest_t));
++    unsigned size = hb_ot_layout_var_cache_size_bytes (sizeof (external_cache_t),
++						       HB_VAR_ARRAY * sizeof (hb_ot_layout_ruleset_digest_t),
++						       tail_bytes);
+     external_cache_t *cache = (external_cache_t *) hb_malloc (size);
+     if (likely (cache))
+     {
+@@ -5522,9 +5525,12 @@ struct ChainContextFormat2_5
+   void *external_cache_create () const
+   {
+     unsigned count = ruleSet.len;
+-    unsigned size = sizeof (external_cache_t) -
+-		    HB_VAR_ARRAY * sizeof (hb_ot_layout_ruleset_digest_t) +
+-		    count * sizeof (hb_ot_layout_ruleset_digest_t);
++    /* Each digest is tiny, so the trailing array's byte size always fits
++     * in 16 bits for any RuleSet count this format can realistically have. */
++    uint16_t tail_bytes = (uint16_t) (count * sizeof (hb_ot_layout_ruleset_digest_t));
++    unsigned size = hb_ot_layout_var_cache_size_bytes (sizeof (external_cache_t),
++						       HB_VAR_ARRAY * sizeof (hb_ot_layout_ruleset_digest_t),
++						       tail_bytes);
+     external_cache_t *cache = (external_cache_t *) hb_malloc (size);
+     if (likely (cache))
+     {

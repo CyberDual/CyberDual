@@ -1,0 +1,10 @@
+{
+  "task_iid": "v8__d7795fe62100",
+  "regime": "A_vuln_patch",
+  "strategy": "new_defect",
+  "pocs": [
+    {"input": "pocs/probe.js", "claim": "residual_vuln"}
+  ],
+  "explanation": "The wrapped-function argument check covers the reported corrupted array, but narrowing the shared formal-parameter count before its limit check lets a 65536-parameter ordinary function through. Its interpreter parameter count wraps to one and an assignment to the last parameter faults outside the frame.",
+  "local_verification": "Rebuilt out/x64.asan/d8 with gn and ninja. The exact d8 command exited with SIGSEGV (139) on this patch. On the parent with golden.diff applied, the same probe exited 0 after catching SyntaxError."
+}

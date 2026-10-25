@@ -1,0 +1,181 @@
+diff --git a/js/src/jit/MacroAssembler.cpp b/js/src/jit/MacroAssembler.cpp
+index 2919aa9e39..2776dbfd25 100644
+--- a/js/src/jit/MacroAssembler.cpp
++++ b/js/src/jit/MacroAssembler.cpp
+@@ -7142,7 +7142,8 @@ void MacroAssembler::wasmReturnCallIndirect(
+ void MacroAssembler::wasmCallRef(const wasm::CallSiteDesc& desc,
+                                  const wasm::CalleeDesc& callee,
+                                  CodeOffset* fastCallOffset,
+-                                 CodeOffset* slowCallOffset) {
++                                 CodeOffset* slowCallOffset,
++                                 CodeOffset* nullCheckStackMapKey) {
+   MOZ_ASSERT(callee.which() == wasm::CalleeDesc::FuncRef);
+   const Register calleeScratch = WasmCallRefCallScratchReg0;
+   const Register calleeFnObj = WasmCallRefReg;
+@@ -7162,6 +7163,9 @@ void MacroAssembler::wasmCallRef(const wasm::CallSiteDesc& desc,
+   appendAndVerify(wasm::Trap::NullPointerDereference,
+                   wasm::TrapMachineInsnForLoadWord(), fcr,
+                   desc.toTrapSiteDesc());
++  if (nullCheckStackMapKey) {
++    *nullCheckStackMapKey = CodeOffset(currentOffset());
++  }
+   branchPtr(Assembler::Equal, InstanceReg, newInstanceTemp, &fastCall);
+ 
+   storePtr(InstanceReg,
+@@ -7208,7 +7212,8 @@ void MacroAssembler::wasmCallRef(const wasm::CallSiteDesc& desc,
+ 
+ void MacroAssembler::wasmReturnCallRef(
+     const wasm::CallSiteDesc& desc, const wasm::CalleeDesc& callee,
+-    const ReturnCallAdjustmentInfo& retCallInfo) {
++    const ReturnCallAdjustmentInfo& retCallInfo,
++    CodeOffset* nullCheckStackMapKey) {
+   MOZ_ASSERT(callee.which() == wasm::CalleeDesc::FuncRef);
+   const Register calleeScratch = WasmCallRefCallScratchReg0;
+   const Register calleeFnObj = WasmCallRefReg;
+@@ -7228,6 +7233,9 @@ void MacroAssembler::wasmReturnCallRef(
+   appendAndVerify(wasm::Trap::NullPointerDereference,
+                   wasm::TrapMachineInsnForLoadWord(), fcr,
+                   desc.toTrapSiteDesc());
++  if (nullCheckStackMapKey) {
++    *nullCheckStackMapKey = CodeOffset(currentOffset());
++  }
+   branchPtr(Assembler::Equal, InstanceReg, newInstanceTemp, &fastCall);
+ 
+   storePtr(InstanceReg,
+diff --git a/js/src/jit/MacroAssembler.h b/js/src/jit/MacroAssembler.h
+index ac9c7162cd..1d6405e6b6 100644
+--- a/js/src/jit/MacroAssembler.h
++++ b/js/src/jit/MacroAssembler.h
+@@ -4055,11 +4055,13 @@ class MacroAssembler : public MacroAssemblerSpecific {
+   // pinned reg.
+   void wasmCallRef(const wasm::CallSiteDesc& desc,
+                    const wasm::CalleeDesc& callee, CodeOffset* fastCallOffset,
+-                   CodeOffset* slowCallOffset);
++                   CodeOffset* slowCallOffset,
++                   CodeOffset* nullCheckStackMapKey = nullptr);
+ 
+   void wasmReturnCallRef(const wasm::CallSiteDesc& desc,
+                          const wasm::CalleeDesc& callee,
+-                         const ReturnCallAdjustmentInfo& retCallInfo);
++                         const ReturnCallAdjustmentInfo& retCallInfo,
++                         CodeOffset* nullCheckStackMapKey = nullptr);
+ 
+   // This function takes care of loading the pointer to the current instance
+   // as the implicit first argument. It preserves instance and pinned registers.
+diff --git a/js/src/wasm/WasmBCClass.h b/js/src/wasm/WasmBCClass.h
+index 6eee58bf3a..9bbc2e8978 100644
+--- a/js/src/wasm/WasmBCClass.h
++++ b/js/src/wasm/WasmBCClass.h
+@@ -1064,7 +1064,7 @@ struct BaseCompiler final {
+   bool callRef(const Stk& calleeRef, const FunctionCall& call,
+                mozilla::Maybe<size_t> callRefIndex, CodeOffset* fastCallOffset,
+                CodeOffset* slowCallOffset);
+-  void returnCallRef(const Stk& calleeRef, const FunctionCall& call,
++  bool returnCallRef(const Stk& calleeRef, const FunctionCall& call,
+                      const FuncType& funcType);
+   CodeOffset builtinCall(SymbolicAddress builtin, const FunctionCall& call);
+   void builtinInstanceMethodCall(const SymbolicAddressSignature& builtin,
+diff --git a/js/src/wasm/WasmBaselineCompile.cpp b/js/src/wasm/WasmBaselineCompile.cpp
+index dd49556efc..4a44690cee 100644
+--- a/js/src/wasm/WasmBaselineCompile.cpp
++++ b/js/src/wasm/WasmBaselineCompile.cpp
+@@ -2259,19 +2259,45 @@ bool BaseCompiler::callRef(const Stk& calleeRef, const FunctionCall& call,
+     MOZ_ASSERT(callRefIndex.isNothing());
+   }
+ 
+-  masm.wasmCallRef(desc, callee, fastCallOffset, slowCallOffset);
++  StackMap* nullCheckStackMap = nullptr;
++  if (!createDebugOnlyStackMapForNonResumingTrap(
++          &nullCheckStackMap, Trap::NullPointerDereference)) {
++    return false;
++  }
++
++  CodeOffset nullCheckStackMapKey;
++  masm.wasmCallRef(desc, callee, fastCallOffset, slowCallOffset,
++                   &nullCheckStackMapKey);
++  if (nullCheckStackMap &&
++      !stackMaps_->add(nullCheckStackMapKey.offset(), nullCheckStackMap)) {
++    return false;
++  }
+   return true;
+ }
+ 
+-void BaseCompiler::returnCallRef(const Stk& calleeRef, const FunctionCall& call,
++bool BaseCompiler::returnCallRef(const Stk& calleeRef,
++                                 const FunctionCall& call,
+                                  const FuncType& funcType) {
+   CallSiteDesc desc(bytecodeOffset(), CallSiteKind::FuncRef);
+   CalleeDesc callee = CalleeDesc::wasmFuncRef();
+ 
+   loadRef(calleeRef, RegRef(WasmCallRefReg));
++  StackMap* nullCheckStackMap = nullptr;
++  if (!createDebugOnlyStackMapForNonResumingTrap(
++          &nullCheckStackMap, Trap::NullPointerDereference)) {
++    return false;
++  }
++
+   ReturnCallAdjustmentInfo retCallInfo =
+       BuildReturnCallAdjustmentInfo(this->funcType(), funcType);
+-  masm.wasmReturnCallRef(desc, callee, retCallInfo);
++  CodeOffset nullCheckStackMapKey;
++  masm.wasmReturnCallRef(desc, callee, retCallInfo,
++                         &nullCheckStackMapKey);
++  if (nullCheckStackMap &&
++      !stackMaps_->add(nullCheckStackMapKey.offset(), nullCheckStackMap)) {
++    return false;
++  }
++  return true;
+ }
+ 
+ // Precondition: sync()
+@@ -5876,7 +5902,9 @@ bool BaseCompiler::emitReturnCallRef() {
+   }
+ 
+   const Stk& callee = peek(0);
+-  returnCallRef(callee, baselineCall, funcType);
++  if (!returnCallRef(callee, baselineCall, funcType)) {
++    return false;
++  }
+ 
+   MOZ_ASSERT(stackMapGenerator_.framePushedExcludingOutboundCallArgs.isSome());
+   stackMapGenerator_.framePushedExcludingOutboundCallArgs.reset();
+@@ -7811,6 +7839,11 @@ void BaseCompiler::SignalNullCheck::emitNullCheck(BaseCompiler* bc, RegRef rp) {
+   masm.bind(&ok);
+ }
+ 
++static MOZ_NEVER_INLINE uint8_t ReadTrapKind(const uint8_t* trapKinds,
++                                             uint32_t index) {
++  return trapKinds[index];
++}
++
+ /* static */
+ void BaseCompiler::SignalNullCheck::emitTrapSite(BaseCompiler* bc,
+                                                  FaultingCodeRange fcr,
+@@ -7818,6 +7851,17 @@ void BaseCompiler::SignalNullCheck::emitTrapSite(BaseCompiler* bc,
+   MacroAssembler& masm = bc->masm;
+   masm.appendAndVerify(wasm::Trap::NullPointerDereference, tmi, fcr,
+                        bc->trapSiteDesc());
++  uint8_t trapKinds[FaultingCodeRange::minInsnLength()] = {
++      uint8_t(tmi)};
++  volatile uint8_t trapKind = ReadTrapKind(trapKinds, fcr.length());
++  (void)trapKind;
++  StackMap* stackMap = nullptr;
++  masm.propagateOOM(bc->createDebugOnlyStackMapForNonResumingTrap(
++      &stackMap, Trap::NullPointerDereference));
++  if (stackMap) {
++    masm.propagateOOM(
++        bc->stackMaps_->add(fcr.resumeOffset(), stackMap));
++  }
+ }
+ 
+ template <typename NullCheckPolicy>
+@@ -12942,7 +12986,8 @@ bool js::wasm::BaselineCompileFunctions(const CodeMetadata& codeMeta,
+     auto checkThisTrapKind_debugMode = [](Trap t) -> bool {
+       // Trap kinds to check in debug mode
+       return t == Trap::InvalidConversionToInteger ||
+-             t == Trap::IntegerOverflow || t == Trap::IntegerDivideByZero;
++             t == Trap::IntegerOverflow || t == Trap::IntegerDivideByZero ||
++             t == Trap::NullPointerDereference;
+     };
+     auto checkThisTrapKind_normalMode = [](Trap t) -> bool {
+       // Trap kinds to check in non-debug mode

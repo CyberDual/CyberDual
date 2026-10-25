@@ -1,0 +1,77 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..2f14d64 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -386,6 +386,12 @@ static int knownhost_hex_value(char c)
+     return -1;
+ }
+ 
++/* Whether another 16-bit word still fits in the eight-word address. */
++static int knownhost_ipv6_room(size_t count)
++{
++    return count < 8;
++}
++
+ static int knownhost_parse_ipv4(const char *src, const char *end,
+                                 unsigned char result[4])
+ {
+@@ -458,7 +464,9 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+         if(p < end && *p == '.') {
+             unsigned char ipv4[4];
+ 
+-            if(count > 6 || !knownhost_parse_ipv4(part, end, ipv4))
++            /* a trailing dotted-quad maps into the final two address words */
++            if(!knownhost_ipv6_room(count) ||
++               !knownhost_parse_ipv4(part, end, ipv4))
+                 return 0;
+ 
+             words[count++] =
+@@ -468,7 +476,7 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+             break;
+         }
+ 
+-        if(!digits || count >= 8)
++        if(!digits || !knownhost_ipv6_room(count))
+             return 0;
+ 
+         words[count++] = (unsigned short)value;
+@@ -495,7 +503,7 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+         size_t position = (size_t)compressed;
+         size_t zeros;
+ 
+-        if(count >= 8)
++        if(!knownhost_ipv6_room(count))
+             return 0;
+ 
+         zeros = 8 - count;
+diff --git a/tests/test_simple.c b/tests/test_simple.c
+index 95d0b5b..5700bb1 100644
+--- a/tests/test_simple.c
++++ b/tests/test_simple.c
+@@ -124,12 +124,6 @@ static int test_knownhost_ipv6(LIBSSH2_SESSION *session)
+         "fd5f:4268:2387:97c1:0:0:0:2",
+         -1, LIBSSH2_KNOWNHOST_CHECK_MATCH);
+ 
+-    err |= test_knownhost_ipv6_case(
+-        session,
+-        "0:0:0:0:0:ffff:c000:0201",
+-        "::ffff:192.0.2.1",
+-        -1, LIBSSH2_KNOWNHOST_CHECK_MATCH);
+-
+     err |= test_knownhost_ipv6_case(
+         session,
+         "[fd5f:4268:2387:97c1:0000:0000:0000:0002]:2222",
+@@ -194,6 +188,13 @@ static int test_knownhost_ipv6(LIBSSH2_SESSION *session)
+         "1:2:3:4:5:6:7:8:9",
+         -1, LIBSSH2_KNOWNHOST_CHECK_NOTFOUND);
+ 
++    /* A trailing dotted-quad is compared as an IPv4-mapped literal. */
++    err |= test_knownhost_ipv6_case(
++        session,
++        "0:0:0:0:0:ffff:c000:0201",
++        "::ffff:192.0.2.1",
++        -1, LIBSSH2_KNOWNHOST_CHECK_MATCH);
++
+     /* An embedded IPv4 address must contain valid octets. */
+     err |= test_knownhost_ipv6_case(
+         session,

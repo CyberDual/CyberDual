@@ -1,0 +1,30 @@
+diff --git a/js/src/vm/PortableBaselineInterpret.cpp b/js/src/vm/PortableBaselineInterpret.cpp
+index f267a04054..527e535c7a 100644
+--- a/js/src/vm/PortableBaselineInterpret.cpp
++++ b/js/src/vm/PortableBaselineInterpret.cpp
+@@ -9375,7 +9375,10 @@ bool PortablebaselineInterpreterStackCheck(JSContext* cx, RunState& state,
+   StackVal* base = reinterpret_cast<StackVal*>(pbs.base);
+   StackVal* top = reinterpret_cast<StackVal*>(pbs.top);
+   ssize_t margin = kStackMargin / sizeof(StackVal);
+-  ssize_t needed = numActualArgs + state.script()->nslots() + margin;
++  size_t numFormals =
++      state.isInvoke() ? state.script()->function()->nargs() : 0;
++  ssize_t needed =
++      std::max(numActualArgs, numFormals) + state.script()->nslots() + margin;
+   return (top - base) >= needed;
+ }
+ 
+diff --git a/js/src/vm/Stack.cpp b/js/src/vm/Stack.cpp
+index 2465a89b4c..4df3322c5d 100644
+--- a/js/src/vm/Stack.cpp
++++ b/js/src/vm/Stack.cpp
+@@ -336,6 +336,9 @@ void InterpreterFrame::trace(JSTracer* trc, Value* sp, jsbytecode* pc) {
+ 
+     // Trace arguments.
+     unsigned argc = std::max(numActualArgs(), numFormalArgs());
++    if (numActualArgs() < numFormalArgs()) {
++      argc--;
++    }
+     TraceRootRange(trc, argc + isConstructing(), argv_, "fp argv");
+   }
+ 

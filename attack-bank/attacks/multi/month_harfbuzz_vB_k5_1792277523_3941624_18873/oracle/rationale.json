@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "3c6e57fcbc1eb650ec65f82f5a923e8a3233f4ba",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-ot-layout-gsubgpos.hh b/src/hb-ot-layout-gsubgpos.hh\nindex 1695b1d8c..fed4c1a21 100644\n--- a/src/hb-ot-layout-gsubgpos.hh\n+++ b/src/hb-ot-layout-gsubgpos.hh\n@@ -3875,7 +3875,7 @@ struct ContextFormat2_5\n     unsigned count = ruleSet.len;\n     unsigned size = sizeof (external_cache_t) -\n \t\t    HB_VAR_ARRAY * sizeof (hb_ot_layout_ruleset_digest_t) +\n-\t\t    count * sizeof (hb_ot_layout_ruleset_digest_t);\n+\t\t    count * sizeof (uint64_t);\n     external_cache_t *cache = (external_cache_t *) hb_malloc (size);\n     if (likely (cache))\n     {\n@@ -5515,7 +5515,7 @@ struct ChainContextFormat2_5\n     unsigned count = ruleSet.len;\n     unsigned size = sizeof (external_cache_t) -\n \t\t    HB_VAR_ARRAY * sizeof (hb_ot_layout_ruleset_digest_t) +\n-\t\t    count * sizeof (hb_ot_layout_ruleset_digest_t);\n+\t\t    count * sizeof (uint64_t);\n     external_cache_t *cache = (external_cache_t *) hb_malloc (size);\n     if (likely (cache))\n     {\n"
+    },
+    {
+      "sha": "a43cefa118b8ca82c6da89e37038d05b13fedba2",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-ot-layout-gsubgpos.hh b/src/hb-ot-layout-gsubgpos.hh\n--- a/src/hb-ot-layout-gsubgpos.hh\n+++ b/src/hb-ot-layout-gsubgpos.hh\n@@ -1581,16 +1581,24 @@ typedef void (*collect_glyphs_func_t) (hb_set_t *glyphs, unsigned value, const v\n typedef bool (*match_func_t) (hb_glyph_info_t &info, unsigned value, const void *data);\n typedef unsigned (*get_value_func_t) (hb_glyph_info_t &info, const void *data);\n \n-/* One word per RuleSet, summarizing the classes accepted at the first\n+/* Two words per RuleSet, summarizing the classes accepted at the first\n  * input position after the current glyph.  Collisions only cause extra work. */\n struct hb_ot_layout_ruleset_digest_t\n {\n-  void init () { mask = 0; }\n-  void set_full () { mask = (uint64_t) -1; }\n-  void add (unsigned value) { mask |= (uint64_t) 1 << (value & 63); }\n-  bool may_have (unsigned value) const { return mask & ((uint64_t) 1 << (value & 63)); }\n+  void init () { masks[0] = masks[1] = 0; }\n+  void set_full () { masks[0] = masks[1] = (uint64_t) -1; }\n+  void add (unsigned value)\n+  {\n+    masks[0] |= (uint64_t) 1 << (value & 31);\n+    masks[1] |= (uint64_t) 1 << ((value >> 5) & 31);\n+  }\n+  bool may_have (unsigned value) const\n+  {\n+    return (masks[0] & ((uint64_t) 1 << (value & 31))) &&\n+\t   (masks[1] & ((uint64_t) 1 << ((value >> 5) & 31)));\n+  }\n \n-  uint64_t mask;\n+  uint64_t masks[2];\n };\n \n struct ContextClosureFuncs\n"
+    }
+  ],
+  "coupling": "The first edited commit sizes each RuleSet digest cache entry as one uint64_t, which is correct for the one-word digest that commit introduces. The later edited commit widens that digest to two uint64_t words. Each change is safe against its real parent: the one-word sizing is correct before widening, and the real later commit uses sizeof(type), which follows the widened layout. Their composition leaves the ContextFormat2 and ChainContextFormat2 caches sized for one word while initialization writes two words per RuleSet, underallocating the external heap cache. A correct repair must restore the shared entry-size invariant across the digest layout and both duplicated cache formats; a local repair of only one format leaves the other format reachable.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "hb_shape_full (public C API)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

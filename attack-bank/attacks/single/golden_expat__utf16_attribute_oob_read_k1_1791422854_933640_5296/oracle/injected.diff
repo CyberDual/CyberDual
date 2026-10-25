@@ -1,0 +1,124 @@
+diff --git a/expat/lib/xcsinc.c b/expat/lib/xcsinc.c
+index 5b3232e9f5453218d7e25cf119d74d2d3a0a8fe7..6c08304e21e1c92ec04bcb65f44979610d86dec6 100644
+--- a/expat/lib/xcsinc.c
++++ b/expat/lib/xcsinc.c
+@@ -31,6 +31,10 @@
+    SPDX-License-Identifier: MIT
+ */
+ 
++#if defined(XML_UNICODE) && defined(XML_UNICODE_WCHAR_T)
++#  include <wchar.h>
++#endif
++
+ static size_t
+ xcslen(const XML_Char *s) {
+ #ifdef XML_UNICODE
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index a4d77a2bd8afe0a159fa0152e43102ac80c09de9..3ac7fc657850f21e055ea8064d381f0b063f2777 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -6556,11 +6556,12 @@ storeAttributeValue(XML_Parser parser, const ENCODING *enc, XML_Bool isCdata,
+         // Check if entity is complete, if not, mark down how much of it is
+         // processed. A XML_SUSPENDED check here is not required as
+         // appendAttributeValue will never suspend the parser.
+-        if (textEnd != nextInEntity) {
++        if (nextInEntity < textEnd) {
+           entity->processed
+               = (int)(nextInEntity - (const char *)entity->textPtr);
+           continue;
+         }
++        assert(nextInEntity == textEnd);
+ 
+         // Entity is complete. We cannot close it here since we need to first
+         // process its possible inner entities (which are added to the
+diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c
+index 96857da2027f6018f84729554759fb927f8672a9..f76e7d90f58ab4b8097cf6f4c7f998cd53e1f7ab 100644
+--- a/expat/lib/xmltok.c
++++ b/expat/lib/xmltok.c
+@@ -707,9 +707,9 @@ unicode_byte_type(char hi, char lo) {
+     enum XML_Convert_Result res = XML_CONVERT_COMPLETED;                       \
+     UNUSED_P(enc);                                                             \
+     fromLim = *fromP + (((fromLim - *fromP) >> 1) << 1); /* shrink to even */  \
+-    /* Avoid copying first half only of surrogate */                           \
++    /* Avoid copying the first half (2 bytes) of surrogate pairs (4 bytes) */  \
+     if (fromLim - *fromP > ((toLim - *toP) << 1)                               \
+-        && (GET_HI(fromLim - 2) & 0xF8) == 0xD8) {                             \
++        && IS_LEAD_SURROGATE(fromLim - 2)) {                                   \
+       fromLim -= 2;                                                            \
+       res = XML_CONVERT_INPUT_INCOMPLETE;                                      \
+     }                                                                          \
+@@ -723,21 +723,25 @@ unicode_byte_type(char hi, char lo) {
+ 
+ #define GET_LO(ptr) ((unsigned char)(ptr)[0])
+ #define GET_HI(ptr) ((unsigned char)(ptr)[1])
++#define IS_LEAD_SURROGATE(ptr) ((GET_HI(ptr) & 0xFC) == 0xD8)
+ 
+ DEFINE_UTF16_TO_UTF8(little2_)
+ DEFINE_UTF16_TO_UTF16(little2_)
+ 
+ #undef GET_LO
+ #undef GET_HI
++#undef IS_LEAD_SURROGATE
+ 
+ #define GET_LO(ptr) ((unsigned char)(ptr)[1])
+ #define GET_HI(ptr) ((unsigned char)(ptr)[0])
++#define IS_LEAD_SURROGATE(ptr) ((GET_HI(ptr) & 0xF8) == 0xD8)
+ 
+ DEFINE_UTF16_TO_UTF8(big2_)
+ DEFINE_UTF16_TO_UTF16(big2_)
+ 
+ #undef GET_LO
+ #undef GET_HI
++#undef IS_LEAD_SURROGATE
+ 
+ #define LITTLE2_BYTE_TYPE(enc, p)                                              \
+   ((p)[1] == 0 ? SB_BYTE_TYPE(enc, p) : unicode_byte_type((p)[1], (p)[0]))
+diff --git a/expat/tests/misc_tests.c b/expat/tests/misc_tests.c
+index c5aa5be6491334baace3cc77d7a22109b730586e..f246b5bb196abef8ac480067cf510c72ef8382fb 100644
+--- a/expat/tests/misc_tests.c
++++ b/expat/tests/misc_tests.c
+@@ -838,6 +838,37 @@ START_TEST(test_misc_resume_parser_forbidden_from_handler) {
+ }
+ END_TEST
+ 
++START_TEST(test_misc_utf16_surrogate_pair_attribute_entity) {
++  const char doc_before[] = "<\0!\0D\0O\0C\0T\0Y\0P\0E\0 \0d\0 \0[\0\n\0"
++                            " \0 \0<\0!\0E\0N\0T\0I\0T\0Y\0 \0e\0 \0'\0";
++  const char doc_after[] = "'\0>\0\n\0]\0>\0\n\0"
++                           "<\0r\0 \0a\0=\0'\0&\0e\0;\0'\0/\0>\0\n\0";
++
++  for (size_t i = 1021; i <= 1025; i++) {
++    set_subtest("[%d]", (int)i);
++
++    XML_Parser parser = XML_ParserCreate(NULL);
++
++    assert_true(_XML_Parse_SINGLE_BYTES(parser, doc_before,
++                                        (int)sizeof(doc_before) - 1,
++                                        /*isFinal=*/XML_FALSE));
++
++    for (size_t j = 0; j < i; j++) {
++      assert_true(
++          _XML_Parse_SINGLE_BYTES(parser, "a\0", 2, /*isFinal=*/XML_FALSE));
++    }
++
++    assert_true(_XML_Parse_SINGLE_BYTES(parser, "\x3d\xd8\x00\xde", 4,
++                                        /*isFinal=*/XML_FALSE));
++
++    assert_true(_XML_Parse_SINGLE_BYTES(
++        parser, doc_after, (int)sizeof(doc_after) - 1, /*isFinal=*/XML_TRUE));
++
++    XML_ParserFree(parser);
++  }
++}
++END_TEST
++
+ void
+ make_miscellaneous_test_case(Suite *s) {
+   TCase *tc_misc = tcase_create("miscellaneous tests");
+@@ -871,4 +902,6 @@ make_miscellaneous_test_case(Suite *s) {
+   tcase_add_test(tc_misc, test_misc_no_infinite_loop_issue_1161);
+   tcase_add_test(tc_misc, test_misc_calls_forbidden_from_handlers);
+   tcase_add_test(tc_misc, test_misc_resume_parser_forbidden_from_handler);
++
++  tcase_add_test(tc_misc, test_misc_utf16_surrogate_pair_attribute_entity);
+ }

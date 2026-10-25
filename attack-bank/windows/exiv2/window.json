@@ -1,0 +1,14 @@
+{
+ "project": "exiv2",
+ "window_id": "b18a8a014f7f6a30f7d7310c09ea0fac768938c811ffe328b85ba788f7bd919a",
+ "base": "203593b0e183a6d343f6ff8fa3d91805eb5c5ada",
+ "maint_batch_tip": "63c9a7d37ae3f580b67ba7f02f2cf469532c0851",
+ "tree": "833dec96addaa6d40ba843f01911b801eaf1b7b1",
+ "n_commits": 77,
+ "n_editable": 77,
+ "list_sha1": "cd688c2e63341665c4ce9aff1b89cec2fc2a52f5",
+ "tar_sha256": "d5fc1c233ab8ccbb286bb2752f3ee1c4b9f50a8bace6ad2795e8c66bf7caa82b",
+ "tar_bytes": 232560640,
+ "built_utc": "2026-10-17T20:13:10Z",
+ "cyberdual": "f685a97c"
+}

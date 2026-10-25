@@ -1,0 +1,42 @@
+diff --git a/src/hb-buffer-serialize.cc b/src/hb-buffer-serialize.cc
+index 923524d708ae23146b27b637f87c179d988b2b44..7621e7acf98f188aff72671c7e96ea08df75621a 100644
+--- a/src/hb-buffer-serialize.cc
++++ b/src/hb-buffer-serialize.cc
+@@ -796,6 +796,18 @@ hb_buffer_deserialize_glyphs (hb_buffer_t *buffer,
+     return false;
+   }
+ 
++  const char *tail = buf + buf_len;
++  while (tail > buf && (tail[0] == '\n' || tail[0] == '\r'))
++    tail--;
++  buf_len = tail - buf;
++
++  if (format != HB_BUFFER_SERIALIZE_FORMAT_TEXT &&
++      format != HB_BUFFER_SERIALIZE_FORMAT_JSON)
++  {
++    *end_ptr = buf;
++    return false;
++  }
++
+   hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_GLYPHS);
+ 
+   if (!font)
+@@ -867,6 +879,18 @@ hb_buffer_deserialize_unicode (hb_buffer_t *buffer,
+     return false;
+   }
+ 
++  const char *tail = buf + buf_len;
++  while (tail > buf && (tail[0] == '\n' || tail[0] == '\r'))
++    tail--;
++  buf_len = tail - buf;
++
++  if (format != HB_BUFFER_SERIALIZE_FORMAT_TEXT &&
++      format != HB_BUFFER_SERIALIZE_FORMAT_JSON)
++  {
++    *end_ptr = buf;
++    return false;
++  }
++
+   hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_UNICODE);
+ 
+   hb_font_t* font = hb_font_get_empty ();

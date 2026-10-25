@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "9876197a09a8d9e3c74b05feb83995a3a4925d83",
+      "edited_message": null,
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 6947b3d..6b0892a 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -264,6 +264,7 @@\n     FT_Memory  memory = parser->root.memory;\n     FT_Error   error  = FT_Err_Ok;\n     FT_ULong   size;\n+    FT_UInt    segment_count = 0;\n \n \n     if ( parser->in_pfb )\n@@ -284,11 +285,12 @@\n         if ( tag != 0x8002U )\n           break;\n \n-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||\n+        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size + 1 ) ||\n              FT_STREAM_READ( priv_dict + priv_len, size )        )\n           goto Fail;\n \n         priv_len += size;\n+        segment_count++;\n       }\n \n       /* Check that we have a private dictionary there */\n@@ -437,6 +439,10 @@\n     /* we now decrypt the encoded binary private dictionary */\n     psaux->t1_decrypt( parser->private_dict, parser->private_len, 55665U );\n \n+    if ( parser->in_pfb && segment_count > 1 &&\n+         parser->private_dict[parser->private_len - 1] != '\\n' )\n+      parser->private_dict[parser->private_len++] = '\\n';\n+\n     if ( parser->private_len < 4 )\n     {\n       FT_ERROR(( \"T1_Get_Private_Dict:\"\n"
+    },
+    {
+      "sha": "2b7d5875b74cbc896f1f1ca13b427bafe91434d1",
+      "edited_message": null,
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 151aeac..077d9c5 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -284,7 +284,7 @@\n         if ( tag != 0x8002U || size > stream->size - stream->pos )\n           break;\n \n-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||\n+        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size + 1U ) ||\n              FT_STREAM_READ( priv_dict + priv_len, size )        )\n           break;\n \n@@ -437,6 +437,9 @@\n     /* we now decrypt the encoded binary private dictionary */\n     psaux->t1_decrypt( parser->private_dict, parser->private_len, 55665U );\n \n+    if ( parser->in_pfb )\n+      parser->private_dict[parser->private_len] = '\\0';\n+\n     if ( parser->private_len < 4 )\n     {\n       FT_ERROR(( \"T1_Get_Private_Dict:\"\n"
+    }
+  ],
+  "coupling": "The segment-merging commit reserves one byte and, for a split PFB private dictionary without a trailing newline, appends a decrypted PostScript newline and includes it in private_len. The later size-check commit independently reserves one byte and writes a NUL at private_dict[private_len]. Either edit alone stays within its one-byte reserve. Together the newline consumes that reserve, so the NUL write is one byte past the heap allocation. Repair requires accounting for both post-decryption bytes when allocating or changing the shared buffer contract across the two commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "FT_New_Memory_Face",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

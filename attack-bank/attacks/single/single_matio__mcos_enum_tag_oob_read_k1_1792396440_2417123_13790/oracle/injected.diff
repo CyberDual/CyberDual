@@ -1,0 +1,34 @@
+diff --git a/src/mcos.c b/src/mcos.c
+index 5b7582866920c4b9ada50d1488fe8312baaab62a..9d4cc68cb293d3133b38cbb9537c1e6ea9441752 100644
+--- a/src/mcos.c
++++ b/src/mcos.c
+@@ -1559,6 +1559,9 @@ static int
+ IsEnumStruct(const matvar_t *matvar)
+ {
+     const matvar_t *tag;
++    const mat_uint32_t *tag_words;
++    size_t ntags, i;
++    int found = 0;
+ 
+     if ( matvar == NULL || matvar->class_type != MAT_C_STRUCT )
+         return 0;
+@@ -1567,7 +1570,18 @@ IsEnumStruct(const matvar_t *matvar)
+     if ( tag == NULL || tag->class_type != MAT_C_UINT32 || tag->data == NULL )
+         return 0;
+ 
+-    return ((const mat_uint32_t *)tag->data)[0] == MCOS_REF_VALUE;
++    /* A tag holding less than one reference value cannot mark an
++     * enumeration instance */
++    ntags = tag->nbytes;
++    if ( ntags < sizeof(mat_uint32_t) )
++        return 0;
++
++    /* The reference value may be stored at any offset of the tag array */
++    tag_words = (const mat_uint32_t *)tag->data;
++    for ( i = 0; i < ntags; i++ )
++        found |= ( tag_words[i] == MCOS_REF_VALUE );
++
++    return found;
+ }
+ 
+ /** @brief Recursively check for a nested enumeration instance struct

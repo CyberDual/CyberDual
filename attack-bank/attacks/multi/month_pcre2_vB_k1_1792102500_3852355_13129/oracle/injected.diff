@@ -1,0 +1,56 @@
+diff --git a/src/pcre2_internal.h b/src/pcre2_internal.h
+index 4913149..c4977df 100644
+--- a/src/pcre2_internal.h
++++ b/src/pcre2_internal.h
+@@ -523,6 +523,7 @@ enum {
+ /* Values for the flags field in a match data block. */
+ 
+ #define PCRE2_MD_COPIED_SUBJECT 0x01u
++#define PCRE2_MD_EMPTY_SUBJECT 0x02u
+ 
+ /* Magic number to provide a small check against being handed junk. */
+ 
+diff --git a/src/pcre2_match.c b/src/pcre2_match.c
+index 25cbda4..7dd0b0a 100644
+--- a/src/pcre2_match.c
++++ b/src/pcre2_match.c
+@@ -7875,6 +7875,7 @@ pcre2_match(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length, PCRE2
+ 
+   match_data->subject = NULL;
+   match_data->subject_length = 0;
++  match_data->flags &= ~PCRE2_MD_EMPTY_SUBJECT;
+ 
+   /* Zero the error offset in case the first code unit is invalid UTF. */
+ 
+@@ -7975,6 +7976,8 @@ pcre2_match(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length, PCRE2
+       ((PCRE2_UCHAR *)match_data->subject)[length] = 0;
+ 
+       match_data->flags |= PCRE2_MD_COPIED_SUBJECT;
++      if (length == 0)
++        match_data->flags |= PCRE2_MD_EMPTY_SUBJECT;
+     }
+     else
+     {
+@@ -8957,6 +8960,8 @@ ENDLOOP:
+       ((PCRE2_UCHAR *)match_data->subject)[length] = 0;
+ 
+       match_data->flags |= PCRE2_MD_COPIED_SUBJECT;
++      if (length == 0)
++        match_data->flags |= PCRE2_MD_EMPTY_SUBJECT;
+     }
+     else
+     {
+diff --git a/src/pcre2_substitute.c b/src/pcre2_substitute.c
+index 96c78fc..fc4620a 100644
+--- a/src/pcre2_substitute.c
++++ b/src/pcre2_substitute.c
+@@ -932,7 +932,8 @@ pcre2_substitute(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length,
+     internal_match_data->heapframes = NULL;
+     internal_match_data->heapframes_size = 0;
+     /* Ensure that the subject is not freed when internal_match_data is */
+-    internal_match_data->flags &= ~PCRE2_MD_COPIED_SUBJECT;
++    if (match_data->flags == PCRE2_MD_COPIED_SUBJECT)
++      internal_match_data->flags &= ~PCRE2_MD_COPIED_SUBJECT;
+     match_data = internal_match_data;
+   }
+ 

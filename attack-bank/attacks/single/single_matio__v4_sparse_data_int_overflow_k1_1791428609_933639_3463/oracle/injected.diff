@@ -1,0 +1,53 @@
+diff --git a/src/mat4.c b/src/mat4.c
+index 118835f5d2924180942a8b69fe9bcfd692f536a1..a070814480b85cfd93d673b2712e73ed0ccf57e9 100644
+--- a/src/mat4.c
++++ b/src/mat4.c
+@@ -439,14 +439,14 @@ Mat_VarRead4(mat_t *mat, matvar_t *matvar)
+                     return err;
+                 }
+                 if ( sparse->nir > 0 ) {
++                    err = Mul(&nBytes, sparse->nir, sizeof(mat_uint32_t));
++                    if ( err ) {
++                        Mat_Critical("Integer multiplication overflow");
++                        return err;
++                    }
+                     sparse->jc = (mat_uint32_t *)malloc(nBytes);
+                     if ( sparse->jc != NULL ) {
+                         mat_uint32_t *jc;
+-                        err = Mul(&nBytes, sparse->nir, sizeof(mat_uint32_t));
+-                        if ( err ) {
+-                            Mat_Critical("Integer multiplication overflow");
+-                            return err;
+-                        }
+                         jc = (mat_uint32_t *)malloc(nBytes);
+                         if ( jc != NULL ) {
+                             mat_uint32_t j = 0;
+@@ -496,9 +496,17 @@ Mat_VarRead4(mat_t *mat, matvar_t *matvar)
+                 }
+                 sparse->ndata = sparse->nir;
+                 data_type = matvar->data_type;
++                err = Mul(&nBytes, sparse->ndata, Mat_SizeOf(data_type));
++                if ( err ) {
++                    free(sparse->jc);
++                    free(sparse->ir);
++                    free(matvar->data);
++                    matvar->data = NULL;
++                    Mat_Critical("Integer multiplication overflow");
++                    return err;
++                }
+                 if ( matvar->isComplex ) {
+-                    mat_complex_split_t *complex_data =
+-                        ComplexCalloc(sparse->ndata * Mat_SizeOf(data_type));
++                    mat_complex_split_t *complex_data = ComplexCalloc(nBytes);
+                     if ( NULL != complex_data ) {
+                         sparse->data = complex_data;
+ #if defined(EXTENDED_SPARSE)
+@@ -640,7 +648,7 @@ Mat_VarRead4(mat_t *mat, matvar_t *matvar)
+                         return MATIO_E_OUT_OF_MEMORY;
+                     }
+                 } else if ( sparse->ndata > 0 ) {
+-                    sparse->data = malloc(sparse->ndata * Mat_SizeOf(data_type));
++                    sparse->data = malloc(nBytes);
+                     if ( sparse->data != NULL ) {
+ #if defined(EXTENDED_SPARSE)
+                         switch ( data_type ) {

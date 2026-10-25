@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "a3101f4111d8cbc219ab1963bc96911da46aff89",
+      "edited_message": "Reduce QuickTime buffer work",
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -829,10 +829,12 @@\n     xmpData_[\"Xmp.video.FocalLength\"] =\n         buf.read_uint32(0, littleEndian) / static_cast<double>(buf2.read_uint32(0, littleEndian));\n     io_->seek(95L, BasicIo::cur);\n-    io_->readOrThrow(buf.data(), 48);\n+    io_->readOrThrow(buf.data(), 49);\n+    const byte isoFirstByte = buf.data()[48];\n     buf.write_uint8(48, 0);\n     xmpData_[\"Xmp.video.Software\"] = buf.data();\n-    io_->readOrThrow(buf.data(), 4);\n+    buf.data()[0] = isoFirstByte;\n+    io_->readOrThrow(buf.data() + 1, 3);\n     xmpData_[\"Xmp.video.ISO\"] = buf.read_uint32(0, littleEndian);\n   }\n \n"
+    },
+    {
+      "sha": "7c86fa1f79a0ffd4a265a083dee58e1fc0495a11",
+      "edited_message": "Nul-terminate QuickTime strings",
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -837,2 +837,1 @@\n-    buf.write_uint8(48, 0);\n     xmpData_[\"Xmp.video.Software\"] = buf.data();\n"
+    }
+  ],
+  "coupling": "The earlier commit prefetches the first ISO byte into byte 48 of the Nikon camera software buffer, then clears that byte before converting the software field to a string. The later commit removes the clear because, with the original 48-byte read, byte 48 in its 49-byte buffer is zero-initialized. Together the 49-byte prefetch fills the entire 49-byte buffer and the conversion uses a C string with no terminator, reading beyond the allocation. Either edit alone leaves a terminator; repairing the path requires reconciling the prefetch with the buffer size and string boundary across both commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Exiv2::ImageFactory::open / Image::readMetadata",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

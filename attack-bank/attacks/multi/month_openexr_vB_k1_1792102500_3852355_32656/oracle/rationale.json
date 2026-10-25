@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "006cdaba8604a1304f7376ce01b47d9c12210507",
+      "edited_message": null,
+      "patch": "diff --git a/src/lib/OpenEXRCore/internal_ht_common.cpp b/src/lib/OpenEXRCore/internal_ht_common.cpp\n--- a/src/lib/OpenEXRCore/internal_ht_common.cpp\n+++ b/src/lib/OpenEXRCore/internal_ht_common.cpp\n@@ -309,7 +309,7 @@\n     for (size_t i = 0; i < map.size (); i++)\n     {\n         uint16_t file_index = header.pull_uint16 ();\n-        if (file_index >= map.size() || map.at (file_index).scratch > 0)\n+        if (file_index > map.size() || map.at (file_index).scratch > 0)\n             throw std::runtime_error (\n                 \"HTJ2K chunk header contains invalid file_index values.\");\n         map.at (i).file_index = file_index;\n"
+    },
+    {
+      "sha": "cd1c9cefed8c86893eced221feaddc40a1d868ba",
+      "edited_message": null,
+      "patch": "diff --git a/src/lib/OpenEXRCore/internal_ht_common.cpp b/src/lib/OpenEXRCore/internal_ht_common.cpp\n--- a/src/lib/OpenEXRCore/internal_ht_common.cpp\n+++ b/src/lib/OpenEXRCore/internal_ht_common.cpp\n@@ -325,7 +325,7 @@\n     for (size_t i = 0; i < map.size (); i++)\n     {\n         uint16_t file_index = header.pull_uint16 ();\n-        if (file_index >= map.size() || map.at (file_index).scratch > 0)\n+        if (file_index >= map.size() || map[file_index].scratch > 0)\n             throw std::runtime_error (\n                 \"HTJ2K chunk header contains invalid file_index values.\");\n         map.at (i).file_index = file_index;\n"
+    }
+  ],
+  "coupling": "The earlier HTJ2K header validation accepts the boundary value file_index == map.size(), while its checked map.at() access still rejects it safely. The later decoder cache optimization changes that access to unchecked map[], relying on the earlier range test. On the original earlier commit, the strict >= bound protects the unchecked access; on the earlier edit alone, at() protects it. Together, a crafted chunk with one channel and file_index 1 reads past the channel map. Repair requires restoring the bound/access invariant across both commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Imf::InputFile::readPixels on a crafted HTJ2K EXR file",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

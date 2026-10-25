@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "2f134d01936956c02c4ec66fadb41b61746a9cf7",
+      "edited_message": null,
+      "patch": "--- a/src/media_tools/crypt_tools.c\n+++ b/src/media_tools/crypt_tools.c\n@@ -280,6 +280,28 @@\n \treturn GF_OK;\n }\n \n+static GF_Err crypt_cpix_parse_pssh_node(const GF_XMLNode *node, GF_CryptDRMInfo *drm)\n+{\n+\tGF_XMLNode *first = NULL, *child;\n+\tchar *text;\n+\tGF_Err e;\n+\tu32 i;\n+\n+\tif (!node || !node->content) return GF_BAD_PARAM;\n+\tfor (i=0; i<gf_list_count(node->content); i++) {\n+\t\tchild = (GF_XMLNode *) gf_list_get(node->content, i);\n+\t\tif (child && ((child->type == GF_XML_TEXT_TYPE) || (child->type == GF_XML_CDATA_TYPE)) && child->name[0]) {\n+\t\t\tfirst = child;\n+\t\t\tbreak;\n+\t\t}\n+\t}\n+\tif (!first) return GF_BAD_PARAM;\n+\ttext = (gf_list_count(node->content) == 1) ? first->name : crypt_xml_get_text(node);\n+\te = text ? crypt_cpix_parse_pssh(text, drm) : GF_BAD_PARAM;\n+\tif (text && (text != first->name)) gf_free(text);\n+\treturn e;\n+}\n+\n static char *crypt_cpix_hls_info(const char *b64)\n {\n \tGF_Err e;\n@@ -547,12 +569,7 @@\n \t\t\t}\n \t\t\tpssh_node = crypt_xml_get_child(drm_node, \"PSSH\");\n \t\t\tif (pssh_node) {\n-\t\t\t\ttext = crypt_xml_get_text(pssh_node);\n-\t\t\t\te = text ? crypt_cpix_parse_pssh(text, drm) : GF_BAD_PARAM;\n-\t\t\t\tif (text) {\n-\t\t\t\t\tgf_free(text);\n-\t\t\t\t\ttext = NULL;\n-\t\t\t\t}\n+\t\t\t\te = crypt_cpix_parse_pssh_node(pssh_node, drm);\n \t\t\t\tif (e) {\n \t\t\t\t\tcrypt_cpix_drm_del(drm);\n \t\t\t\t\tgoto exit;\n"
+    },
+    {
+      "sha": "4200a3471ebb2570f3aea3e6740b15aab7432001",
+      "edited_message": null,
+      "patch": "--- a/src/media_tools/crypt_tools.c\n+++ b/src/media_tools/crypt_tools.c\n@@ -104,7 +104,7 @@\n \tfor (i=0; i<gf_list_count(node->content); i++) {\n \t\tchild = (GF_XMLNode *) gf_list_get(node->content, i);\n \t\tif (child && ((child->type == GF_XML_TEXT_TYPE) || (child->type == GF_XML_CDATA_TYPE))) {\n-\t\t\tif (strlen(child->name))\n+\t\t\tif (strspn(child->name, \" \\t\\r\\n\") != strlen(child->name))\n \t\t\t\treturn child->name;\n \t\t}\n \t}\n"
+    }
+  ],
+  "coupling": "The CPIX introduction commit adds a PSSH fast path and releases a combined text buffer when its pointer differs from the first XML text node. At that commit crypt_xml_get_text allocates the combined text, so the release is correct. The later commit changes that helper to return DOM-owned text; its edit skips leading whitespace-only text and can return a later CDATA node. The earlier pointer check then mistakes that borrowed later node for an allocated buffer, frees it, and DOM teardown frees it again. With either edit absent, the probe has no memory fault: the original first commit has no pointer check, while the unedited later helper returns the first node. A correct repair must align the PSSH caller with the helper's ownership and selection contract across both commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "gf_crypt_info_load via a registered GF_Blob URL",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

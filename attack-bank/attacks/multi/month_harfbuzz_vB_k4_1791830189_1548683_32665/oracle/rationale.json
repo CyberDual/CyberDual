@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "3cf1c637f58312d3f771e991929a477a6e69536d",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\nindex c39583d..b43b475 100644\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1259,7 +1259,7 @@ cell_add (int32_t *area, int16_t *cover, unsigned width, int col,\n       int32_t dy = fy1 - fy0;\n       cover[0] += (int16_t) (dy * wind);\n       x_min = hb_min (x_min, 0u);\n-      x_max = hb_max (x_max, 0u);\n+      x_max = hb_max (x_max, 1u);\n     }\n     return;\n   }\n@@ -1267,7 +1267,7 @@ cell_add (int32_t *area, int16_t *cover, unsigned width, int col,\n   area[col]  += (fx0 + fx1) * dy * wind;\n   cover[col] += (int16_t) (dy * wind);\n   x_min = hb_min (x_min, (unsigned) col);\n-  x_max = hb_max (x_max, (unsigned) col);\n+  x_max = hb_max (x_max, (unsigned) col + 1);\n }\n \n /* Walk one edge through the pixel cells of a single pixel row,\n@@ -1461,7 +1461,7 @@ edge_sweep_row (int32_t                *area,\n }\n \n /* Convert cover-delta + area to alpha bytes, then clear.\n-   Returns final cover accumulator over [x_min, x_max]. */\n+   Returns final cover accumulator over [x_min, x_max). */\n static int32_t\n sweep_row_to_alpha (uint8_t *__restrict row_buf,\n \t\t    int32_t *__restrict area,\n@@ -1478,7 +1478,7 @@ sweep_row_to_alpha (uint8_t *__restrict row_buf,\n   int32x4_t bias_v  = vdupq_n_s32 (HB_RASTER_FULL_COVERAGE / 2);\n   int32x4_t zero32  = vdupq_n_s32 (0);\n   int16x8_t zero16  = vdupq_n_s16 (0);\n-  for (; x + 7 <= x_max; x += 8)\n+  for (; x + 8 <= x_max; x += 8)\n   {\n     int32_t ctmp[8];\n     for (unsigned i = 0; i < 8; i++)\n@@ -1515,7 +1515,7 @@ sweep_row_to_alpha (uint8_t *__restrict row_buf,\n   __m128i clamp_v = _mm_set1_epi32 (HB_RASTER_FULL_COVERAGE);\n   __m128i bias_v  = _mm_set1_epi32 (HB_RASTER_FULL_COVERAGE / 2);\n   __m128i zero_v  = _mm_setzero_si128 ();\n-  for (; x + 7 <= x_max; x += 8)\n+  for (; x + 8 <= x_max; x += 8)\n   {\n     int32_t ctmp[8];\n     for (unsigned i = 0; i < 8; i++)\n@@ -1555,7 +1555,7 @@ sweep_row_to_alpha (uint8_t *__restrict row_buf,\n   }\n #endif\n \n-  for (; x <= x_max; x++)\n+  for (; x < x_max; x++)\n   {\n     cover_accum += cover[x];\n     int32_t val   = cover_accum * cover_scale - area[x];\n@@ -1713,7 +1713,7 @@ hb_raster_draw_render (hb_raster_draw_t *draw)\n       }\n       draw->active_edges.resize (write);\n \n-      if (x_min <= x_max)\n+      if (x_min < x_max)\n       {\n \tint32_t cover_accum = sweep_row_to_alpha (image->buffer.arrayZ + row * ext.stride,\n \t\t\t\t\t\t   draw->row_area.arrayZ, draw->row_cover.arrayZ,\n@@ -1728,7 +1728,7 @@ hb_raster_draw_render (hb_raster_draw_t *draw)\n \t  uint8_t byte = (uint8_t) (((unsigned) alpha * 255 + HB_RASTER_FULL_COVERAGE / 2) >> (2 * HB_RASTER_PIXEL_BITS + 1));\n \n \t  uint8_t *row_buf = image->buffer.arrayZ + row * ext.stride;\n-\t  hb_memset (row_buf + x_max + 1, byte, ext.width - 1 - x_max);\n+\t  hb_memset (row_buf + x_max, byte, ext.width - x_max);\n \t}\n       }\n     }\n"
+    },
+    {
+      "sha": "8d1d10b12db4df1c385ac83377dc8e4c9cd93789",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\nindex 5134f7f..e55da9c 100644\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1767,7 +1767,7 @@ hb_raster_draw_render (hb_raster_draw_t *draw)\n \tint64_t cover_accum = use_wide ?\n \t  sweep_row_to_alpha_wide (image->buffer.arrayZ + row * ext.stride,\n \t\t\t\t   draw->row_area_wide.arrayZ, draw->row_cover_wide.arrayZ,\n-\t\t\t\t   x_min, x_max) :\n+\t\t\t\t   0, x_max) :\n \t  sweep_row_to_alpha (image->buffer.arrayZ + row * ext.stride,\n \t\t\t      draw->row_area.arrayZ, draw->row_cover.arrayZ,\n \t\t\t      x_min, x_max);\n"
+    }
+  ],
+  "coupling": "The earlier raster clipping commit changes x_max from an inclusive cell index to an exclusive right edge. It updates the narrow sweep, SIMD bounds, row condition, and tail fill consistently, so that commit alone is safe. The later accumulator commit adds a separate wide sweep for dense rows. Its wide converter still loops through x_max inclusively, and the edited call sweeps the full prefix through that shared bound. Against the original inclusive convention the later edit is safe; combined with the earlier exclusive convention it reads cover[width] when an edge reaches the rightmost column. Correct repair requires tracing the boundary contract across both commits and changing the wide converter or its call. Changing only the later full-prefix start back to x_min, or only the earlier narrow-loop bounds, leaves the wide out-of-bounds read reachable.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "hb_raster_draw_get_funcs() draw callbacks followed by hb_raster_draw_render()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

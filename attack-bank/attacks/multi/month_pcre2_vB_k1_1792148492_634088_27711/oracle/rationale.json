@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "abbf6915235c5cb21485c6d7807b20e475f3c78a",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2posix.c b/src/pcre2posix.c\nindex 2f2cdf5..38dc660 100644\n--- a/src/pcre2posix.c\n+++ b/src/pcre2posix.c\n@@ -411,7 +411,7 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t\n     if (pmatch[0].rm_so < 0 || pmatch[0].rm_eo < 0 || pmatch[0].rm_so > pmatch[0].rm_eo)\n       return REG_INVARG;\n     so = (PCRE2_SIZE)pmatch[0].rm_so;\n-    eo = (PCRE2_SIZE)pmatch[0].rm_eo;\n+    eo = (PCRE2_SIZE)(pmatch[0].rm_eo - pmatch[0].rm_so);\n   }\n   else\n   {\n@@ -419,7 +419,7 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t\n     eo = strlen(string);\n   }\n \n-  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, (eo - so), 0,\n+  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, eo, 0,\n                    options, md, NULL);\n \n   /* Successful match */\n"
+    },
+    {
+      "sha": "2d3a98a9f7c908cfd7c6ac81620580fa85c67acf",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2posix.c b/src/pcre2posix.c\nindex 401ad0a..654ca8e 100644\n--- a/src/pcre2posix.c\n+++ b/src/pcre2posix.c\n@@ -440,7 +440,7 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t\n     eo = strlen(string);\n   }\n \n-  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, (eo - so), 0,\n+  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, eo, 0,\n                    options, md, NULL);\n \n   /* Successful match */\n"
+    }
+  ],
+  "coupling": "The defect is a semantic conflict over the meaning of the local variable 'eo' in pcre2_regexec() between two consecutive real maintenance commits, both in src/pcre2posix.c. Commit abbf691 (#1022, 'do not truncate the subject length to int') is edited to normalize eo to hold the subject LENGTH: it sets eo = rm_eo - rm_so in the REG_STARTEND branch and passes eo directly to pcre2_match() instead of (eo - so). Read alone this is complete, correct, and self-consistent: so holds the start offset, eo the length, and (string + so, eo) is exactly the declared subject. Commit 2d3a98a (#1009, 'validate REG_STARTEND offsets') is edited so that, while adding its real NULL/offset validation, it also assigns eo = (PCRE2_SIZE)pmatch[0].rm_eo (the ABSOLUTE end offset, upstream text) without updating the pcre2_match() call site changed by the previous commit. Read alone this also looks correct: in upstream code eo IS the absolute end and (eo - so) at the call site is the length. Only when the two commits compose does pcre2_match() get called as (string + so, eo) with eo = absolute rm_eo: for any REG_STARTEND call with rm_so > 0 the declared subject length over-runs the real buffer by rm_so bytes, and the matcher reads past the end of the caller's allocation (ASan heap-buffer-overflow in match() at pcre2_match.c:1732). The fix is necessarily non-local: reverting either edited commit's diff alone removes the bug (reverting #1022's edit restores (eo - so) with absolute eo; reverting #1009's edit restores eo = rm_eo - rm_so with the direct eo argument), but each single-commit 'fix' contradicts the other commit's convention, so a reviewer must reason across both commits - agreeing one convention for so/eo and using it consistently at both the assignment and the call site - to repair it correctly.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "regcomp/regexec POSIX API (pcre2posix.h)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

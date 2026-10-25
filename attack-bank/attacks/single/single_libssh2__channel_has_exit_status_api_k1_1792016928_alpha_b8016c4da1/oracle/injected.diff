@@ -1,0 +1,299 @@
+diff --git a/docs/Makefile.inc b/docs/Makefile.inc
+index 20dafbafba50a3144bfd5e3d57089911eff4f0ac..534a3869c8b8d5401170ff5601c7e9cb77668011 100644
+--- a/docs/Makefile.inc
++++ b/docs/Makefile.inc
+@@ -35,6 +35,7 @@ man_MANS = \
+   libssh2_channel_get_exit_status.3 \
+   libssh2_channel_handle_extended_data.3 \
+   libssh2_channel_handle_extended_data2.3 \
++  libssh2_channel_has_exit_status.3 \
+   libssh2_channel_ignore_extended_data.3 \
+   libssh2_channel_open_ex.3 \
+   libssh2_channel_open_session.3 \
+diff --git a/docs/libssh2_channel_get_exit_status.md b/docs/libssh2_channel_get_exit_status.md
+index 512c93f4584eb8d5f0253ab01b749170aae81589..54c0df61f454711f43364ae8ab2bc5af88463005 100644
+--- a/docs/libssh2_channel_get_exit_status.md
++++ b/docs/libssh2_channel_get_exit_status.md
+@@ -5,6 +5,7 @@ Title: libssh2_channel_get_exit_status
+ Section: 3
+ Source: libssh2
+ See-also:
++  - libssh2_channel_has_exit_status(3)
+ ---
+ 
+ # NAME
+diff --git a/docs/libssh2_channel_has_exit_status.md b/docs/libssh2_channel_has_exit_status.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..e73f7dc4b320ba9b24f264f46f9e3987fbd54f86
+--- /dev/null
++++ b/docs/libssh2_channel_has_exit_status.md
+@@ -0,0 +1,37 @@
++---
++c: Copyright (C) The libssh2 project and its contributors.
++SPDX-License-Identifier: BSD-3-Clause
++Title: libssh2_channel_has_exit_status
++Section: 3
++Source: libssh2
++See-also:
++  - libssh2_channel_get_exit_status(3)
++---
++
++# NAME
++
++libssh2_channel_has_exit_status - tell whether the peer reported an exit
++status
++
++# SYNOPSIS
++
++~~~c
++#include <libssh2.h>
++
++int libssh2_channel_has_exit_status(LIBSSH2_CHANNEL *channel)
++~~~
++
++# DESCRIPTION
++
++*channel* - Channel stream to check.
++
++Reports whether the remote host has delivered an exit status for the named
++channel. An exit status of zero is a valid value, so
++libssh2_channel_get_exit_status(3) alone cannot distinguish a process that
++exited with status zero from one whose exit status has not been received
++yet.
++
++# RETURN VALUE
++
++Returns 1 if an exit status has been received for the channel, 0 if it has
++not (or if *channel* is NULL).
+diff --git a/include/libssh2.h b/include/libssh2.h
+index c9b9e78c8735e034f47ae5574c9ea35f5af3f1b3..6ec7f79b0a70a55ff464c7021e3374c38b3807fd 100644
+--- a/include/libssh2.h
++++ b/include/libssh2.h
+@@ -993,6 +993,7 @@ LIBSSH2_API int libssh2_channel_flush_ex(LIBSSH2_CHANNEL *channel,
+ #define libssh2_channel_flush_stderr(channel) \
+     libssh2_channel_flush_ex(channel, SSH_EXTENDED_DATA_STDERR)
+ 
++LIBSSH2_API int libssh2_channel_has_exit_status(LIBSSH2_CHANNEL *channel);
+ LIBSSH2_API int libssh2_channel_get_exit_status(LIBSSH2_CHANNEL *channel);
+ LIBSSH2_API int libssh2_channel_get_exit_signal(LIBSSH2_CHANNEL *channel,
+                                                 char **exitsignal,
+diff --git a/os400/libssh2rpg/libssh2.rpgle.in b/os400/libssh2rpg/libssh2.rpgle.in
+index 931c550b51a354841df1cdb4171f3d4cb7ae1f99..d6adbe9a7258e6fecd409a9ed68feb1c74145f53 100644
+--- a/os400/libssh2rpg/libssh2.rpgle.in
++++ b/os400/libssh2rpg/libssh2.rpgle.in
+@@ -1320,6 +1320,12 @@
+      d                                     like(libssh2_Cint)
+      d  channel                        *   value                                LIBSSH2_CHANNEL *
+ 
++     d libssh2_channel_has_exit_status...
++     d                 pr                  extproc(
++     d                                     'libssh2_channel_has_exit_status')
++     d                                     like(libssh2_Cint)
++     d  channel                        *   value                                LIBSSH2_CHANNEL *
++
+      d libssh2_channel_get_exit_status...
+      d                 pr                  extproc(
+      d                                     'libssh2_channel_get_exit_status')
+diff --git a/src/channel.c b/src/channel.c
+index e3ab8bfebd1774d07f1207fd2e731f4a66eb2b66..cb5f7579f7d38763a7f78f59c093812ff686e020 100644
+--- a/src/channel.c
++++ b/src/channel.c
+@@ -1632,6 +1632,18 @@ int libssh2_channel_flush_ex(LIBSSH2_CHANNEL *channel, int streamid)
+     return rc;
+ }
+ 
++/*
++ * Tell whether the peer delivered an exit status for the channel. Returns
++ * zero if the channel is NULL or no exit status has arrived yet.
++ */
++int libssh2_channel_has_exit_status(LIBSSH2_CHANNEL *channel)
++{
++    if(!channel)
++        return 0;
++
++    return channel->exit_status_set ? 1 : 0;
++}
++
+ /*
+  * Return the channel's program exit status. Note that the actual protocol
+  * provides the full 32-bit this function returns.  We cannot abuse it to
+diff --git a/src/libssh2_priv.h b/src/libssh2_priv.h
+index e2f8a6e6a37deaeff3c07e37d8351c3114e0c047..fef74a9c309285c719261d5325f009768c4c96b4 100644
+--- a/src/libssh2_priv.h
++++ b/src/libssh2_priv.h
+@@ -466,6 +466,9 @@ struct _LIBSSH2_CHANNEL {
+     /* channel's program exit status */
+     int exit_status;
+ 
++    /* nonzero once the peer delivered an exit status */
++    char exit_status_set;
++
+     /* channel's program exit signal (without the SIG prefix) */
+     char *exit_signal;
+ 
+diff --git a/src/packet.c b/src/packet.c
+index e040ba81d273b6662dea191fbf4d4f4baaecddc3..d320543be97446aceb42eaee041447d780b308e6 100644
+--- a/src/packet.c
++++ b/src/packet.c
+@@ -1099,17 +1099,16 @@ ssh2_packet_add_jump_point1:
+                 if(SSH2_IS_LITERAL(request, len, "exit-status")) {
+                     /* we have got "exit-status" packet. Set the session value.
+                      */
+-                    if(datalen >= 20)
++                    uint32_t status = 0;
++
++                    if(datalen >= 20) {
++                        status = ssh2_ntohu32(buf.dataptr);
+                         channelp = ssh2_channel_locate(session, channel);
++                    }
+ 
+                     if(channelp) {
+-
+-                        uint32_t status = 0;
+-                        if(ssh2_get_u32(&buf, &status))
+-                            rc = ssh2_err(session, LIBSSH2_ERROR_PROTO,
+-                                          "exit-signal status error");
+-
+                         channelp->exit_status = (int)status;
++                        channelp->exit_status_set = 1;
+ 
+                         ssh2_deb((session, LIBSSH2_TRACE_CONN,
+                                   "Exit status %d received for channel %u/%u",
+diff --git a/tests/Makefile.inc b/tests/Makefile.inc
+index 1351362d6775be40e502d7ea37d25a81f11ebfb6..0d8c014c4de638ca528e506ee27510f9b141143a 100644
+--- a/tests/Makefile.inc
++++ b/tests/Makefile.inc
+@@ -39,6 +39,7 @@ DOCKER_TESTS = \
+   test_auth_pubkey_ok_rsa_pem_signed \
+   test_auth_pubkey_ok_rsa_pkcs8 \
+   test_auth_pubkey_ok_rsa_pkcs8_encrypted \
++  test_exit_status \
+   test_hostkey_hash \
+   test_read
+ 
+diff --git a/tests/test_exit_status.c b/tests/test_exit_status.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..ff7331e43bdfb1eb4fc97ce67b0baec63668a9a2
+--- /dev/null
++++ b/tests/test_exit_status.c
+@@ -0,0 +1,120 @@
++/* Copyright (C) The libssh2 project and its contributors.
++ *
++ * libssh2 test checking exit status reporting on a channel
++ *
++ * SPDX-License-Identifier: BSD-3-Clause
++ */
++
++#include "runner.h"
++#include "openssh_fixture.h"
++
++#include <stdlib.h>  /* for getenv() */
++#include <string.h>
++
++/* set in Dockerfile */
++static const char *username = "libssh2";
++static const char *key_file_private = "keys/id_rsa_pem";
++static const char *key_file_public = "keys/id_rsa_pem.pub";
++
++int test(LIBSSH2_SESSION *session)
++{
++    int rc = 0;
++    LIBSSH2_CHANNEL *channel = NULL;
++    const char *userauth_list;
++
++    /* Ignore our hard-wired Dockerfile user when not running under Docker */
++    if(!openssh_fixture_have_docker()) {
++        username = getenv("USER");
++#ifdef _WIN32
++        if(!username)
++            username = getenv("USERNAME");
++#endif
++    }
++
++    if(!username) {
++        fprintf(stderr, "username not set\n");
++        return 1;
++    }
++
++    userauth_list = libssh2_userauth_list(session, username,
++                                          (unsigned int)strlen(username));
++    if(!userauth_list) {
++        print_last_session_error("libssh2_userauth_list");
++        return 1;
++    }
++
++    if(!strstr(userauth_list, "publickey")) {
++        fprintf(stderr, "'publickey' was expected in userauth list: %s\n",
++                userauth_list);
++        return 1;
++    }
++
++    rc = libssh2_userauth_publickey_fromfile_ex(session, username,
++                                                (unsigned int)strlen(username),
++                                                srcdir_path(key_file_public),
++                                                srcdir_path(key_file_private),
++                                                NULL);
++    if(rc) {
++        print_last_session_error("libssh2_userauth_publickey_fromfile_ex");
++        return 1;
++    }
++
++    channel = libssh2_channel_open_session(session);
++    if(!channel) {
++        fprintf(stderr, "Unable to open a session\n");
++        return 1;
++    }
++
++    if(libssh2_channel_exec(channel, "true")) {
++        fprintf(stderr, "Unable to request command on channel\n");
++        rc = 1;
++        goto shutdown;
++    }
++
++    if(libssh2_channel_has_exit_status(channel)) {
++        fprintf(stderr, "Exit status reported before command finished\n");
++        rc = 1;
++        goto shutdown;
++    }
++
++    while(!libssh2_channel_eof(channel)) {
++        char buf[1024];
++        ssize_t err = libssh2_channel_read(channel, buf, sizeof(buf));
++        if(err < 0) {
++            fprintf(stderr, "Unable to read response: %ld\n", (long)err);
++            rc = 1;
++            goto shutdown;
++        }
++    }
++
++    if(libssh2_channel_close(channel)) {
++        fprintf(stderr, "Unable to close channel\n");
++        rc = 1;
++        goto shutdown;
++    }
++
++    if(libssh2_channel_wait_closed(channel)) {
++        fprintf(stderr, "Unable to wait for channel close\n");
++        rc = 1;
++        goto shutdown;
++    }
++
++    if(!libssh2_channel_has_exit_status(channel)) {
++        fprintf(stderr, "Exit status not reported for channel\n");
++        rc = 1;
++        goto shutdown;
++    }
++
++    if(libssh2_channel_get_exit_status(channel) != 0) {
++        fprintf(stderr, "Unexpected exit status: %d\n",
++                libssh2_channel_get_exit_status(channel));
++        rc = 1;
++        goto shutdown;
++    }
++
++shutdown:
++
++    libssh2_channel_free(channel);
++
++    return rc;
++}

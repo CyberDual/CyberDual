@@ -1,0 +1,53 @@
+diff --git a/src/preview.cpp b/src/preview.cpp
+index eda5c1a..f26e106 100644
+--- a/src/preview.cpp
++++ b/src/preview.cpp
+@@ -934,7 +934,7 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {
+   auto destData = dest.data();
+   size_t destPos = 0;
+   for (size_t i = rle ? 3 : 0; i < imageDataSize;) {
+-    byte num = 1;
++    uint32_t num = 1;
+     byte value = imageData[i++];
+     if (rle && value == 0xFD) {
+       if (i >= imageDataSize) {
+@@ -945,17 +945,33 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {
+       }
+       value = imageData[i++];
+       if (value != 0xFD) {
+-        if (i >= imageDataSize) {
++        // A zero count is followed by a big-endian uint32 repeat. Writers use
++        // that form for runs longer than a single byte; a bare zero used to
++        // emit nothing and desynchronize the rest of the stream.
++        if (value == 0) {
++          if (i + 4 >= imageDataSize) {
+ #ifndef SUPPRESS_WARNINGS
+-          EXV_WARNING << "Unexpected end of image data at AI7 thumbnail.\n";
++            EXV_WARNING << "Unexpected end of image data at AI7 thumbnail.\n";
+ #endif
+-          return {};
++            return {};
++          }
++          num = (static_cast<uint32_t>(imageData[i]) << 24) | (static_cast<uint32_t>(imageData[i + 1]) << 16) |
++                (static_cast<uint32_t>(imageData[i + 2]) << 8) | static_cast<uint32_t>(imageData[i + 3]);
++          i += 4;
++          value = imageData[i++];
++        } else {
++          if (i >= imageDataSize) {
++#ifndef SUPPRESS_WARNINGS
++            EXV_WARNING << "Unexpected end of image data at AI7 thumbnail.\n";
++#endif
++            return {};
++          }
++          num = value;
++          value = imageData[i++];
+         }
+-        num = value;
+-        value = imageData[i++];
+       }
+     }
+-    Internal::enforce(expectedSize - destPos >= static_cast<size_t>(num) * 3, ErrorCode::kerCorruptedMetadata);
++    Internal::enforce(expectedSize - destPos >= static_cast<uint32_t>(num) * 3U, ErrorCode::kerCorruptedMetadata);
+     const auto c0 = colorTable[value * 3];
+     const auto c1 = colorTable[value * 3 + 1];
+     const auto c2 = colorTable[value * 3 + 2];

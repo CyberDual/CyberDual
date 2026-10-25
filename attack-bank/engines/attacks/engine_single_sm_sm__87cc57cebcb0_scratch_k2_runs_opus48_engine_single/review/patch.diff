@@ -1,0 +1,91 @@
+diff --git a/js/src/gc/Zone.cpp b/js/src/gc/Zone.cpp
+index 08e400657f..ecba77aa38 100644
+--- a/js/src/gc/Zone.cpp
++++ b/js/src/gc/Zone.cpp
+@@ -392,10 +392,14 @@ void Zone::forceDiscardJitCode(JS::GCContext* gcx,
+       });
+ 
+   // Also clear references to jit code from RegExpShared cells at this point.
+-  // This avoid holding onto ExecutablePools.
++  // This avoid holding onto ExecutablePools. RegExpShareds with an execution in
++  // progress are skipped: their jitcode may be active on the stack and would be
++  // used again once the interrupt that triggered this discard is handled.
+   for (auto regExp = cellIterUnsafe<RegExpShared>(); !regExp.done();
+        regExp.next()) {
+-    regExp->discardJitCode();
++    if (!regExp->hasActiveUse()) {
++      regExp->discardJitCode();
++    }
+   }
+ 
+   /*
+diff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp
+index 7ee71d3eca..2861db1815 100644
+--- a/js/src/vm/RegExpObject.cpp
++++ b/js/src/vm/RegExpObject.cpp
+@@ -6,6 +6,7 @@
+ 
+ #include "mozilla/MemoryReporting.h"
+ #include "mozilla/PodOperations.h"
++#include "mozilla/ScopeExit.h"
+ 
+ #include <type_traits>
+ 
+@@ -745,6 +746,12 @@ RegExpRunStatus RegExpShared::execute(JSContext* cx,
+     return RegExpShared::executeAtom(re, input, start, matches);
+   }
+ 
++  // Pin the jitcode for the duration of execution. An interrupt handled while
++  // this regexp is running on the stack may trigger a GC that would otherwise
++  // discard the jitcode we are about to resume into.
++  re->addActiveUse();
++  auto dropActiveUse = mozilla::MakeScopeExit([&] { re->removeActiveUse(); });
++
+   uint32_t interruptRetries = 0;
+   const uint32_t maxInterruptRetries = 4;
+   do {
+@@ -789,6 +796,12 @@ RegExpRunStatus RegExpShared::execute(JSContext* cx,
+                                   RegExpShared::CodeKind::Jitcode)) {
+             return RegExpRunStatus::Error;
+           }
++          // Re-expand the output buffer to hold one pair per capture group
++          // before resuming into the (re)compiled code.
++          if (!matches->allocOrExpandArray(re->pairCount() - 1)) {
++            ReportOutOfMemory(cx);
++            return RegExpRunStatus::Error;
++          }
+           continue;
+         }
+       }
+diff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h
+index 62b64350cb..a3a8e3ce7f 100644
+--- a/js/src/vm/RegExpShared.h
++++ b/js/src/vm/RegExpShared.h
+@@ -119,6 +119,11 @@ class RegExpShared
+   uint32_t maxRegisters_ = 0;
+   uint32_t ticks_ = 0;
+ 
++  // Number of in-progress executions that may have jitcode belonging to this
++  // RegExpShared live on the stack. While this is nonzero, a GC triggered by
++  // an interrupt must not discard the jitcode (see discardJitCode).
++  uint32_t activeUses_ = 0;
++
+   // With duplicate named capture groups, it's possible that the number of
+   // distinct named groups is less than the total number of named captures.
+   // If they are equal, we used the namedCaptureIndices_ array directly to
+@@ -266,6 +271,15 @@ class RegExpShared
+   void discardJitCode();
+   void finalize(JS::GCContext* gcx);
+ 
++  // Executions in progress pin the jitcode so it isn't discarded from under an
++  // active frame when an interrupt triggers a GC.
++  void addActiveUse() { activeUses_++; }
++  void removeActiveUse() {
++    MOZ_ASSERT(activeUses_ > 0);
++    activeUses_--;
++  }
++  bool hasActiveUse() const { return activeUses_ > 0; }
++
+   static size_t offsetOfSource() { return offsetOfHeaderPtr(); }
+ 
+   static size_t offsetOfPatternAtom() {

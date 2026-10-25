@@ -1,0 +1,41 @@
+diff --git a/src/lib/OpenEXRCore/internal_zstd.c b/src/lib/OpenEXRCore/internal_zstd.c
+index 670b92a73c768ebf3b5cc4cec26d92c90fe23b79..c719ca6cf6debceb8b408f8da8ef6f4835f36505 100644
+--- a/src/lib/OpenEXRCore/internal_zstd.c
++++ b/src/lib/OpenEXRCore/internal_zstd.c
+@@ -1298,6 +1298,29 @@ exr_undo_zstd_v1 (
+         sorting_lookup,
+         pack_channels);
+ 
++    uint64_t channel_bytes[32] = {0};
++    for (int h = 0; h < chunk_line_count; ++h)
++    {
++        for (int c = 0; c < channel_count; ++c)
++        {
++            uint64_t const count =
++                channel_sample_count_grid[h * channel_count + c];
++            uint64_t const bytes = pack_channels[c].bytes_per_element;
++            if (bytes == 0 || count > (UINT64_MAX - channel_bytes[c]) / bytes)
++                return EXR_ERR_CORRUPT_CHUNK;
++            channel_bytes[c] += count * bytes;
++        }
++    }
++
++    uint64_t layout_size = 0;
++    for (int c = 0; c < channel_count; ++c)
++    {
++        if (channel_bytes[c] > UINT64_MAX - layout_size)
++            return EXR_ERR_CORRUPT_CHUNK;
++        layout_size += channel_bytes[c];
++    }
++    if (layout_size != uncompressed_size) return EXR_ERR_CORRUPT_CHUNK;
++
+     exr_zstd_pack_pipeline pipe;
+     exr_zstd_build_decode_pipeline (fr.format, fr.flags, &pipe);
+ 
+@@ -1400,4 +1423,4 @@ internal_exr_undo_zstd (
+         comp_buf_size,
+         uncompressed_data,
+         uncompressed_size);
+-}
+\ No newline at end of file
++}

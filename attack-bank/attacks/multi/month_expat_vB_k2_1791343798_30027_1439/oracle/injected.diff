@@ -1,0 +1,106 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db9..404542d 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -419,7 +419,7 @@ typedef struct {
+ #endif /* XML_DTD */
+   PREFIX defaultPrefix;
+   /* === scaffolding for building content model === */
+-  bool in_eldecl;
++  XML_Bool in_eldecl;
+   CONTENT_SCAFFOLD *scaffold;
+   unsigned contentStringLen;
+   unsigned scaffSize;
+@@ -441,7 +441,7 @@ typedef struct open_internal_entity {
+   struct open_internal_entity *next;
+   ENTITY *entity;
+   int startTagLevel;
+-  bool betweenDecl; /* WFC: PE Between Declarations */
++  XML_Bool betweenDecl; /* WFC: PE Between Declarations */
+   enum EntityType type;
+ } OPEN_INTERNAL_ENTITY;
+ 
+@@ -511,7 +511,7 @@ static enum XML_Error doProlog(XML_Parser parser, const ENCODING *enc,
+                                XML_Bool haveMore, XML_Bool allowClosingDoctype,
+                                enum XML_Account account);
+ static enum XML_Error processEntity(XML_Parser parser, ENTITY *entity,
+-                                    bool betweenDecl, enum EntityType type);
++                                    XML_Bool betweenDecl, enum EntityType type);
+ static enum XML_Error doContent(XML_Parser parser, int startTagLevel,
+                                 const ENCODING *enc, const char *start,
+                                 const char *end, const char **endPtr,
+@@ -6377,7 +6377,8 @@ doProlog(XML_Parser parser, const ENCODING *enc, const char *s, const char *end,
+           return XML_ERROR_RECURSIVE_ENTITY_REF;
+         if (entity->textPtr) {
+           enum XML_Error result;
+-          bool betweenDecl = (role == XML_ROLE_PARAM_ENTITY_REF);
++          XML_Bool betweenDecl
++              = (role == XML_ROLE_PARAM_ENTITY_REF ? XML_TRUE : XML_FALSE);
+           result = processEntity(parser, entity, betweenDecl, ENTITY_INTERNAL);
+           if (result != XML_ERROR_NONE)
+             return result;
+@@ -6429,7 +6430,7 @@ doProlog(XML_Parser parser, const ENCODING *enc, const char *s, const char *end,
+           return XML_ERROR_NO_MEMORY;
+         dtd->scaffLevel = 0;
+         dtd->scaffCount = 0;
+-        dtd->in_eldecl = true;
++        dtd->in_eldecl = XML_TRUE;
+         handleDefault = XML_FALSE;
+       }
+       break;
+@@ -6458,7 +6459,7 @@ doProlog(XML_Parser parser, const ENCODING *enc, const char *s, const char *end,
+           afterHandler(parser);
+           handleDefault = XML_FALSE;
+         }
+-        dtd->in_eldecl = false;
++        dtd->in_eldecl = XML_FALSE;
+       }
+       break;
+ 
+@@ -6499,7 +6500,9 @@ doProlog(XML_Parser parser, const ENCODING *enc, const char *s, const char *end,
+           return XML_ERROR_NO_MEMORY;
+         name = el->name;
+         dtd->scaffold[myindex].name = name;
+-        nameLen = xcslen(name) + /*null terminator*/ 1;
++        /* Count only the characters here; the per-name NUL terminators
++           are reserved separately in build_model(). */
++        nameLen = xcslen(name);
+ 
+         /* Detect and prevent integer overflow */
+         if (nameLen > UINT_MAX - dtd->contentStringLen) {
+@@ -6540,7 +6543,7 @@ doProlog(XML_Parser parser, const ENCODING *enc, const char *s, const char *end,
+                 parser->m_handlerArg, parser->m_declElementType->name, model);
+             afterHandler(parser);
+           }
+-          dtd->in_eldecl = false;
++          dtd->in_eldecl = XML_FALSE;
+           dtd->contentStringLen = 0;
+         }
+       }
+@@ -6688,7 +6691,7 @@ epilogProcessor(XML_Parser parser, const char *s, const char *end,
+ }
+ 
+ static enum XML_Error
+-processEntity(XML_Parser parser, ENTITY *entity, bool betweenDecl,
++processEntity(XML_Parser parser, ENTITY *entity, XML_Bool betweenDecl,
+               enum EntityType type) {
+   OPEN_INTERNAL_ENTITY *openEntity, **openEntityList;
+   OPEN_INTERNAL_ENTITY **const freeEntityList = &parser->m_freeEntities;
+@@ -7881,7 +7884,7 @@ dtdCreate(XML_Parser parser) {
+   p->defaultPrefix.name = NULL;
+   p->defaultPrefix.binding = NULL;
+ 
+-  p->in_eldecl = false;
++  p->in_eldecl = XML_FALSE;
+   p->scaffIndex = NULL;
+   p->scaffIndexSize = 0;
+   p->scaffold = NULL;
+@@ -7920,7 +7923,7 @@ dtdReset(DTD *p, XML_Parser parser) {
+   p->defaultPrefix.name = NULL;
+   p->defaultPrefix.binding = NULL;
+ 
+-  p->in_eldecl = false;
++  p->in_eldecl = XML_FALSE;
+ 
+   FREE(parser, p->scaffIndex);
+   p->scaffIndex = NULL;

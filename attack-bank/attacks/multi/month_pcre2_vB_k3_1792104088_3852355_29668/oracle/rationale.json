@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "abbf6915235c5cb21485c6d7807b20e475f3c78a",
+      "edited_message": null,
+      "patch": "--- a/src/pcre2posix.c\n+++ b/src/pcre2posix.c\n@@ -411,7 +411,7 @@\n     if (pmatch[0].rm_so < 0 || pmatch[0].rm_eo < 0 || pmatch[0].rm_so > pmatch[0].rm_eo)\n       return REG_INVARG;\n     so = (PCRE2_SIZE)pmatch[0].rm_so;\n-    eo = (PCRE2_SIZE)pmatch[0].rm_eo;\n+    eo = (PCRE2_SIZE)(pmatch[0].rm_eo - pmatch[0].rm_so);\n   }\n   else\n   {\n@@ -419,7 +419,7 @@\n     eo = strlen(string);\n   }\n \n-  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, (eo - so), 0,\n+  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, eo, 0,\n                    options, md, NULL);\n \n   /* Successful match */\n"
+    },
+    {
+      "sha": "2d3a98a9f7c908cfd7c6ac81620580fa85c67acf",
+      "edited_message": null,
+      "patch": "--- a/src/pcre2posix.c\n+++ b/src/pcre2posix.c\n@@ -396,7 +396,7 @@\n               int eflags)\n {\n   int rc;\n-  PCRE2_SIZE so, eo;\n+  PCRE2_SIZE so, eo, length;\n   int options = 0;\n   pcre2_match_data *md;\n \n@@ -440,7 +440,8 @@\n     eo = strlen(string);\n   }\n \n-  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, (eo - so), 0,\n+  length = eo - so;\n+  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, length, 0,\n                    options, md, NULL);\n \n   /* Successful match */\n"
+    }
+  ],
+  "coupling": "The first commit changes eo from an absolute REG_STARTEND end offset into the checked window length and passes it directly to pcre2_match. The later validation commit makes the match length an explicit eo - so calculation, interpreting eo as an absolute end again. Both changes are safe in isolation: the first passes the relative length directly, and the second subtracts from the original absolute end. Together, a valid range whose start exceeds its width underflows PCRE2_SIZE and makes the matcher read beyond the bounded subject. A fix must make the range representation and its consumer agree across both commits; changing only the raw offset validation leaves this valid range reachable.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "pcre2_regcomp / pcre2_regexec (pcre2posix.h)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

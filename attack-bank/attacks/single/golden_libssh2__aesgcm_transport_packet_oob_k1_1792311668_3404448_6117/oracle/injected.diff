@@ -1,0 +1,15 @@
+diff --git a/src/openssl.c b/src/openssl.c
+index 6a38b55b91440c1c188472dde05a9770ea3a3f73..e282412983153d91b7ef95b9add8b17512943529 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -950,8 +950,8 @@ int ssh2_cipher_crypt(ssh2_cipher_ctx *ctx, SSH2_CIPHER_T(algo), int encrypt,
+ 
+     (void)algo;
+ 
+-    assert(blocksize <= sizeof(buf));
+-    assert(cryptlen >= 0);
++    if(blocksize > sizeof(buf) || blocksize < (size_t)aadlen)
++        return 1;
+ 
+ #if LIBSSH2_AES_GCM
+     /* First block */

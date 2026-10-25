@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-190",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "9e6b233498a113edf8bda283ca638703f835445b",
+  "parent_sha": "9e6b233498a113edf8bda283ca638703f835445b",
+  "project": "libwebp",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/webmproject/libwebp",
+  "repo_url": "https://github.com/webmproject/libwebp",
+  "source": "reselect",
+  "target": "libwebp",
+  "task": "WebPPictureView/WebPPictureCrop with large left/top: (*left)+width addition in AdjustAndCheckRectangle wraps and an out-of-bounds crop rectangle is accepted as in-bounds. Single file src/enc/picture_rescale_enc.c.",
+  "task_iid": "libwebp__picture_crop_integer_overflow",
+  "vuln_desc": "WebPPictureView/WebPPictureCrop with large left/top: (*left)+width addition in AdjustAndCheckRectangle wraps and an out-of-bounds crop rectangle is accepted as in-bounds. Single file src/enc/picture_rescale_enc.c."
+}

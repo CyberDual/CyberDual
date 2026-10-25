@@ -1,0 +1,35 @@
+diff --git a/src/hb-buffer-serialize.cc b/src/hb-buffer-serialize.cc
+index 923524d708ae23146b27b637f87c179d988b2b44..a94b0408411e3005194a82630fa5c6edb8bb385b 100644
+--- a/src/hb-buffer-serialize.cc
++++ b/src/hb-buffer-serialize.cc
+@@ -787,7 +787,7 @@ hb_buffer_deserialize_glyphs (hb_buffer_t *buffer,
+     return false;
+   }
+ 
+-  if (buf_len == -1)
++  if (buf_len)
+     buf_len = strlen (buf);
+ 
+   if (!buf_len)
+@@ -796,6 +796,10 @@ hb_buffer_deserialize_glyphs (hb_buffer_t *buffer,
+     return false;
+   }
+ 
++  if (format != HB_BUFFER_SERIALIZE_FORMAT_TEXT &&
++      format != HB_BUFFER_SERIALIZE_FORMAT_JSON)
++    return false;
++
+   hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_GLYPHS);
+ 
+   if (!font)
+@@ -867,6 +871,10 @@ hb_buffer_deserialize_unicode (hb_buffer_t *buffer,
+     return false;
+   }
+ 
++  if (format != HB_BUFFER_SERIALIZE_FORMAT_TEXT &&
++      format != HB_BUFFER_SERIALIZE_FORMAT_JSON)
++    return false;
++
+   hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_UNICODE);
+ 
+   hb_font_t* font = hb_font_get_empty ();

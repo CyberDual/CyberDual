@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "a9eeb8d3f21be5a8a50c9022d69334b5034b003c",
+      "edited_message": null,
+      "patch": "diff --git a/lib/parsedate.c b/lib/parsedate.c\nindex b4dd97bb7f..62c81a4613 100644\n--- a/lib/parsedate.c\n+++ b/lib/parsedate.c\n@@ -114,7 +114,7 @@ struct tzinfo {\n \n #define tDAYZONE (-60)         /* offset for daylight savings time */\n \n-/* alpha-sorted list of single-letter time zones */\n+/* alpha-sorted list of single-letter time zones, no entry for J */\n static const struct tzinfo tzone[] = {\n   { \"A\", -1 * 60 },            /* Alpha */\n   { \"B\", -2 * 60 },            /* Bravo */\n@@ -125,7 +125,6 @@ static const struct tzinfo tzone[] = {\n   { \"G\", -7 * 60 },            /* Golf */\n   { \"H\", -8 * 60 },            /* Hotel */\n   { \"I\", -9 * 60 },            /* India */\n-  { \"\", -1 },          /* not a timezone */\n   { \"K\", -10 * 60 },           /* Kilo */\n   { \"L\", -11 * 60 },           /* Lima */\n   { \"M\", -12 * 60 },           /* Mike */\n@@ -337,7 +336,8 @@ UNITTEST int checktz(const char *check, size_t len)\n     /* short-cut single letter names */\n     if((check[0] < 'A') || (check[0] > 'Z') || (check[0] == 'J'))\n       return -1; /* no such tz */\n-    return tzone[check[0] - 'A'].offset * 60;\n+    /* there is no entry for J, skip its slot */\n+    return tzone[check[0] - 'A' - (check[0] > 'J')].offset * 60;\n   }\n   else if(len == 2) {\n     /* two-letter names */\n"
+    },
+    {
+      "sha": "791f5e19d74ffd34d1db2b2737a635e0dda45a1e",
+      "edited_message": null,
+      "patch": "diff --git a/lib/parsedate.c b/lib/parsedate.c\nindex 9630a988b9..98437f31bf 100644\n--- a/lib/parsedate.c\n+++ b/lib/parsedate.c\n@@ -125,7 +125,6 @@ static const int16_t tzone[] = {\n   -7 * 60,            /* Golf */\n   -8 * 60,            /* Hotel */\n   -9 * 60,            /* India */\n-  -1,                 /* J - not a timezone */\n   -10 * 60,           /* Kilo */\n   -11 * 60,           /* Lima */\n   -12 * 60,           /* Mike */\n"
+    }
+  ],
+  "coupling": "The defect is an out-of-bounds read of the single-letter time zone table lib/parsedate.c:tzone[] reached from the public API curl_getdate() with a perfectly ordinary RFC 1123 date whose zone is the military letter 'Z' (\\\"Sun, 06 Nov 1994 08:49:37 Z\\\"). It only exists when the two edited commits are composed; each one, on its own, is internally consistent and benign. Commit a9eeb8d3f2 ('parsedate: find day names, months and time zones faster') drops the dead placeholder entry for the letter J from the alpha-sorted table - J is not a time zone and is rejected before lookup, so the entry was unreachable - and correspondingly shifts the lookup index to tzone[check[0] - 'A' - (check[0] > 'J')] so letters K..Z still hit the right slots in the now 25-entry table. That commit is correct: every index it computes is in bounds (verified by building that tree alone: the PoC parses cleanly, rc 0). The later commit 791f5e19d7 ('parsedate: time zone strings') rewrites checktz(): it hoists first = check[0], converts the table to a plain int16_t array, and re-derives the lookup as the canonical upstream expression tzone[first - 'A'] * 60 - silently discarding the slot-skip that commit one had added, because that expression is exactly what the original 26-entry table used. Read alone, neither diff is wrong: commit one removes a dead entry and keeps its own index aligned; commit two's diff relative to the real upstream commit is a single table line (no J slot carried forward, a natural consequence of its parent) and its index line is byte-identical to upstream. Only their combination is buggy: a 25-entry (50 byte) global indexed with first - 'A', so 'Z' (and only 'Z') reads tzone[25] - two bytes past the object - which AddressSanitizer reports as a global-buffer-overflow in checktz (letters K..Y merely read a neighbouring zone's offset, silently wrong). A correct fix cannot come from either commit's diff alone: reverting commit one's index shift still leaves the 25-entry table from commit one upstream of commit two's rewrite, and patching only commit two's table requires knowing commit one deliberately removed the J slot. The fix has to reconcile the table layout introduced in commit one with the index expression introduced in commit two - restore a placeholder slot or restore the slot-skip - which is reasoning across both commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "curl_getdate",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

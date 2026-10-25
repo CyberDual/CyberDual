@@ -1,0 +1,22 @@
+diff --git a/src/pem.c b/src/pem.c
+index ac1cb6aa372dd383ac772e68772ea37b9b226742..8f29aa2a774b1c4ef794db83bdbd283dc90bf578 100644
+--- a/src/pem.c
++++ b/src/pem.c
+@@ -664,13 +664,16 @@ static int pem_parse_data_openssh(LIBSSH2_SESSION *session,
+     if(decrypted_buf) {
+         /* copy data to out-going buffer */
+         struct string_buf *out_buf = ssh2_string_buf_new(session);
++        size_t alloc_len = decrypted.len;
+         if(!out_buf) {
+             ret = ssh2_err(session, LIBSSH2_ERROR_ALLOC,
+                            "Unable to allocate memory for decrypted struct");
+             goto out;
+         }
+ 
+-        out_buf->data = SSH2_CALLOC(session, decrypted.len);
++        if(!method)
++            alloc_len++;
++        out_buf->data = SSH2_CALLOC(session, alloc_len);
+         if(!out_buf->data) {
+             ret = ssh2_err(session, LIBSSH2_ERROR_ALLOC,
+                            "Unable to allocate memory for decrypted struct");

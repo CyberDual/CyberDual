@@ -1,0 +1,93 @@
+diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c
+index c4ee9dd9df91db436b95e2d870e189d92689a994..014710ed96914e9f6bfe68958a4c14b733c06d4e 100644
+--- a/expat/lib/xmltok.c
++++ b/expat/lib/xmltok.c
+@@ -54,6 +54,7 @@
+ #include "expat_config.h"
+ 
+ #include <stddef.h>
++#include <stdlib.h> /* malloc, free */
+ #include <string.h> /* memcpy */
+ #include <stdbool.h>
+ 
+@@ -1154,6 +1155,67 @@ static const char KW_yes[] = {ASCII_y, ASCII_e, ASCII_s, '\0'};
+ 
+ static const char KW_no[] = {ASCII_n, ASCII_o, '\0'};
+ 
++/* VersionNum ::= '1.' [0-9]+ */
++static int
++matchOneDotDigits(const char *s) {
++  const char *p;
++  if (s[0] != ASCII_1 || s[1] != ASCII_PERIOD)
++    return 0;
++  p = s + 2;
++  if (*p == '\0')
++    return 0;
++  for (; *p != '\0'; p++) {
++    if ((unsigned char)*p < ASCII_0 || (unsigned char)*p > ASCII_9)
++      return 0;
++  }
++  return 1;
++}
++
++static int
++checkXmlDeclVersionNum(const ENCODING *enc, const char *ptr, const char *end) {
++  enum { VERSION_SCRATCH = 128 };
++  char scratch[VERSION_SCRATCH];
++  char *flat;
++  char *heap = NULL;
++  const ptrdiff_t minBpc = (ptrdiff_t)enc->minBytesPerChar;
++  ptrdiff_t nchars;
++  ptrdiff_t i;
++  int c;
++  int ok;
++
++  if (minBpc <= 0 || ptr > end)
++    return 0;
++  nchars = (end - ptr) / minBpc;
++  if (nchars < 3)
++    return 0;
++
++  /* Common versions ("1.0", "1.1", ...) stay on the stack. Longer digit
++     runs are still VersionNum, so flatten those on the heap. */
++  if (nchars < (ptrdiff_t)sizeof(scratch)) {
++    flat = scratch;
++  } else {
++    heap = malloc((size_t)nchars);
++    if (heap == NULL)
++      return 0;
++    flat = heap;
++  }
++
++  for (i = 0; i < nchars; i++) {
++    c = toAscii(enc, ptr, end);
++    if (c < 0) {
++      free(heap);
++      return 0;
++    }
++    flat[i] = (char)c;
++    ptr += minBpc;
++  }
++  flat[nchars] = '\0';
++
++  ok = matchOneDotDigits(flat);
++  free(heap);
++  return ok;
++}
++
+ static int
+ doParseXmlDecl(const ENCODING *(*encodingFinder)(const ENCODING *, const char *,
+                                                  const char *),
+@@ -1181,10 +1243,8 @@ doParseXmlDecl(const ENCODING *(*encodingFinder)(const ENCODING *, const char *,
+       *versionPtr = val;
+     if (versionEndPtr)
+       *versionEndPtr = ptr;
+-    /* The version number must not be empty; VersionNum requires at least
+-       one character.  The encoding and standalone pseudo-attributes below
+-       already reject an empty value, so keep version consistent. */
+-    if (val == ptr - enc->minBytesPerChar) {
++    /* `ptr` is one past the closing quote. VersionNum ::= '1.' [0-9]+ */
++    if (! checkXmlDeclVersionNum(enc, val, ptr - enc->minBytesPerChar)) {
+       *badPtr = val;
+       return 0;
+     }

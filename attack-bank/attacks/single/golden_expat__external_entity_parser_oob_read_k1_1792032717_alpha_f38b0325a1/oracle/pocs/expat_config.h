@@ -1,0 +1,15 @@
+#define BYTEORDER 1234
+#define XML_DEV_URANDOM 1
+#define XML_DTD 1
+#define XML_GE 1
+#define XML_NS 1
+#define XML_CONTEXT_BYTES 1024
+#define PACKAGE "expat"
+#define PACKAGE_NAME "expat"
+#define PACKAGE_STRING "expat"
+#define PACKAGE_VERSION "2.8.3"
+#define PACKAGE_BUGREPORT ""
+#define PACKAGE_TARNAME "expat"
+#define PACKAGE_URL ""
+#define STDC_HEADERS 1
+#define VERSION "2.8.3"

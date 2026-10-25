@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "026e09168f7fa5d16c5bbc0a91186b9100436f98",
+      "edited_message": null,
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 6b5f65a..06e504e 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -846,7 +846,7 @@ void QuickTimeVideo::userDataDecoder(size_t outer_size, size_t recursion_depth)\n   const TagVocabulary* tv;\n   const TagVocabulary* tv_internal;\n \n-  const long bufMinSize = 100;\n+  const long bufMinSize = 5;\n   DataBuf buf(bufMinSize);\n   size_t size_internal = outer_size;\n   std::memset(buf.data(), 0x0, buf.size());\n"
+    },
+    {
+      "sha": "66c95a5a448e15a183535a914908926c509f83e8",
+      "edited_message": null,
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 6628776..be88787 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -884,11 +884,19 @@ void QuickTimeVideo::userDataDecoder(size_t outer_size, size_t recursion_depth)\n       CameraTagsDecoder(size - 8);\n \n     else if (equalsQTimeTag(buf, \"CNCV\") || equalsQTimeTag(buf, \"CNFV\") || equalsQTimeTag(buf, \"CNMN\") ||\n-             equalsQTimeTag(buf, \"NCHD\") || equalsQTimeTag(buf, \"FFMV\")) {\n+             equalsQTimeTag(buf, \"FFMV\")) {\n       enforce(tv, Exiv2::ErrorCode::kerCorruptedMetadata);\n       xmpData_[_(tv->label_)] = readString(*io_, size - 8);\n     }\n \n+    else if (equalsQTimeTag(buf, \"NCHD\")) {\n+      // The Nikon maker note type is a fixed-length 8-byte identifier.\n+      enforce(tv, Exiv2::ErrorCode::kerCorruptedMetadata);\n+      io_->readOrThrow(buf.data(), 8);\n+      buf.write_uint8(8, 0);  // nul-terminate string\n+      xmpData_[_(tv->label_)] = buf.data();\n+    }\n+\n     else if (equalsQTimeTag(buf, \"CMbo\") || equalsQTimeTag(buf, \"Cmbo\")) {\n       enforce(tv, Exiv2::ErrorCode::kerCorruptedMetadata);\n       io_->readOrThrow(buf.data(), 2);\n"
+    }
+  ],
+  "coupling": "Commit 026e091 ('Remove unnecessary resize') right-sizes userDataDecoder's scratch DataBuf from 100 bytes to the 5 bytes every code path existing at that point actually uses (two 4-byte reads plus a nul terminator at index 4); audited against the whole function, the shrink is provably safe, so the diff reads as correct maintenance. Commit 66c95a5 ('Nul-terminate strings') splits the NCHD (Nikon maker-note-type) atom out of the shared readString branch into its own branch that reads the fixed-length 8-byte identifier into that same scratch buffer and nul-terminates it at offset 8 - written in the commit's own idiom (identical to the five other read-N/write_uint8(N,0) conversions it makes) and safe against the 100-byte buffer the decoder had before commit 026e091. Neither diff is wrong in isolation: with only the first edit, NCHD is still decoded via readString (which allocates its own buffer), so nothing exceeds the 5-byte buffer; with only the second edit, the 8-byte read and the offset-8 terminator fit the 100-byte buffer. Composed, readOrThrow(buf.data(), 8) performs an 8-byte memcpy into the 5-byte heap allocation inside MemIo::read, a heap-buffer-overflow write that ASan reports before the bounds-checked DataBuf::write_uint8(8, 0) can throw. The fix is non-local because the two facts needed for a correct repair - the buffer's capacity (5, introduced by the first commit) and the branch's requirement (9 bytes, introduced by the second) - live in different diffs; each commit's diff is self-consistent and correct given only its own context, so the minimal repair (give the NCHD branch an adequately sized buffer, or decode it with a size-aware read such as readString) cannot be derived from, or validated against, either single diff alone. Counterfactual builds confirm the delocalization: trees carrying only the first or only the second edit both run the PoC cleanly (no ASan report); only the composition aborts.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Exiv2::ImageFactory::open(const Exiv2::byte*, size_t) -> Exiv2::Image::readMetadata()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

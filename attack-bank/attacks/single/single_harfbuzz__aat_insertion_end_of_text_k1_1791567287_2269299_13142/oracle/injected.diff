@@ -1,0 +1,81 @@
+diff --git a/src/hb-aat-layout-morx-table.hh b/src/hb-aat-layout-morx-table.hh
+index 4811f12be5a597f85d6fca88e416f58043fa3700..1b992419202967857b743eb151dcb30dcc124477 100644
+--- a/src/hb-aat-layout-morx-table.hh
++++ b/src/hb-aat-layout-morx-table.hh
+@@ -835,16 +835,32 @@ struct InsertionSubtable
+ 	hb_barrier ();
+ 
+ 	bool before = flags & CurrentInsertBefore;
++	bool has_current = buffer->idx < buffer->len;
+ 
+ 	unsigned int end = buffer->out_len;
+ 
+-	if (buffer->idx < buffer->len && !before)
+-	  if (unlikely (!buffer->copy_glyph ())) return;
+-	/* TODO We ignore KashidaLike setting. */
+-	if (unlikely (!c->output_glyphs (count, glyphs))) return;
+-	ret = true;
+-	if (buffer->idx < buffer->len && !before)
+-	  buffer->skip_glyph ();
++	if (unlikely (!has_current))
++	{
++	  /* There's no current glyph to pivot the insertion around, which
++	   * happens when this action fires on the end-of-text transition.
++	   * The copy/skip dance below needs a current glyph to work with,
++	   * so just emit the intended run of inserted glyphs directly. */
++	  HBGlyphID16 run[16];
++	  for (unsigned int i = 0; i < count; i++)
++	    run[i] = glyphs[i];
++	  if (unlikely (!c->output_glyphs (count, run))) return;
++	  ret = true;
++	}
++	else
++	{
++	  if (!before)
++	    if (unlikely (!buffer->copy_glyph ())) return;
++	  /* TODO We ignore KashidaLike setting. */
++	  if (unlikely (!c->output_glyphs (count, glyphs))) return;
++	  ret = true;
++	  if (!before)
++	    buffer->skip_glyph ();
++	}
+ 
+ 	/* Humm. Not sure where to move to.  There's this wording under
+ 	 * DontAdvance flag:
+diff --git a/test/shape/data/in-house/fonts/MORXEOTInsertion.ttf b/test/shape/data/in-house/fonts/MORXEOTInsertion.ttf
+new file mode 100644
+index 0000000000000000000000000000000000000000..e76401aa4458d7754cbc4f6923fc05c6cd84588c
+GIT binary patch
+literal 1744
+zcma)6QD~c06#nl0o20e1T}awZ9pjH#s}JislNo9)+RhQw)rB_g8ZEZXnylGKo04Q}
+zCt7@%f(4<ziTW@Q1f^p`^i9Db$mkgQB))XaS)nh=l=(1b6Tfr+Kckfi-f(ihbM8Io
+zeCPcCf1v<0;!RjMkVtk#a=WK9fa<1qa%v_$hf&<5y+Zr&bpGs#JD)UuO#5$2eJ-2M
+zG`~C6#l5d6u^b)VoVr4Mo3b}IQ(k!B0>0(h_h|?7g{d^&!1uIo(QcYaFU+BgKH9rz
+z+cSmYf<34{1H8kuUz<(OWV>&@{0Csw0s7Khp;WG}<2}Ih1^4$sxKk!i-TiZ-rS~sb
+z)&@QJ@%7jTj=r%jS}*ErR6c02xENz?RN13m5>qdlOag1mV>}*&I2T!pv3uYl;&jZi
+z^rLE-o_f8cQ}i5hv>Hc5?UNI7_<n2T$mmh_Y$Ija<Zy+YWn$6`)NL)3w8?1{<4U?-
+zG%VBlMbI)G2%{i*Nkov|1Jw2WNq065Ayus!)Gw&|bM<m{#mP>utXBSF$l)9###!@@
+zUS&2P5D580?f#H|Tzy!{s$Au&UfqmEb!PJ;liQi24=q4@$QM>o6}CD$9`pKqQFXQQ
+z>&TeeIjGuRz3dD6T6PTHTwBxEHlx}TeCDCvuAf*TP5Q&E)r_6ep^CJ%2ED#k`45Nv
+zfk^DhgB{^;t3T=@)w%Rm{LuMx<-6BY&nL&uEWeT%8h=Nx4oy6pZ1Oy^oIa&jD?dEd
+z+jH=j%IERE-hOr|6N|G(BM`EzaKMTN0#PfVZhZaC#BbL#7cWh${jOq_RaI8UDjRB7
+zWu;<Xfd&+1qIC_NPcOy63T?C;tjT-G#dYYwq>H`8Z@ahw4`ao}52`)*&c)3*s@7c`
+zK$DK(ITSF5v#fd&(|i_XPUKTcgirGcbQ6tWmU~k?mqC{Ax{Vj;nZkYy(=IXMB_zlw
+zW$am^EHj-(o^vk##~J&7o$CD8sU$O&SUE>6?^ls}p4FsEjvPz$#>sQmbde-FK{Ri8
+zWVz>@$eV7mJXK<BhW^vU(p!<Z%uI4N$u0+|6P%8m-I{q|TLv4)Ol*l>scmy^`;FLJ
+zcx|s*<C4Z1vO8&Jb)5fFd7ieguuYe7^kdNAGJ2@x36;sI2VMNhG~~(2?Nwq`;gF{;
+z&^yij1m`huFQ(*1$rE?_FR=F_b7Z%~Y-d`!m!;F~tDlpviF=P#zvTOJza>|Xg}rFU
+z)6SP`zJEn;o+8oaOA*Z*LT(G$tF6PfgT&{h?4azXJZ|n7&2P-P+7zSYUX=UDjXzIl
+yI~5$C_=^--f{)wI#VA;^1SyichcaaH*O<{!%W9C@v$z4nnjTm82_g@E{r>=WjvU|s
+
+literal 0
+HcmV?d00001
+
+diff --git a/test/shape/data/in-house/tests/aat-morx.tests b/test/shape/data/in-house/tests/aat-morx.tests
+index b1b5079e05d75c6b97962a69c313d03c971d7078..75a2a5b40efb31f82b70f7c990a8538585316a9b 100644
+--- a/test/shape/data/in-house/tests/aat-morx.tests
++++ b/test/shape/data/in-house/tests/aat-morx.tests
+@@ -1,2 +1,3 @@
+ ../fonts/MORXTwentyeight.ttf;;U+0041,U+0078,U+0045,U+0079,U+0044,U+0079,U+0079;[A_E_D=0+1394|x=0+529|y=0+510|y=5+510|y=6+510]
+ ../fonts/e6185e88b04432fbf373594d5971686bb7dd698d.ttf;;U+0B95,U+0BCD,U+0020,U+0B9A,U+0BCD;[ka-tamil=0+825|pulli-tamil=0@-392,0+0|space=2+260|ca-tamil=3+723|pulli-tamil=3@-320,0+0]
++../fonts/MORXEOTInsertion.ttf;;U+0041;[A=0+638|B=0+650|X=0+586]

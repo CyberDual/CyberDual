@@ -1,0 +1,22 @@
+diff --git a/libheif/image/pixelimage.cc b/libheif/image/pixelimage.cc
+index 3a5f43f..088f319 100644
+--- a/libheif/image/pixelimage.cc
++++ b/libheif/image/pixelimage.cc
+@@ -686,7 +686,7 @@ Error HeifPixelImage::extend_to_size_with_zero(uint32_t width, uint32_t height,
+   // memset length as (subsampled_width - old_width), which would underflow to a
+   // huge value on a shrink request and write past the end of the pixel plane.
+   // Reject it up front (GHSA-hqc2-cx5m-g6ff).
+-  if (width < m_width || height < m_height) {
++  if (width + 1 < m_width || height < m_height) {
+     return Error{heif_error_Usage_error,
+                  heif_suberror_Invalid_parameter_value,
+                  "Cannot extend an image to a size smaller than its current size."};
+@@ -711,7 +711,7 @@ Error HeifPixelImage::extend_to_size_with_zero(uint32_t width, uint32_t height,
+     get_subsampled_size(width, height, component.m_channel, m_chroma,
+                         &subsampled_width, &subsampled_height);
+ 
+-    if (subsampled_width < component.m_width || subsampled_height < component.m_height) {
++    if (subsampled_width + 1 < component.m_width || subsampled_height < component.m_height) {
+       return Error{heif_error_Usage_error,
+                    heif_suberror_Invalid_parameter_value,
+                    "Cannot extend an image to a size smaller than an existing plane."};

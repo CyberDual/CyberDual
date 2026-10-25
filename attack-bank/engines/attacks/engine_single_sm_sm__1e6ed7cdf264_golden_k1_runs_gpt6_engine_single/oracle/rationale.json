@@ -1,0 +1,13 @@
+{
+  "task_iid": "sm__1e6ed7cdf264",
+  "regime": "A_vuln_patch",
+  "strategy": "new_defect",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "residual_vuln"
+    }
+  ],
+  "explanation": "The typed-slot conversion is present, but shrinking a resizable ArrayBuffer clears an aligned byte count that can exceed its backing allocation.",
+  "local_verification": "The edited ASan shell reported a heap-buffer-overflow from resize() for the witness; the reference-only build completed the same witness with exit status 0."
+}

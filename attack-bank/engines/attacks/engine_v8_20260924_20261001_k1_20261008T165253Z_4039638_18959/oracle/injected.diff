@@ -1,0 +1,83 @@
+diff --git a/src/regexp/regexp-ast.h b/src/regexp/regexp-ast.h
+index 4f4aad14e00..952b993c1dc 100644
+--- a/src/regexp/regexp-ast.h
++++ b/src/regexp/regexp-ast.h
+@@ -275,6 +275,7 @@ class Disjunction final : public Tree {
+   void RationalizeConsecutiveAtoms(Compiler* compiler);
+   void FixSingleCharacterDisjunctions(Compiler* compiler);
+   ZoneList<Tree*>* alternatives_;
++  ZoneList<CharacterRange>* previous_single_char_ranges_ = nullptr;
+   int min_match_;
+   int max_match_;
+ };
+diff --git a/src/regexp/regexp-compiler-tonode.cc b/src/regexp/regexp-compiler-tonode.cc
+index 2ae70c3fe7e..05fae4ea0dd 100644
+--- a/src/regexp/regexp-compiler-tonode.cc
++++ b/src/regexp/regexp-compiler-tonode.cc
+@@ -2,6 +2,9 @@
+ // Use of this source code is governed by a BSD-style license that can be
+ // found in the LICENSE file.
+ 
++#include <algorithm>
++#include <memory>
++
+ #include "src/common/globals.h"
+ #include "src/execution/isolate.h"
+ #include "src/objects/string.h"
+@@ -1082,6 +1085,17 @@ void Disjunction::FixSingleCharacterDisjunctions(Compiler* compiler) {
+   ZoneList<Tree*>* alternatives = this->alternatives();
+   int length = alternatives->length();
+ 
++  bool contains_prior_trail_surrogate = false;
++  if (previous_single_char_ranges_ != nullptr) {
++    // Preserve the split-surrogate indication when a normalized run is
++    // revisited after the alternatives have been compacted.
++    auto previous = std::make_unique<CharacterRange[]>(length);
++    std::copy_n(previous_single_char_ranges_->begin(),
++                previous_single_char_ranges_->length(), previous.get());
++    contains_prior_trail_surrogate =
++        unibrow::Utf16::IsTrailSurrogate(previous[0].from());
++  }
++
+   int write_posn = 0;
+   int i = 0;
+   while (i < length) {
+@@ -1100,7 +1114,7 @@ void Disjunction::FixSingleCharacterDisjunctions(Compiler* compiler) {
+     const Flags flags = compiler->flags();
+     DCHECK_IMPLIES(IsEitherUnicode(flags),
+                    !unibrow::Utf16::IsLeadSurrogate(atom->data().at(0)));
+-    bool contains_trail_surrogate =
++    bool contains_trail_surrogate = contains_prior_trail_surrogate ||
+         unibrow::Utf16::IsTrailSurrogate(atom->data().at(0));
+     int first_in_run = i;
+     i++;
+@@ -1122,10 +1136,16 @@ void Disjunction::FixSingleCharacterDisjunctions(Compiler* compiler) {
+       int run_length = i - first_in_run;
+       ZoneList<CharacterRange>* ranges =
+           zone->New<ZoneList<CharacterRange>>(2, zone);
++      bool has_non_ascii = false;
+       for (int j = 0; j < run_length; j++) {
+         Atom* old_atom = alternatives->at(j + first_in_run)->AsAtom();
+         DCHECK_EQ(old_atom->length(), 1);
+-        ranges->Add(CharacterRange::Singleton(old_atom->data().at(0)), zone);
++        base::uc16 character = old_atom->data().at(0);
++        has_non_ascii |= character > 0x7f;
++        ranges->Add(CharacterRange::Singleton(character), zone);
++      }
++      if (IsIgnoreCase(flags) && has_non_ascii) {
++        previous_single_char_ranges_ = ranges;
+       }
+       ClassRanges::ClassRangesFlags class_ranges_flags;
+       if (IsEitherUnicode(flags) && contains_trail_surrogate) {
+@@ -1147,6 +1167,11 @@ Node* Disjunction::ToNodeImpl(Compiler* compiler, Node* on_success) {
+   ZoneList<Tree*>* alternatives = this->alternatives();
+ 
+   if (alternatives->length() > 2) {
++    if (compiler->read_backward()) {
++      // Coalesce adjacent single-code-unit alternatives before the
++      // lookbehind ordering check. This does not reorder alternatives.
++      FixSingleCharacterDisjunctions(compiler);
++    }
+     if (!compiler->read_backward() && v8_flags.regexp_optimization) {
+       // We deliberately disable SortConsecutiveAtoms and
+       // RationalizeConsecutiveAtoms in lookbehinds rather than keep

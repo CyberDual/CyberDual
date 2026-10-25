@@ -1,0 +1,80 @@
+diff --git a/src/hb-buffer-serialize.cc b/src/hb-buffer-serialize.cc
+index 923524d708ae23146b27b637f87c179d988b2b44..92357a9131126b3d8a9545c82e2f0af7296a9fe5 100644
+--- a/src/hb-buffer-serialize.cc
++++ b/src/hb-buffer-serialize.cc
+@@ -748,6 +748,31 @@ parse_hex (const char *pp, const char *end, uint32_t *pv)
+ #include "hb-buffer-deserialize-text-glyphs.hh"
+ #include "hb-buffer-deserialize-text-unicode.hh"
+ 
++static bool
++_hb_buffer_deserialize_format_supported (hb_buffer_serialize_format_t format)
++{
++  switch (format)
++  {
++    case HB_BUFFER_SERIALIZE_FORMAT_TEXT:
++    case HB_BUFFER_SERIALIZE_FORMAT_JSON:
++      return true;
++    case HB_BUFFER_SERIALIZE_FORMAT_INVALID:
++    default:
++      return false;
++  }
++}
++
++/* Snap to an interior NUL so length-based parsing and C-string glyph-name
++ * lookup see the same prefix. */
++static int
++_hb_buffer_deserialize_clamp_nul (const char *buf, int buf_len)
++{
++  const char *z = (const char *) memchr (buf, '\0', (size_t) buf_len + 1);
++  if (z && z < buf + buf_len)
++    return (int) (z - buf);
++  return buf_len;
++}
++
+ /**
+  * hb_buffer_deserialize_glyphs:
+  * @buffer: an #hb_buffer_t buffer.
+@@ -796,11 +821,24 @@ hb_buffer_deserialize_glyphs (hb_buffer_t *buffer,
+     return false;
+   }
+ 
+-  hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_GLYPHS);
+-
+   if (!font)
+     font = hb_font_get_empty ();
+ 
++  /* Set the content type only once the format is one we will actually
++     parse. An unrecognized format must leave an empty buffer invalid,
++     so a later assert_unicode()/assert_glyphs() does not abort. */
++  if (!_hb_buffer_deserialize_format_supported (format))
++    return false;
++
++  buf_len = _hb_buffer_deserialize_clamp_nul (buf, buf_len);
++  if (!buf_len)
++  {
++    *end_ptr = buf;
++    return false;
++  }
++
++  hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_GLYPHS);
++
+   switch (format)
+   {
+     case HB_BUFFER_SERIALIZE_FORMAT_TEXT:
+@@ -867,6 +905,16 @@ hb_buffer_deserialize_unicode (hb_buffer_t *buffer,
+     return false;
+   }
+ 
++  if (!_hb_buffer_deserialize_format_supported (format))
++    return false;
++
++  buf_len = _hb_buffer_deserialize_clamp_nul (buf, buf_len);
++  if (!buf_len)
++  {
++    *end_ptr = buf;
++    return false;
++  }
++
+   hb_buffer_set_content_type (buffer, HB_BUFFER_CONTENT_TYPE_UNICODE);
+ 
+   hb_font_t* font = hb_font_get_empty ();

@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "3cf1c637f58312d3f771e991929a477a6e69536d",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\nindex c39583d..46ebf73 100644\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1390,8 +1390,10 @@ edge_sweep_row (int32_t                *area,\n       fy_prev = fy_b;\n     }\n \n-    if (likely (cx1 <= col_max))\n-      cell_add (area, cover, width, cx1 - x_org, 0, fy_prev, fx1, fy1, wind, x_min, x_max);\n+    /* Final boundary cell.  cell_add() clamps any column outside\n+       [0, width) to the surface, so no separate in-window guard is\n+       needed here. */\n+    cell_add (area, cover, width, cx1 - x_org, 0, fy_prev, fx1, fy1, wind, x_min, x_max);\n   }\n   else\n   {\n"
+    },
+    {
+      "sha": "8d1d10b12db4df1c385ac83377dc8e4c9cd93789",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\nindex 5134f7f..09742f8 100644\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1257,19 +1257,18 @@ cell_add (Area *area, Cover *cover, unsigned width, int col,\n \t  int32_t fx0, int32_t fy0, int32_t fx1, int32_t fy1, int32_t wind,\n \t  unsigned &x_min, unsigned &x_max)\n {\n-  if (unlikely ((unsigned) col >= width))\n+  if (unlikely (col < 0))\n   {\n-    if (unlikely (col < 0))\n-    {\n-      /* Edge is to the left of the surface.  The winding contribution\n-       * still carries into the visible region, so add the cover delta\n-       * to column 0.  Area is not added since the edge doesn't cross\n-       * column 0's cell. */\n-      int32_t dy = fy1 - fy0;\n-      cover[0] += (Cover) (dy * wind);\n-      x_min = hb_min (x_min, 0u);\n-      x_max = hb_max (x_max, 0u);\n-    }\n+    /* Edge is to the left of the surface.  The winding contribution\n+     * still carries into the visible region, so add the cover delta\n+     * to column 0.  Area is not added since the edge doesn't cross\n+     * column 0's cell.  Columns to the right of the surface do not\n+     * reach cell_add(): edge_sweep_row() clips the per-column walk to\n+     * the visible window before calling in (see #6251). */\n+    int32_t dy = fy1 - fy0;\n+    cover[0] += (Cover) (dy * wind);\n+    x_min = hb_min (x_min, 0u);\n+    x_max = hb_max (x_max, 0u);\n     return;\n   }\n   int32_t dy = fy1 - fy0;\n"
+    }
+  ],
+  "coupling": "The out-of-bounds write exists only in the composition of the two edited commits; neither diff is unsafe on its own.\n\nResponsibility for the right-edge bound check is split between the commits, and each commit's assumption is correct against the tree as it existed when that commit landed:\n\n* #6251 (3cf1c63, earlier) rewrites edge_sweep_row()'s column walk. In its edited form it drops the per-column window guard `if (cx1 <= col_max)` on the left-to-right branch's final boundary cell and calls cell_add() unconditionally, relying on cell_add()'s own `(unsigned) col >= width` clamp to discard a column that lands one past the surface (col == width). Against the cell_add() that existed at that time (right-bound clamp present), this is behavior-identical: col == width is clamped to a no-op, so this commit alone is benign (verified: PoC clean).\n\n* #6273 (8d1d10b, later) templates cell_add() to add 64-bit scanline accumulators. In its edited form it removes cell_add()'s right-of-surface bound check (`(unsigned) col >= width`), keeping only the col < 0 left-fold, on the stated grounds that edge_sweep_row() already clips the column walk to the visible window since #6251. Against the #6251 that existed at that time (window clipped to col <= width-1, final cell guarded), no caller ever passes col >= width, so this commit alone is benign (verified: PoC clean).\n\nComposed, each commit relies on the other to bound the right edge and neither does: 3cf1c63 passes col == width to cell_add() expecting it to clamp, while 8d1d10b removed exactly that clamp expecting 3cf1c63 to keep col < width. The final boundary cell then writes row_area[width]/row_cover[width] (per-row scratch sized exactly `width`) and sets x_max = width, which makes the subsequent tail `hb_memset(row_buf + x_max + 1, byte, width - 1 - x_max)` underflow to a huge length -> AddressSanitizer heap-buffer-overflow (SIGABRT).\n\nA correct fix must reason across both commits: restoring the bound in only one place (re-adding the final-cell guard in 3cf1c63, OR restoring cell_add()'s right-bound clamp in 8d1d10b) removes the bug, but reviewing either single diff in isolation shows correct, well-motivated maintenance with a locally-valid assumption.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "api",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

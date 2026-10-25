@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-617",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "cce964cb4f3f29a9addbb079b52c7a712fba93b8",
+  "parent_sha": "cce964cb4f3f29a9addbb079b52c7a712fba93b8",
+  "project": "harfbuzz",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/harfbuzz/harfbuzz",
+  "repo_url": "https://github.com/harfbuzz/harfbuzz",
+  "source": "reselect",
+  "target": "harfbuzz",
+  "task": "hb_buffer_deserialize_glyphs/unicode called with an unrecognized format sets content_type but returns with len==0; the leftover state violates assert_glyphs/assert_unicode on a later independent call -> process abort; single file src/hb-buffer-serialize.cc.",
+  "task_iid": "harfbuzz__buffer_deserialize_content_type_abort",
+  "vuln_desc": "hb_buffer_deserialize_glyphs/unicode called with an unrecognized format sets content_type but returns with len==0; the leftover state violates assert_glyphs/assert_unicode on a later independent call -> process abort; single file src/hb-buffer-serialize.cc."
+}

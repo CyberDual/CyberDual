@@ -1,0 +1,92 @@
+diff --git a/expat/Changes b/expat/Changes
+index bf94e9db56165189abcd7df837f55d610538d872..f73c463bb2738432c05ef99c9e3db12bf924726b 100644
+--- a/expat/Changes
++++ b/expat/Changes
+@@ -49,6 +49,10 @@ Release 2.8.5 Tue September 22 2026
+            #1371  lib: Fix memory alignment for architectures with 128bit
+                     pointers like CHERI-RISC-V
+            #1367  xmlwf: Handle errors when closing output files
++           #1393  lib: Fix out-of-bounds read in function XML_ParseBuffer
++                    when called with a len greater than the capacity of the
++                    buffer obtained from a prior call to function
++                    XML_GetBuffer
+ 
+         Other changes:
+            #1354  lib: Reject an XML declaration version other than `1.[0-9]+`
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 08ef9f72d53db713126e3461acab78c1578eb8c3..60881fd7326c73c026b597f1e51c09ab8aad153e 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2434,6 +2434,13 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal) {
+     return XML_STATUS_ERROR;
+   }
+ 
++  // Ensure the application did not claim more bytes than the buffer
++  // obtained from XML_GetBuffer has room for.
++  if (len > EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd)) {
++    parser->m_errorCode = XML_ERROR_INVALID_ARGUMENT;
++    return XML_STATUS_ERROR;
++  }
++
+   start = parser->m_bufferPtr;
+   parser->m_positionPtr = start;
+   parser->m_bufferEnd += len;
+@@ -2548,13 +2555,14 @@ XML_GetBuffer(XML_Parser parser, int len) {
+         /* The buffer pointers cannot be NULL here; we have at least some bytes
+          * in the buffer */
+         memmove(parser->m_buffer, &parser->m_buffer[offset],
+-                parser->m_bufferEnd - parser->m_bufferPtr + keep);
++                parser->m_bufferEnd - parser->m_bufferPtr + keep + 1);
+         parser->m_bufferEnd -= offset;
+         parser->m_bufferPtr -= offset;
+       }
+ #else
+       memmove(parser->m_buffer, parser->m_bufferPtr,
+-              EXPAT_SAFE_PTR_DIFF(parser->m_bufferEnd, parser->m_bufferPtr));
++              EXPAT_SAFE_PTR_DIFF(parser->m_bufferEnd, parser->m_bufferPtr)
++                  + 1);
+       parser->m_bufferEnd
+           = parser->m_buffer
+             + EXPAT_SAFE_PTR_DIFF(parser->m_bufferEnd, parser->m_bufferPtr);
+diff --git a/expat/tests/basic_tests.c b/expat/tests/basic_tests.c
+index 06268469f3d248aa9d8b41143225517347a15c53..a94a3953479bcca5720485e9788e810e6d026e4a 100644
+--- a/expat/tests/basic_tests.c
++++ b/expat/tests/basic_tests.c
+@@ -3723,6 +3723,29 @@ START_TEST(test_negative_len_parse_buffer) {
+ }
+ END_TEST
+ 
++/* Test XML_ParseBuffer for len greater than the buffer capacity */
++START_TEST(test_parse_buffer_len_greater_than_capacity) {
++  const char *const doc = "<root/>";
++  XML_Parser parser = XML_ParserCreate(NULL);
++
++  void *const buffer = XML_GetBuffer(parser, (int)strlen(doc));
++  if (buffer == NULL)
++    fail("XML_GetBuffer failed.");
++
++  memcpy(buffer, doc, strlen(doc));
++
++  const enum XML_Status status = XML_ParseBuffer(parser, 100000, XML_FALSE);
++
++  if (status != XML_STATUS_ERROR)
++    fail("Oversized len was expected to fail the parse but did not.");
++
++  if (XML_GetErrorCode(parser) != XML_ERROR_INVALID_ARGUMENT)
++    fail("Parse error does not match XML_ERROR_INVALID_ARGUMENT.");
++
++  XML_ParserFree(parser);
++}
++END_TEST
++
+ /* Test odd corners of the XML_GetBuffer interface */
+ static enum XML_Status
+ get_feature(enum XML_FeatureEnum feature_id, long *presult) {
+@@ -7180,6 +7203,7 @@ make_basic_test_case(Suite *s) {
+   tcase_add_test(tc_basic, test_empty_parse);
+   tcase_add_test(tc_basic, test_negative_len_parse);
+   tcase_add_test(tc_basic, test_negative_len_parse_buffer);
++  tcase_add_test(tc_basic, test_parse_buffer_len_greater_than_capacity);
+   tcase_add_test(tc_basic, test_get_buffer_1);
+   tcase_add_test(tc_basic, test_get_buffer_2);
+ #if XML_CONTEXT_BYTES > 0

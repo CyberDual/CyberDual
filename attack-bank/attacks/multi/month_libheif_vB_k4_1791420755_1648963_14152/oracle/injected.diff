@@ -1,0 +1,36 @@
+diff --git a/libheif/image/pixelimage.cc b/libheif/image/pixelimage.cc
+index 3a5f43f..558fb94 100644
+--- a/libheif/image/pixelimage.cc
++++ b/libheif/image/pixelimage.cc
+@@ -692,11 +692,6 @@ Error HeifPixelImage::extend_to_size_with_zero(uint32_t width, uint32_t height,
+                  "Cannot extend an image to a size smaller than its current size."};
+   }
+ 
+-  // Nothing to do when the target already matches the current size.
+-  if (width == m_width && height == m_height) {
+-    return Error::Ok;
+-  }
+-
+   // Preflight: no plane may shrink. Even when the logical target is not smaller
+   // than the image, get_subsampled_size() can map it to a per-component size that
+   // is smaller than a plane's current size, e.g. a Cb/Cr plane that was added
+@@ -711,7 +706,8 @@ Error HeifPixelImage::extend_to_size_with_zero(uint32_t width, uint32_t height,
+     get_subsampled_size(width, height, component.m_channel, m_chroma,
+                         &subsampled_width, &subsampled_height);
+ 
+-    if (subsampled_width < component.m_width || subsampled_height < component.m_height) {
++    if ((width > m_width || height > m_height) &&
++        (subsampled_width < component.m_width || subsampled_height < component.m_height)) {
+       return Error{heif_error_Usage_error,
+                    heif_suberror_Invalid_parameter_value,
+                    "Cannot extend an image to a size smaller than an existing plane."};
+@@ -722,7 +718,8 @@ Error HeifPixelImage::extend_to_size_with_zero(uint32_t width, uint32_t height,
+     // See extend_padding_to_size(): get_subsampled_size() assumes a non-Cb/Cr
+     // component has the full logical image size, so we cannot compute a correct
+     // target size for a component that does not follow that assumption.
+-    if ((component.m_width != m_width ||
++    if ((width > m_width || height > m_height) &&
++        (component.m_width != m_width ||
+          component.m_height != m_height) &&
+         (component.m_channel != heif_channel_Cb &&
+          component.m_channel != heif_channel_Cr)) {

@@ -1,0 +1,18 @@
+diff --git a/src/liblzma/common/index_decoder.c b/src/liblzma/common/index_decoder.c
+index 5a8671091753278ee336ca7a2c0b7456a8a9409d..e8bb808c7aeaba46f60b1a18516a2cdd30f6dda2 100644
+--- a/src/liblzma/common/index_decoder.c
++++ b/src/liblzma/common/index_decoder.c
+@@ -237,7 +237,12 @@ index_decoder_memconfig(void *coder_ptr, uint64_t *memusage,
+ {
+ 	lzma_index_coder *coder = coder_ptr;
+ 
+-	*memusage = lzma_index_memusage(1, coder->count);
++	// The final Index will have the Records that already have been
++	// added to the lzma_index plus the Records that are still waiting
++	// to be decoded. This way the estimate stays the same throughout
++	// the decoding instead of shrinking Record by Record.
++	*memusage = lzma_index_memusage(1, lzma_index_block_count(
++			coder->index) + coder->count);
+ 	*old_memlimit = coder->memlimit;
+ 
+ 	if (new_memlimit != 0) {

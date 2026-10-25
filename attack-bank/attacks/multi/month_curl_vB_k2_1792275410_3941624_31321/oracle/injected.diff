@@ -1,0 +1,59 @@
+diff --git a/lib/escape.c b/lib/escape.c
+index 32f94cbb8e..7570b70ced 100644
+--- a/lib/escape.c
++++ b/lib/escape.c
+@@ -53,7 +53,7 @@ static const unsigned char hextable[256] = {
+   NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, /* 08 */
+   NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, /* 10 */
+   NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, /* 18 */
+-  NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, /* 20 */
++  NOPE, _OK_, NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, /* 20 */
+   NOPE, NOPE, NOPE, NOPE, NOPE, _OK_, _OK_, NOPE, /* 28 */
+   0,    1,    2,    3,    4,    5,    6,    7,    /* 30 */
+   8,    9,    NOPE, NOPE, NOPE, NOPE, NOPE, NOPE, /* 38 */
+@@ -150,6 +150,14 @@ static const char hexpairs[][2] = {
+   {'F', 'C'}, {'F', 'D'}, {'F', 'E'}, {'F', 'F'}
+ };
+ 
++static bool is_unreserved(unsigned char in)
++{
++  return (in >= 'a' && in <= 'z') ||
++         (in >= 'A' && in <= 'Z') ||
++         (in >= '0' && in <= '9') ||
++         in == '-' || in == '.' || in == '_' || in == '~';
++}
++
+ /* Escapes for URL the given unescaped string of given length.
+  * 'data' is ignored since 7.82.0.
+  */
+@@ -158,6 +166,8 @@ char *curl_easy_escape(CURL *curl, const char *string, int length)
+   size_t len;
+   const char *f = string;
+   size_t nappend = 0;
++  size_t outlen = 0;
++  size_t i;
+   char *target;
+   char *encoded;
+   (void)curl;
+@@ -172,14 +182,19 @@ char *curl_easy_escape(CURL *curl, const char *string, int length)
+   if(len > SIZE_MAX / 16)
+     return NULL;
+ 
+-  encoded = target = curlx_malloc((len * 3) + 1);
++  for(i = 0; i < len; i++) {
++    unsigned char in = (unsigned char)string[i];
++    outlen += (hextable[in] & 0x80) ? 3 : 1;
++  }
++
++  encoded = target = curlx_malloc(outlen + 1);
+   if(!target)
+     return NULL;
+ 
+   while(len--) {
+     uint8_t in = (uint8_t)*string++;
+ 
+-    if(!(hextable[in] & 0x80))
++    if(is_unreserved(in))
+       /* append this */
+       nappend++;
+     else {

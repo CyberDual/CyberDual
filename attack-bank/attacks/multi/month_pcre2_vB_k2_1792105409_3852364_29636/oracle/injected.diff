@@ -1,0 +1,47 @@
+diff --git a/src/pcre2posix.c b/src/pcre2posix.c
+index 401ad0a..43394d9 100644
+--- a/src/pcre2posix.c
++++ b/src/pcre2posix.c
+@@ -361,7 +361,6 @@ pcre2_regcomp(regex_t *preg, const char *pattern, int cflags)
+ 
+   (void)pcre2_pattern_info((const pcre2_code *)preg->re_pcre2_code, PCRE2_INFO_CAPTURECOUNT,
+                            &re_nsub);
+-  preg->re_nsub = (size_t)re_nsub;
+   preg->re_match_data = pcre2_match_data_create(re_nsub + 1, NULL);
+   preg->re_erroffset = (size_t)(-1); // No meaning after successful compile
+ 
+@@ -377,6 +376,12 @@ pcre2_regcomp(regex_t *preg, const char *pattern, int cflags)
+     return REG_ESPACE;
+   }
+ 
++  /* Record the number of subexpressions from the match data that will actually
++  be used for matching, so the reported count stays in step with the vector that
++  was allocated for it. */
++
++  preg->re_nsub = pcre2_get_ovector_count(preg->re_match_data);
++
+   return 0;
+ }
+ 
+@@ -449,9 +454,18 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t
+   {
+     size_t i;
+     PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(md);
+-    if ((size_t)rc > nmatch)
+-      rc = (int)nmatch;
+-    for (i = 0; i < (size_t)rc; i++)
++
++    /* Report every capturing subexpression of the pattern, not just those that
++    the final match happened to fill in. Slots that did not participate in the
++    match are left as PCRE2_UNSET by pcre2_match() and are mapped to -1 below, so
++    the result is the same, but the number of reported slots no longer depends on
++    where the last captured substring fell. Never write beyond the caller's
++    vector. */
++
++    size_t top = (size_t)preg->re_nsub + 1;
++    if (top > nmatch)
++      top = nmatch;
++    for (i = 0; i < top; i++)
+     {
+       if (ovector[i * 2] == PCRE2_UNSET || ovector[i * 2] + so > (PCRE2_SIZE)INT_MAX ||
+           ovector[i * 2 + 1] == PCRE2_UNSET || ovector[i * 2 + 1] + so > (PCRE2_SIZE)INT_MAX)

@@ -1,0 +1,13 @@
+{
+  "task_iid": "sm__2ec2a95db2e3",
+  "regime": "A_vuln_patch",
+  "strategy": "new_defect",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "residual_vuln"
+    }
+  ],
+  "explanation": "The loop now handles null targets but also treats dead proxies as wrappers. A nuked wrapper has an integer private value; reading it through ProxyObject::target() violates the object-or-null invariant.",
+  "local_verification": "ASan shell rebuilt successfully. The probe exits 1 with an AddressSanitizer fatal signal in UncheckedUnwrapWithoutExpose on the edited tree and exits 0 after rebuilding the parent with golden.diff. A live cross-compartment WeakMap key and an ordinary Proxy key pass smoke checks."
+}

@@ -1,0 +1,35 @@
+diff --git a/src/objects/js-objects.cc b/src/objects/js-objects.cc
+index 56c97b94..97f0fe95 100644
+--- a/src/objects/js-objects.cc
++++ b/src/objects/js-objects.cc
+@@ -55,6 +55,7 @@
+ #include "src/objects/js-shadow-realm.h"
+ #include "src/objects/js-shared-array.h"
+ #include "src/objects/js-struct.h"
++#include "src/objects/map-word.h"
+ #include "src/objects/object-conversions-inl.h"
+ #include "src/objects/property-details.h"
+ #ifdef V8_TEMPORAL_SUPPORT
+@@ -867,8 +868,20 @@ int GetIdentityHashHelper(Tagged<JSReceiver> object) {
+     return Smi::ToInt(properties);
+   }
+ 
+-  if (IsPropertyArray(properties)) {
+-    return Cast<PropertyArray>(properties)->Hash();
++  Tagged<HeapObject> properties_object = Cast<HeapObject>(properties);
++  if (MapWord properties_object_map = properties_object->map_word(kRelaxedLoad);
++      properties_object_map.IsForwardingAddress()) {
++    Tagged<HeapObject> forwarded_properties =
++        properties_object_map.ToForwardingAddress(properties_object);
++    if (IsPropertyArray(forwarded_properties) &&
++        Cast<PropertyArray>(forwarded_properties)->length().value() >
++            JSObject::kFieldsAdded) {
++      properties_object = forwarded_properties;
++    }
++  }
++
++  if (IsPropertyArray(properties_object)) {
++    return Cast<PropertyArray>(properties_object)->Hash();
+   }
+ 
+   if (IsPropertyDictionary(properties)) {

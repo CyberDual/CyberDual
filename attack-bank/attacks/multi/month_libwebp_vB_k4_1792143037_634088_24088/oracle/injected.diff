@@ -1,0 +1,43 @@
+diff --git a/src/dec/alpha_dec.c b/src/dec/alpha_dec.c
+index 9fb14484..459043bd 100644
+--- a/src/dec/alpha_dec.c
++++ b/src/dec/alpha_dec.c
+@@ -140,7 +140,10 @@ int WebPGetAlphaWindowRows(const VP8Decoder* const dec, const VP8Io* const io) {
+   // pixel rows held back from the previous macroblock row plus all 16 pixel
+   // rows of the last macroblock row (24 pixel rows total), while retaining 1
+   // preceding row (row - 1) for spatial unfiltering and fancy upsampling.
+-  return (dec->alpha_dithering > 0)
++  // A level-quantized alpha plane is smoothed over the whole image by
++  // WebPDequantizeLevels(), so it must remain fully resident.
++  return (dec->alpha_data_size > ALPHA_HEADER_LEN &&
++          ((dec->alpha_data[0] >> 4) & 0x03) == ALPHA_PREPROCESSED_LEVELS)
+              ? height
+              : VP8LGetWindowRows(width, height, /*max_history_rows=*/25);
+ }
+@@ -272,9 +275,11 @@ WEBP_NODISCARD const uint8_t* VP8DecompressAlphaRows(VP8Decoder* const dec,
+     start_row = dec->alph_dec->output_start_row;
+ 
+     if (dec->is_alpha_decoded) {  // finished?
++      const int pre_processing = dec->alph_dec->pre_processing;
+       ALPHDelete(dec->alph_dec);
+       dec->alph_dec = NULL;
+-      if (dec->alpha_dithering > 0) {
++      if (dec->alpha_dithering > 0 &&
++          pre_processing == ALPHA_PREPROCESSED_LEVELS) {
+         uint8_t* const alpha =
+             dec->alpha_plane + io->crop_top * width + io->crop_left;
+         uint8_t* WEBP_BIDI_INDEXABLE const bounded_alpha =
+diff --git a/src/dec/frame_dec.c b/src/dec/frame_dec.c
+index 2b3c99ba..782b2f30 100644
+--- a/src/dec/frame_dec.c
++++ b/src/dec/frame_dec.c
+@@ -365,8 +365,7 @@ void VP8InitDithering(const WebPDecoderOptions* const options,
+       }
+     }
+     // potentially allow alpha dithering
+-    if (dec->alpha_data != NULL && dec->alpha_data_size > ALPHA_HEADER_LEN &&
+-        ((dec->alpha_data[0] >> 4) & 0x03) == ALPHA_PREPROCESSED_LEVELS) {
++    if (dec->alpha_data != NULL && dec->alpha_data_size > ALPHA_HEADER_LEN) {
+       dec->alpha_dithering = options->alpha_dithering_strength;
+       if (dec->alpha_dithering > 100) {
+         dec->alpha_dithering = 100;

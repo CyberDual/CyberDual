@@ -1,0 +1,64 @@
+diff --git a/src/objects/js-weak-refs-inl.h b/src/objects/js-weak-refs-inl.h
+index e15fdc66..30fe13b9 100644
+--- a/src/objects/js-weak-refs-inl.h
++++ b/src/objects/js-weak-refs-inl.h
+@@ -13,6 +13,7 @@
+ #include "src/heap/heap-write-barrier-inl.h"
+ #include "src/objects/dictionary-inl.h"
+ #include "src/objects/heap-object-field-inl.h"
++#include "src/objects/map-word-inl.h"
+ #include "src/objects/smi-inl.h"
+ 
+ // Has to be the last include (doesn't have include guards):
+@@ -159,6 +160,7 @@ bool JSFinalizationRegistry::RemoveUnregisterToken(
+ 
+   Tagged<Object> value = key_map->ValueAt(entry);
+   bool was_present = false;
++  InternalIndex removal_entry = entry;
+   Tagged<Undefined> undefined = ReadOnlyRoots(isolate).undefined_value();
+   Tagged<UnionOf<Undefined, WeakCell>> new_key_list_head = undefined;
+   Tagged<UnionOf<Undefined, WeakCell>> new_key_list_prev = undefined;
+@@ -168,14 +170,32 @@ bool JSFinalizationRegistry::RemoveUnregisterToken(
+   while (!IsUndefined(value)) {
+     Tagged<WeakCell> weak_cell = Cast<WeakCell>(value);
+     value = weak_cell->key_list_next();
+-    if (weak_cell->unregister_token() == unregister_token) {
++    // When invoked from the scavenger, the weak unregister_token slots of the
++    // sibling WeakCells on this key list are updated lazily and may still hold
++    // an unresolved forwarding pointer. Resolve it before comparing identities
++    // so that a moved token is still matched against the token being removed.
++    Tagged<UnionOf<Symbol, JSReceiver, Undefined>> cell_token =
++        weak_cell->unregister_token();
++    if (!IsUndefined(cell_token)) {
++      MapWord map_word = Cast<HeapObject>(cell_token)->map_word(kRelaxedLoad);
++      if (map_word.IsForwardingAddress()) {
++        cell_token = Cast<UnionOf<Symbol, JSReceiver, Undefined>>(
++            map_word.ToForwardingAddress(Cast<HeapObject>(cell_token)));
++      }
++    }
++    if (cell_token == unregister_token) {
+       // weak_cell has the same unregister token; remove it from the key list.
+       switch (removal_mode) {
+         case kRemoveMatchedCellsFromRegistry:
+           weak_cell->RemoveFromFinalizationRegistryCells(isolate);
+           break;
+         case kKeepMatchedCellsInRegistry:
+-          // Do nothing.
++          // The scavenger keeps the matched cells in the registry. If the key
++          // list still has more entries, remember this key so that collapsing
++          // the list clears the right slot even after a token was forwarded.
++          if (!IsUndefined(value)) {
++            removal_entry = InternalIndex(key);
++          }
+           break;
+       }
+       // Clear unregister token-related fields.
+@@ -203,7 +223,7 @@ bool JSFinalizationRegistry::RemoveUnregisterToken(
+   }
+   if (IsUndefined(new_key_list_head)) {
+     DCHECK(was_present);
+-    key_map->ClearEntry(entry);
++    key_map->ClearEntry(removal_entry);
+     key_map->ElementRemoved();
+   } else {
+     key_map->ValueAtPut(entry, new_key_list_head, write_barrier_mode);

@@ -1,0 +1,69 @@
+diff --git a/libheif/image/pixelimage.cc b/libheif/image/pixelimage.cc
+index 3a5f43f..10773ff 100644
+--- a/libheif/image/pixelimage.cc
++++ b/libheif/image/pixelimage.cc
+@@ -482,7 +482,10 @@ Error HeifPixelImage::ComponentStorage::alloc(uint32_t width, uint32_t height, h
+   m_height = height;
+ 
+   m_mem_width = rounded_size(width);
+-  m_mem_height = rounded_size(height);
++  // The column stride keeps the historical alignment padding (rounded_size).
++  // The row count does not: it is the logical height, so the allocated extent
++  // matches the plane size the layout checks compare against.
++  m_mem_height = height;
+ 
+   m_bit_depth = static_cast<uint8_t>(bit_depth);
+   m_num_interleaved_components = static_cast<uint8_t>(num_interleaved_components);
+@@ -2147,6 +2150,16 @@ Error HeifPixelImage::scale_nearest_neighbor(std::shared_ptr<HeifPixelImage>& ou
+ 
+   // --- scale all channels
+ 
++  // Truncating y * in / out biases an odd-length axis toward the previous row.
++  // Round those samples to the nearest source row; an even height already
++  // selects that row with truncation.
++  const auto map_src_y = [this, height](uint32_t y) -> uint32_t {
++    if (m_height & 1) {
++      return static_cast<uint32_t>((static_cast<uint64_t>(y) * m_height + static_cast<uint64_t>(height) / 2) / height);
++    }
++    return static_cast<uint32_t>(static_cast<uint64_t>(y) * m_height / height);
++  };
++
+   int nInterleaved = num_interleaved_components_per_plane(m_chroma);
+   if (nInterleaved > 1) {
+     const auto* comp = find_storage_for_channel(heif_channel_interleaved);
+@@ -2174,7 +2187,7 @@ Error HeifPixelImage::scale_nearest_neighbor(std::shared_ptr<HeifPixelImage>& ou
+       auto* out_data = out_img->get_channel_memory(heif_channel_interleaved, &out_stride);
+ 
+       for (uint32_t y = 0; y < out_h; y++) {
+-        uint32_t iy = static_cast<uint32_t>(static_cast<uint64_t>(y) * m_height / height);
++        uint32_t iy = map_src_y(y);
+ 
+         for (uint32_t x = 0; x < out_w; x++) {
+           uint32_t ix = static_cast<uint32_t>(static_cast<uint64_t>(x) * m_width / width);
+@@ -2199,7 +2212,7 @@ Error HeifPixelImage::scale_nearest_neighbor(std::shared_ptr<HeifPixelImage>& ou
+       out_stride /= 2;
+ 
+       for (uint32_t y = 0; y < out_h; y++) {
+-        uint32_t iy = static_cast<uint32_t>(static_cast<uint64_t>(y) * m_height / height);
++        uint32_t iy = map_src_y(y);
+ 
+         for (uint32_t x = 0; x < out_w; x++) {
+           uint32_t ix = static_cast<uint32_t>(static_cast<uint64_t>(x) * m_width / width);
+@@ -2234,7 +2247,7 @@ Error HeifPixelImage::scale_nearest_neighbor(std::shared_ptr<HeifPixelImage>& ou
+         auto* out_data = out_img->get_channel_memory(channel, &out_stride);
+ 
+         for (uint32_t y = 0; y < out_h; y++) {
+-          uint32_t iy = static_cast<uint32_t>(static_cast<uint64_t>(y) * m_height / height);
++          uint32_t iy = map_src_y(y);
+ 
+           for (uint32_t x = 0; x < out_w; x++) {
+             uint32_t ix = static_cast<uint32_t>(static_cast<uint64_t>(x) * m_width / width);
+@@ -2256,7 +2269,7 @@ Error HeifPixelImage::scale_nearest_neighbor(std::shared_ptr<HeifPixelImage>& ou
+         out_stride /= 2;
+ 
+         for (uint32_t y = 0; y < out_h; y++) {
+-          uint32_t iy = static_cast<uint32_t>(static_cast<uint64_t>(y) * m_height / height);
++          uint32_t iy = map_src_y(y);
+ 
+           for (uint32_t x = 0; x < out_w; x++) {
+             uint32_t ix = static_cast<uint32_t>(static_cast<uint64_t>(x) * m_width / width);

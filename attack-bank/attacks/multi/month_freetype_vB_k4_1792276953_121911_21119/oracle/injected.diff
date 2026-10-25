@@ -1,0 +1,67 @@
+diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c
+index 151aeac3c..511709817 100644
+--- a/src/type1/t1parse.c
++++ b/src/type1/t1parse.c
+@@ -270,8 +270,9 @@
+     {
+       /* in the case of the PFB format, the private dictionary can be */
+       /* made of several adjacent segments.                           */
++      FT_ULong   start_pos = FT_STREAM_POS();
+       FT_UShort  tag;
+-      FT_Byte*   priv_dict = NULL;
++      FT_Byte*   priv_dict;
+       FT_ULong   priv_len  = 0;
+ 
+ 
+@@ -279,14 +280,19 @@
+       {
+         error = read_pfb_tag( stream, &tag, &size );
+         if ( error )
+-          break;
++          goto Fail;
+ 
+-        if ( tag != 0x8002U || size > stream->size - stream->pos )
++        if ( tag != 0x8002U )
+           break;
+ 
+-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||
+-             FT_STREAM_READ( priv_dict + priv_len, size )        )
++        if ( FT_STREAM_SKIP( size ) )
++        {
++          /* a trailing segment that is not completely stored in the */
++          /* file is not part of the private dictionary; stop the    */
++          /* scan there instead of rejecting the whole font          */
++          error = FT_Err_Ok;
+           break;
++        }
+ 
+         priv_len += size;
+       }
+@@ -300,6 +306,27 @@
+         goto Fail;
+       }
+ 
++      if ( FT_STREAM_SEEK( start_pos )      ||
++           FT_QALLOC( priv_dict, priv_len ) )
++        goto Fail;
++
++      /* read the segments one after the other, skipping the headers */
++      priv_len = 0;
++      for (;;)
++      {
++        error = read_pfb_tag( stream, &tag, &size );
++        if ( error || tag != 0x8002U )
++        {
++          error = FT_Err_Ok;
++          break;
++        }
++
++        if ( FT_STREAM_READ( priv_dict + priv_len, size ) )
++          goto Fail;
++
++        priv_len += size;
++      }
++
+       parser->private_dict = priv_dict;
+       parser->private_len  = priv_len;
+     }

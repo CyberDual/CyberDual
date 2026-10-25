@@ -1,0 +1,80 @@
+diff --git a/lib/http.c b/lib/http.c
+index 9af3a705147022afebba333c17f4ad8a9053bc09..cbfca51c4baf7dd9eca13e0eb027d4f262a9d9bb 100644
+--- a/lib/http.c
++++ b/lib/http.c
+@@ -1421,9 +1421,44 @@ bool Curl_compareheader(const char *headerline, /* line to check */
+ 
+   /* find the content string in the rest of the line */
+   if(curlx_strlen(&val) >= clen) {
+-    size_t len;
++    size_t len = curlx_strlen(&val);
++    const char *vend;
++    char sbuf[256];
++    char *buf;
++    bool heap;
++    bool match;
++
+     p = curlx_str(&val);
+-    for(len = curlx_strlen(&val); len >= clen;) {
++    vend = p + len;
++
++    /* Single token: terminate a scratch copy before checking the delimiter. */
++    if(!memchr(p, ',', len)) {
++      buf = sbuf;
++      heap = FALSE;
++      match = FALSE;
++      if(len < sizeof(sbuf)) {
++        memcpy(sbuf, p, len);
++        sbuf[len] = 0;
++      }
++      else {
++        buf = curlx_malloc(len + 1);
++        if(!buf)
++          return FALSE;
++        heap = TRUE;
++        memcpy(buf, p, len + 1);
++      }
++
++      if(strlen(buf) >= clen &&
++         curl_strnequal(buf, content, clen) &&
++         ((buf[clen] == ',') || ISBLANK(buf[clen]) ||
++          ISNEWLINE(buf[clen]) || !buf[clen]))
++        match = TRUE;
++      if(heap)
++        curlx_free(buf);
++      return match;
++    }
++
++    for(; len >= clen;) {
+       struct Curl_str next;
+       const char *o = p;
+       /* after a match there must be a comma, space, newline or null byte */
+@@ -1431,16 +1466,23 @@ bool Curl_compareheader(const char *headerline, /* line to check */
+          ((p[clen] == ',') || ISBLANK(p[clen]) || ISNEWLINE(p[clen]) ||
+           !p[clen]))
+         return TRUE; /* match! */
+-      /* advance to the next comma */
+-      if(curlx_str_until(&p, &next, MAX_HTTP_RESP_HEADER_SIZE, ',') ||
++      /* advance to the next comma, but not past the trimmed value */
++      if(p >= vend ||
++         curlx_str_until(&p, &next, (size_t)(vend - p), ',') ||
+          curlx_str_single(&p, ','))
+         break; /* no comma, get out */
+ 
+       /* if there are more dummy commas, move over them as well */
+-      do
++      do {
++        if(p >= vend)
++          break;
+         curlx_str_passblanks(&p);
+-      while(!curlx_str_single(&p, ','));
+-      len -= (p - o);
++      } while((p < vend) && !curlx_str_single(&p, ','));
++
++      /* trailing blanks live outside the trimmed value and used to wrap len */
++      if(p > vend || (size_t)(p - o) > len)
++        break;
++      len -= (size_t)(p - o);
+     }
+   }
+   return FALSE; /* no match */

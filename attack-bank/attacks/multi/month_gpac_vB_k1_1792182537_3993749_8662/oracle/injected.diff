@@ -1,0 +1,23 @@
+diff --git a/src/media_tools/av_parsers.c b/src/media_tools/av_parsers.c
+index a000002..8c6059b 100644
+--- a/src/media_tools/av_parsers.c
++++ b/src/media_tools/av_parsers.c
+@@ -15494,7 +15494,7 @@ static Bool gf_ac4_substream_info_obj(GF_BitStream *bs,
+ {
+ 	u32 i, res_bytes, j;
+ 	u32 n_signals, isf_config;
+-	u32 N_OBJECTS_CODE_TO_NUM_OBJECTS[] = {0, 1, 2, 3, 5, 7};
++	u32 N_OBJECTS_CODE_TO_NUM_OBJECTS[] = {0, 1, 2, 3, 5};
+ 	u32 BED_CHAN_ASSIGN_CODE_TO_NUM_OBJECTS[] = {2, 3, 6, 8, 10, 8, 10, 12};
+ 	u32 STD_BED_FLAG_TO_NUM_OBJECTS[] = {2, 1, 1, 2, 2, 2, 2, 2, 2, 1};
+ 	u32 ISF_CONFIG_TO_NUM_OBJECTS[] = {4, 8, 10, 14, 15, 30};
+@@ -15537,7 +15537,8 @@ static Bool gf_ac4_substream_info_obj(GF_BitStream *bs,
+ 		substream->b_lfe = gf_bs_read_int_log(bs, 1, "b_lfe");
+ 		n_signals += substream->b_lfe;
+ 
+-		if (substream->n_objects_code >= GF_ARRAY_LENGTH(N_OBJECTS_CODE_TO_NUM_OBJECTS)) {
++		/* n_objects_code is a 3-bit field; values 6 and 7 are reserved */
++		if (substream->n_objects_code >= 6) {
+ 			GF_LOG(GF_LOG_ERROR, GF_LOG_CODING, ("[AC4] n_objects_code exceeds maximum supported (%d)\n", substream->n_objects_code));
+ 			return GF_FALSE;
+ 		}

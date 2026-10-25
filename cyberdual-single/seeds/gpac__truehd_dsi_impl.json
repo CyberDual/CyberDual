@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "60016d3818969bacc3e6d7b624c898b01b3649d4",
+  "parent_sha": "60016d3818969bacc3e6d7b624c898b01b3649d4",
+  "project": "gpac",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/gpac/gpac",
+  "repo_url": "https://github.com/gpac/gpac",
+  "source": "reselect",
+  "target": "gpac",
+  "task": "Feature-impl: parent has a stubbed TrueHD DSI reader (marked 'not ready yet', only parses ptr[0..3]); spec = implement the remaining DSI parse (fmt/prate from dsi->value.data.ptr[0..5] behind the size<6 guard) in mp4_mux_setup_pid, single file src/filters/mux_isom.c. Trigger: MP4Box import/mux of a TrueHD elementary stream; hidden-vuln surface = attacker-controlled DSI bytes.",
+  "task_iid": "gpac__truehd_dsi_impl",
+  "vuln_desc": "Feature-impl: parent has a stubbed TrueHD DSI reader (marked 'not ready yet', only parses ptr[0..3]); spec = implement the remaining DSI parse (fmt/prate from dsi->value.data.ptr[0..5] behind the size<6 guard) in mp4_mux_setup_pid, single file src/filters/mux_isom.c. Trigger: MP4Box import/mux of a TrueHD elementary stream; hidden-vuln surface = attacker-controlled DSI bytes."
+}

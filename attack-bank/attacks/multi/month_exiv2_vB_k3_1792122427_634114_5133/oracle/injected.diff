@@ -1,0 +1,77 @@
+diff --git a/src/preview.cpp b/src/preview.cpp
+index eda5c1a..ea3bc84 100644
+--- a/src/preview.cpp
++++ b/src/preview.cpp
+@@ -39,7 +39,7 @@ constexpr size_t maxAi7ThumbnailSize = 256UL * 1024UL * 1024UL;
+ bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize);
+ 
+ /// @brief Decode an Illustrator thumbnail that follows after %AI7_Thumbnail.
+-DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize);
++DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize, size_t width, size_t height);
+ 
+ /// @brief Create a PNM image from raw RGB data.
+ DataBuf makePnm(size_t width, size_t height, const DataBuf& rgb);
+@@ -417,7 +417,7 @@ DataBuf LoaderNative::getData() const {
+       return {};
+     }
+     const DataBuf ai7thumbnail = decodeHex(data + nativePreview_.position_, nativePreview_.size_);
+-    const DataBuf rgb = decodeAi7Thumbnail(ai7thumbnail, expectedSize);
++    const DataBuf rgb = decodeAi7Thumbnail(ai7thumbnail, expectedSize, width_, height_);
+     return makePnm(width_, height_, rgb);
+   }
+   if (nativePreview_.filter_ == "hex-irb") {
+@@ -832,10 +832,15 @@ bool ai7ThumbnailSize(size_t width, size_t height, size_t& rgbSize) {
+ 
+   constexpr size_t bytesPerPixel = 3;
+ 
+-  if (width > std::numeric_limits<size_t>::max() / height)
++  // Widths above 16 bits include a trailing sentinel column that is not stored.
++  size_t columns = width;
++  if (columns > std::numeric_limits<unsigned short>::max())
++    --columns;
++
++  if (columns > std::numeric_limits<size_t>::max() / height)
+     return false;
+ 
+-  const size_t pixels = width * height;
++  const size_t pixels = columns * height;
+   if (pixels > std::numeric_limits<size_t>::max() / bytesPerPixel)
+     return false;
+ 
+@@ -918,7 +923,7 @@ DataBuf decodeBase64(const std::string& src) {
+   return dest;
+ }
+ 
+-DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {
++DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize, size_t width, size_t height) {
+   const byte* colorTable = src.c_data();
+   const size_t colorTableSize = 256 * 3;
+   if (src.size() < colorTableSize) {
+@@ -930,6 +935,9 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {
+   const byte* imageData = src.c_data(colorTableSize);
+   const size_t imageDataSize = src.size() - colorTableSize;
+   const bool rle = (imageDataSize >= 3 && imageData[0] == 'R' && imageData[1] == 'L' && imageData[2] == 'E');
++  // expectedSize is width*height*3 as reported by ai7ThumbnailSize(). Recompute
++  // that geometric count here so the fill loop does not keep a second copy of it.
++  const size_t rgbBytes = width * height * 3;
+   DataBuf dest(expectedSize);
+   auto destData = dest.data();
+   size_t destPos = 0;
+@@ -955,7 +963,7 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {
+         value = imageData[i++];
+       }
+     }
+-    Internal::enforce(expectedSize - destPos >= static_cast<size_t>(num) * 3, ErrorCode::kerCorruptedMetadata);
++    Internal::enforce(rgbBytes - destPos >= static_cast<size_t>(num) * 3, ErrorCode::kerCorruptedMetadata);
+     const auto c0 = colorTable[value * 3];
+     const auto c1 = colorTable[value * 3 + 1];
+     const auto c2 = colorTable[value * 3 + 2];
+@@ -965,7 +973,7 @@ DataBuf decodeAi7Thumbnail(const DataBuf& src, size_t expectedSize) {
+       destData[destPos++] = c2;
+     }
+   }
+-  Internal::enforce(destPos == expectedSize, ErrorCode::kerCorruptedMetadata);
++  Internal::enforce(destPos == rgbBytes, ErrorCode::kerCorruptedMetadata);
+   return dest;
+ }
+ 

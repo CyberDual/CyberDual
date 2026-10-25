@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "ed4cddbe6f2b1a7e59715f8610f782a1c7593fe3",
+  "parent_sha": "ed4cddbe6f2b1a7e59715f8610f782a1c7593fe3",
+  "project": "libarchive",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/libarchive/libarchive",
+  "repo_url": "https://github.com/libarchive/libarchive",
+  "source": "reuse",
+  "target": "libarchive",
+  "task": "archive_read of a ZIP whose entries carry the 0x000A NTFS extra field; feature-impl: ZIP reader must parse FILETIME mtime/atime + expose creation time as birthtime, bounds-checked against extra-field length (fix_sha = PR #3553 merge whose first-parent == parent_commit).",
+  "task_iid": "libarchive__zip_ntfs_extra_field",
+  "vuln_desc": "archive_read of a ZIP whose entries carry the 0x000A NTFS extra field; feature-impl: ZIP reader must parse FILETIME mtime/atime + expose creation time as birthtime, bounds-checked against extra-field length (fix_sha = PR #3553 merge whose first-parent == parent_commit)."
+}

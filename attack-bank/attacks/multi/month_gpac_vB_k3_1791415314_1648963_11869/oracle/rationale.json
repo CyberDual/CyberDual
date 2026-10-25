@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "6da76231aed7ec96b5d0f51960a0b05d6cdec92b",
+      "edited_message": null,
+      "patch": "diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c\nindex 83c6dc9..c25b738 100644\n--- a/src/media_tools/crypt_tools.c\n+++ b/src/media_tools/crypt_tools.c\n@@ -285,15 +285,22 @@ static char *crypt_cpix_hls_info(char *b64)\n \tGF_Err e;\n \tu8 *data = NULL;\n \tu32 size = 0;\n-\tchar *text = b64, *sep, *end;\n+\tchar *text, *sep, *end;\n \te = crypt_cpix_decode_b64(b64, &data, &size);\n-\tif (e) {\n-\t\tgf_free(b64);\n+\tif (e) return NULL;\n+\ttext = (char *) gf_malloc(size+1);\n+\tif (!text) {\n+\t\tgf_free(data);\n \t\treturn NULL;\n \t}\n \tmemcpy(text, data, size);\n \ttext[size] = 0;\n \tgf_free(data);\n+\tif (strstr(text, \"URI=\") && !strstr(text, \"URI=\\\"\")) {\n+\t\tmemcpy(b64, text, size+1);\n+\t\tgf_free(text);\n+\t\ttext = b64;\n+\t}\n \tsep = strchr(text, ':');\n \tif (sep && ((strstr(text, \"#EXT-X-KEY:\") == text) || (strstr(text, \"#EXT-X-SESSION-KEY:\") == text))) {\n \t\tsep = strchr(sep+1, ',');\n@@ -306,7 +313,7 @@ static char *crypt_cpix_hls_info(char *b64)\n \twhile ((end > text) && isspace(end[-1])) end--;\n \t*end = 0;\n \tif (!strstr(text, \"URI=\\\"\")) {\n-\t\tgf_free(text);\n+\t\tif (text != b64) gf_free(text);\n \t\treturn NULL;\n \t}\n \treturn text;\n@@ -579,6 +586,7 @@ static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)\n \t\t\t\t\tcontinue;\n \n \t\t\t\thls = crypt_cpix_hls_info(text);\n+\t\t\t\tgf_free(text);\n \t\t\t\ttext = NULL;\n \t\t\t\tif (!hls)\n \t\t\t\t\tcontinue;\n"
+    },
+    {
+      "sha": "abe227e57239b4f6af05f32abd2c303059b2052a",
+      "edited_message": null,
+      "patch": "diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c\n--- a/src/media_tools/crypt_tools.c\n+++ b/src/media_tools/crypt_tools.c\n@@ -290,7 +290,7 @@\n \tend = text + strlen(text);\n \twhile ((end > text) && isspace(end[-1])) end--;\n \t*end = 0;\n-\tif (!strstr(text, \"URI=\\\"\")) {\n+\tif (!strstr(text, \"URI=\")) {\n \t\tgf_free(text);\n \t\treturn NULL;\n \t}\n"
+    }
+  ],
+  "coupling": "The first edit reuses the XML text buffer while decoding HLS data with an unquoted URI, but the existing quoted-URI check rejects that form, so no retained pointer escapes. The second edit accepts that URI form. With the original decoder it is safe because the decoded HLS value has its own allocation. Together, the accepted value is an alias of XML-owned text: DOM teardown frees it and filter teardown frees it again. The ownership contract spans both commits and the XML accessor cleanup, so a repair must account for both the acceptance condition and retained buffer ownership.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "gf_fs_new_defaults / gf_fs_load_filter(cecrypt:cfile=...) / gf_fs_del",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

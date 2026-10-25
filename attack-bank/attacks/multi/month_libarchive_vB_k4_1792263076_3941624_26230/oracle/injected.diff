@@ -1,0 +1,22 @@
+diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c
+index 92102164..ee507037 100644
+--- a/libarchive/archive_read_support_format_rar5.c
++++ b/libarchive/archive_read_support_format_rar5.c
+@@ -98,7 +98,7 @@ static const size_t g_unpack_window_size = 0x20000;
+ /* These could have been static const's, but they aren't, because of
+  * Visual Studio. */
+ #define MAX_NAME_IN_CHARS 2048
+-#define MAX_NAME_IN_BYTES (4 * MAX_NAME_IN_CHARS)
++#define MAX_NAME_IN_BYTES (4 * (MAX_NAME_IN_CHARS - 1) + 1)
+ 
+ struct file_header {
+ 	ssize_t bytes_remaining;
+@@ -2071,7 +2071,7 @@ static int process_head_file(struct archive_read* a, struct rar5 *rar5,
+ 	if(r != ARCHIVE_OK)
+ 		return r;
+ 
+-	if(name_size > (MAX_NAME_IN_CHARS - 1)) {
++	if(name_size > (4 * MAX_NAME_IN_CHARS - 1)) {
+ 		archive_set_error(&a->archive, ARCHIVE_ERRNO_FILE_FORMAT,
+ 				"Filename is too long");
+ 

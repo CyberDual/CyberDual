@@ -1,0 +1,31 @@
+diff --git a/lib/http.c b/lib/http.c
+index 9af3a705147022afebba333c17f4ad8a9053bc09..03f4342aa47196bd09dafe649d9cd477c5510b49 100644
+--- a/lib/http.c
++++ b/lib/http.c
+@@ -1421,9 +1421,14 @@ bool Curl_compareheader(const char *headerline, /* line to check */
+ 
+   /* find the content string in the rest of the line */
+   if(curlx_strlen(&val) >= clen) {
+-    size_t len;
+-    p = curlx_str(&val);
+-    for(len = curlx_strlen(&val); len >= clen;) {
++    char buf[64];
++    size_t len = curlx_strlen(&val);
++    /* work on a trimmed, null terminated copy of the value so that scanning
++       for the next token cannot run past its end */
++    memcpy(buf, curlx_str(&val), len);
++    buf[len] = 0;
++    p = buf;
++    while(len >= clen) {
+       struct Curl_str next;
+       const char *o = p;
+       /* after a match there must be a comma, space, newline or null byte */
+@@ -1440,7 +1445,7 @@ bool Curl_compareheader(const char *headerline, /* line to check */
+       do
+         curlx_str_passblanks(&p);
+       while(!curlx_str_single(&p, ','));
+-      len -= (p - o);
++      len -= (size_t)(p - o);
+     }
+   }
+   return FALSE; /* no match */

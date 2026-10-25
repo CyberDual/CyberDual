@@ -1,0 +1,170 @@
+diff --git a/lib/urlapi.c b/lib/urlapi.c
+index 1c4db04e46388df390e037b5147724b62e40d809..a48c627633050cd021030aa6260ceb0d87f9f81c 100644
+--- a/lib/urlapi.c
++++ b/lib/urlapi.c
+@@ -671,6 +671,113 @@ UNITTEST int ipv4_normalize(struct dynbuf *host)
+   return HOST_IPV4;
+ }
+ 
++/*
++ * Normalize a legacy numeric IPv4 address given as a plain string, emitting
++ * the dotted decimal form into the separate 'out' buffer. This mirrors
++ * ipv4_normalize() but works for callers that do not have the host stored in
++ * a writable dynbuf with enough room for the expanded result.
++ *
++ * Returns the host type.
++ */
++static int ipv4_normalize_str(const char *c, struct dynbuf *out)
++{
++  bool done = FALSE;
++  int n = 0;
++  unsigned int parts[4] = { 0, 0, 0, 0 };
++  CURLcode result = CURLE_OK;
++
++  if(!ISDIGIT(*c))
++    return HOST_NAME;
++
++  while(!done) {
++    int rc;
++    curl_off_t l;
++    if(*c == '0') {
++      if((c[1] | 0x20) == 'x') {
++        c += 2; /* skip the prefix */
++        rc = curlx_str_hex(&c, &l, UINT_MAX);
++        if(rc)
++          return HOST_NAME;
++      }
++      else
++        rc = curlx_str_octal(&c, &l, UINT_MAX);
++    }
++    else
++      rc = curlx_str_number(&c, &l, UINT_MAX);
++
++    if(rc) {
++      if(!n || (rc != STRE_NO_NUM) || *c)
++        return HOST_NAME;
++      n--;
++    }
++    else
++      parts[n] = (unsigned int)l;
++
++    switch(*c) {
++    case '.':
++      if(n == 4) {
++        if(c[1])
++          /* something follows this dot */
++          return HOST_NAME;
++        done = TRUE;
++      }
++      else {
++        n++;
++        c++;
++      }
++      break;
++
++    case '\0':
++      done = TRUE;
++      break;
++
++    default:
++      return HOST_NAME;
++    }
++  }
++
++  switch(n) {
++  case 0: /* a -- 32 bits */
++    result = curlx_dyn_addf(out, "%u.%u.%u.%u",
++                            (parts[0] >> 24),
++                            ((parts[0] >> 16) & 0xff),
++                            ((parts[0] >> 8) & 0xff),
++                            (parts[0] & 0xff));
++    break;
++  case 1: /* a.b -- 8.24 bits */
++    if((parts[0] > 0xff) || (parts[1] > 0xffffff))
++      return HOST_NAME;
++    result = curlx_dyn_addf(out, "%u.%u.%u.%u",
++                            parts[0],
++                            ((parts[1] >> 16) & 0xff),
++                            ((parts[1] >> 8) & 0xff),
++                            (parts[1] & 0xff));
++    break;
++  case 2: /* a.b.c -- 8.8.16 bits */
++    if((parts[0] > 0xff) || (parts[1] > 0xff) || (parts[2] > 0xffff))
++      return HOST_NAME;
++    result = curlx_dyn_addf(out, "%u.%u.%u.%u",
++                            parts[0],
++                            parts[1],
++                            ((parts[2] >> 8) & 0xff),
++                            (parts[2] & 0xff));
++    break;
++  case 3: /* a.b.c.d -- 8.8.8.8 bits */
++    if((parts[0] > 0xff) || (parts[1] > 0xff) || (parts[2] > 0xff) ||
++       (parts[3] > 0xff))
++      return HOST_NAME;
++    result = curlx_dyn_addf(out, "%u.%u.%u.%u",
++                            parts[0],
++                            parts[1],
++                            parts[2],
++                            parts[3]);
++    break;
++  }
++  if(result)
++    return HOST_ERROR;
++  return HOST_IPV4;
++}
++
+ /* if necessary, replace the host content with a URL decoded version */
+ static CURLUcode urldecode_host(struct dynbuf *host)
+ {
+@@ -2064,6 +2171,25 @@ static CURLUcode url_sethost(CURLU *u, struct dynbuf *encp,
+     curlx_dyn_free(encp);
+     return CURLUE_BAD_HOSTNAME;
+   }
++  if(n) {
++    /* normalize a legacy numeric IPv4 address to dotted decimal, the same way
++       a full URL is normalized when parsed */
++    struct dynbuf norm;
++    int type;
++    curlx_dyn_init(&norm, CURL_MAX_INPUT_LENGTH);
++    type = ipv4_normalize_str(curlx_dyn_ptr(encp), &norm);
++    if(type == HOST_ERROR) {
++      curlx_dyn_free(&norm);
++      curlx_dyn_free(encp);
++      return CURLUE_OUT_OF_MEMORY;
++    }
++    if(type == HOST_IPV4) {
++      curlx_dyn_free(encp);
++      *encp = norm;
++    }
++    else
++      curlx_dyn_free(&norm);
++  }
+   return CURLUE_OK;
+ }
+ 
+@@ -2159,8 +2285,11 @@ CURLUcode curl_url_set(CURLU *u, CURLUPart what,
+ 
+       if(appendquery && newp)
+         return url_append_query(u, &enc);
+-      else if(what == CURLUPART_HOST)
++      else if(what == CURLUPART_HOST) {
+         status = url_sethost(u, &enc, urlencode, flags);
++        /* the host may have been normalized into a new buffer */
++        newp = curlx_dyn_ptr(&enc);
++      }
+     }
+     if(status)
+       return status;
+diff --git a/tests/libtest/lib1560.c b/tests/libtest/lib1560.c
+index 03d99ccbbf3b9444aa6e316eeeeea7fb5c50476d..f045474be3c834c48c23fdb43f160c16282d5924 100644
+--- a/tests/libtest/lib1560.c
++++ b/tests/libtest/lib1560.c
+@@ -1297,7 +1297,7 @@ static const struct setcase set_parts_list[] = {
+   {"https://example.com/",
+    "host=0xff,", /* '++' there is no automatic URL decode when setting this
+                   part */
+-   "https://0xff/",
++   "https://0.0.0.255/",
+    0, /* get */
+    0, /* set */
+    CURLUE_OK, CURLUE_OK},

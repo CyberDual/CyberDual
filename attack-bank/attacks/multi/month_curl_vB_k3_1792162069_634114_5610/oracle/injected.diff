@@ -1,0 +1,49 @@
+diff --git a/lib/mprintf.c b/lib/mprintf.c
+index 571c417..7558eeb 100644
+--- a/lib/mprintf.c
++++ b/lib/mprintf.c
+@@ -993,12 +993,38 @@ static bool out_string(void *userp,
+       len = 0;
+     }
+   }
+-  else if(prec != -1)
+-    len = (size_t)prec;
+-  else if(*str == '\0')
+-    len = 0;
+-  else
+-    len = strlen(str);
++  else {
++    /* A literal negative precision is defined to be omitted, same as an
++       absent one, but unlike the '*' form it arrives still negative.
++       The alternate form reserves a framing byte: confirm the terminator
++       and, when the walk stays on it, use the single-pass copy. */
++    if(prec < -1) {
++      size_t base = strlen(str);
++      size_t off = base;
++      unsigned int term = 0;
++
++      if(flags & FLAGS_ALT) {
++        term |= (unsigned int)(unsigned char)str[off];
++        off++;
++      }
++      if(flags & FLAGS_LEFT) {
++        term |= (unsigned int)(unsigned char)str[off];
++        off++;
++      }
++      if(flags & FLAGS_WIDTH) {
++        term |= (unsigned int)(unsigned char)str[off];
++        off++;
++      }
++      if(!term && (off <= base + 1))
++        prec = -1;
++    }
++    if(prec != -1)
++      len = (size_t)prec;
++    else if(*str == '\0')
++      len = 0;
++    else
++      len = strlen(str);
++  }
+ 
+   width -= (len > INT_MAX) ? INT_MAX : (int)len;
+ 

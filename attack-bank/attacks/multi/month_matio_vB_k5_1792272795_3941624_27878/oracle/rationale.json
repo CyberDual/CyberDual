@@ -1,0 +1,25 @@
+{
+  "regime": "incomplete_fix",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "d4f97242673238436033d8ad03f5e625a040e0b5",
+      "edited_message": "Support rank 11 in GetDataSlab rank-N slab copy",
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\nindex d7903cb..ce5af9e 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4533,6 +4533,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)\n }\n \n #if HAVE_ZLIB\n+#define MAX_RANK (10)\n #define GET_DATA_SLABN_RANK_LOOP                                                \\\n     do {                                                                        \\\n         for ( j = 1; j < rank; j++ ) {                                          \\\n@@ -4859,13 +4860,13 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n                     break;\n             }\n         }\n-    } else if ( rank > 10 ) {\n+    } else if ( rank > MAX_RANK + 1 ) {\n         err = MATIO_E_BAD_ARGUMENT;\n     } else {\n         int i, j, N, I = 0;\n-        int inc[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};\n-        int cnt[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};\n-        int dimp[10] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};\n+        int inc[MAX_RANK + 1] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};\n+        int cnt[MAX_RANK + 1] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};\n+        int dimp[MAX_RANK + 1] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};\n \n         switch ( class_type ) {\n             case MAT_C_DOUBLE: {\n"
+    },
+    {
+      "sha": "3808c28cee7fc7d7db5bccbef7f8bdfbb2399ba6",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\nindex 1c86d8b..de1b1c6 100644\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4533,6 +4533,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)\n }\n \n #if HAVE_ZLIB\n+#define MAX_RANK (10)\n #define GET_DATA_SLAB2(T)                              \\\n     do {                                               \\\n         ptr_in += start[1] * dims[0] + start[0];       \\\n@@ -4553,7 +4554,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)\n             size_t input_index = (size_t)start[0];                                                \\\n             for ( j = 1; j < rank; j++ ) {                                                        \\\n                 const size_t coordinate = block % (size_t)edge[j];                                \\\n-                input_index += ((size_t)start[j] + coordinate * (size_t)stride[j]) * dimp[j - 1]; \\\n+                input_index += ((size_t)start[j] + coordinate * (size_t)stride[j]) * dimp[j]; \\\n                 block /= (size_t)edge[j];                                                         \\\n             }                                                                                     \\\n             for ( k = 0; k < edge[0]; k++ )                                                       \\\n@@ -4735,7 +4736,7 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n          (class_type == MAT_C_UINT8 && data_type == MAT_T_UINT8) )\n         same_type = 1;\n \n-    if ( rank < 1 || rank > 10 )\n+    if ( rank < 1 || rank > MAX_RANK + 1 )\n         return MATIO_E_BAD_ARGUMENT;\n     for ( i = 0; i < rank; i++ ) {\n         if ( start[i] < 0 || stride[i] < 1 || edge[i] < 1 || (size_t)start[i] >= dims[i] ||\n@@ -4813,7 +4814,7 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n     } else {\n         int j;\n         size_t N = (size_t)edge[0];\n-        size_t dimp[10] = {dims[0], 0, 0, 0, 0, 0, 0, 0, 0, 0};\n+        size_t dimp[MAX_RANK] = {1, 0, 0, 0, 0, 0, 0, 0, 0, 0};\n \n         for ( j = 1; j < rank; j++ ) {\n             err = Mul(&dimp[j], dimp[j - 1], dims[j]);\n"
+    }
+  ],
+  "coupling": "The base is already unsafe for a valid rank-11 compressed struct field: the old rank-N GetDataSlab path indexes ten-entry stack arrays with rank-derived indices. The first edited commit changes the maintenance fix into explicit rank-11 support: it introduces MAX_RANK, sizes the legacy inc/cnt/dimp arrays for eleven ranks, and accepts rank <= MAX_RANK + 1. That commit is safe by itself. The second edited commit later rewrites rank-N indexing around a cumulative dimension table indexed by dimension number, updates the rank check to the new MAX_RANK + 1 policy, but leaves that table sized MAX_RANK. With ranks through ten this rewrite is safe; composed with the first commit, a rank-11 field writes and reads dimp[10], one element past the ten-entry stack buffer. A correct repair must reconcile the rank policy introduced by the first commit with the rewritten buffer layout and indexing convention in the second commit. Changing only one side of that shared invariant either removes the valid rank-11 support or leaves the cumulative-dimension table inconsistent with the accepted rank.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "api",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

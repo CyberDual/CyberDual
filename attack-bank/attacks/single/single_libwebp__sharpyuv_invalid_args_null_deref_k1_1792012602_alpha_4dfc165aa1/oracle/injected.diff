@@ -1,0 +1,1012 @@
+diff --git a/build.gradle b/build.gradle
+deleted file mode 100644
+index 14ceebf78c752c573c0d0fc827261bc02a8db50a..0000000000000000000000000000000000000000
+--- a/build.gradle
++++ /dev/null
+@@ -1,444 +0,0 @@
+-// Define dependencies.
+-buildscript {
+-  repositories {
+-    maven {
+-      url "https://jcenter.bintray.com"
+-    }
+-  }
+-  dependencies {
+-    classpath "com.android.tools.build:gradle:${ANDROID_GRADLE_PLUGIN_VERSION}"
+-  }
+-}
+-
+-// Define versions in the project.
+-project.ext {
+-  buildToolsVersion = "${BUILD_TOOLS_VERSION}"
+-  compileSdkVersion = COMPILE_SDK_VERSION.toInteger()
+-}
+-
+-// Core libraries and executables.
+-apply plugin: "c"
+-def NEON
+-model {
+-  buildTypes {
+-    debug
+-    release
+-  }
+-  platforms {
+-    arm {
+-      architecture "arm"
+-    }
+-    arm64 {
+-      architecture "arm64"
+-    }
+-    x86 {
+-      architecture "x86"
+-    }
+-    x64 {
+-      architecture "x86_64"
+-    }
+-    mips32r2
+-    mips32r5
+-    mips64r6
+-  }
+-  toolChains {
+-    gcc(Gcc) {
+-      target("mips32r2") {
+-        cCompiler.args "-mips32r2"
+-      }
+-      target("mips32r5") {
+-        cCompiler.args "-mips32r5"
+-      }
+-      target("mips64r6") {
+-        cCompiler.args "-mips64r6"
+-      }
+-    }
+-  }
+-  binaries {
+-    all {
+-      if (toolChain in Gcc) {
+-        cCompiler.args "-fPIC"
+-        cCompiler.args "-Wall"
+-        cCompiler.define "ANDROID"
+-        cCompiler.define "HAVE_MALLOC_H"
+-      }
+-      // Optimizations.
+-      if (buildType == buildTypes.release) {
+-        if (toolChain in Gcc) {
+-          cCompiler.args "-finline-functions"
+-          cCompiler.args "-ffast-math"
+-          cCompiler.args "-ffunction-sections"
+-          cCompiler.args "-fdata-sections"
+-        }
+-        if (toolChain in Clang) {
+-          cCompiler.args "-frename-registers -s"
+-        }
+-      }
+-      // mips32 fails to build with clang from r14b
+-      // https://bugs.chromium.org/p/webp/issues/detail?id=343
+-      if (toolChain in Clang) {
+-        if (getTargetPlatform() == "mips") {
+-          cCompiler.args "-no-integrated-as"
+-        }
+-      }
+-      // Check for NEON usage.
+-      if (getTargetPlatform() == "arm") {
+-        NEON = "c.neon"
+-        cCompiler.define "HAVE_CPU_FEATURES_H"
+-      } else {
+-        NEON = "c"
+-      }
+-
+-      cCompiler.args "-I" + file(".").absolutePath
+-    }
+-    // Link to pthread for shared libraries.
+-    withType(SharedLibraryBinarySpec) {
+-      if (toolChain in Gcc) {
+-        cCompiler.define "HAVE_PTHREAD"
+-        cCompiler.define "WEBP_USE_THREAD"
+-        linker.args "-pthread"
+-      }
+-    }
+-  }
+-  components {
+-    webp(NativeLibrarySpec) {
+-      sources {
+-        c {
+-          source {
+-            srcDir "sharpyuv"
+-            include "sharpyuv.c"
+-            include "sharpyuv_cpu.c"
+-            include "sharpyuv_csp.c"
+-            include "sharpyuv_dsp.c"
+-            include "sharpyuv_gamma.c"
+-            include "sharpyuv_neon.c"
+-            include "sharpyuv_sse2.c"
+-            srcDir "src/dec"
+-            include "alpha_dec.c"
+-            include "buffer_dec.c"
+-            include "frame_dec.c"
+-            include "idec_dec.c"
+-            include "io_dec.c"
+-            include "quant_dec.c"
+-            include "tree_dec.c"
+-            include "vp8_dec.c"
+-            include "vp8l_dec.c"
+-            include "webp_dec.c"
+-            srcDir "src/dsp"
+-            include "alpha_processing.c"
+-            include "alpha_processing_mips_dsp_r2.c"
+-            include "alpha_processing_neon.$NEON"
+-            include "alpha_processing_sse2.c"
+-            include "alpha_processing_sse41.c"
+-            include "cpu.c"
+-            include "dec.c"
+-            include "dec_clip_tables.c"
+-            include "dec_mips32.c"
+-            include "dec_mips_dsp_r2.c"
+-            include "dec_msa.c"
+-            include "dec_neon.$NEON"
+-            include "dec_sse2.c"
+-            include "dec_sse41.c"
+-            include "filters.c"
+-            include "filters_mips_dsp_r2.c"
+-            include "filters_msa.c"
+-            include "filters_neon.$NEON"
+-            include "filters_sse2.c"
+-            include "lossless.c"
+-            include "lossless_mips_dsp_r2.c"
+-            include "lossless_msa.c"
+-            include "lossless_neon.$NEON"
+-            include "lossless_sse2.c"
+-            include "lossless_sse41.c"
+-            include "rescaler.c"
+-            include "rescaler_mips32.c"
+-            include "rescaler_mips_dsp_r2.c"
+-            include "rescaler_msa.c"
+-            include "rescaler_neon.$NEON"
+-            include "rescaler_sse2.c"
+-            include "upsampling.c"
+-            include "upsampling_mips_dsp_r2.c"
+-            include "upsampling_msa.c"
+-            include "upsampling_neon.$NEON"
+-            include "upsampling_sse2.c"
+-            include "upsampling_sse41.c"
+-            include "yuv.c"
+-            include "yuv_mips32.c"
+-            include "yuv_mips_dsp_r2.c"
+-            include "yuv_neon.$NEON"
+-            include "yuv_sse2.c"
+-            include "yuv_sse41.c"
+-            srcDir "src/utils"
+-            include "bit_reader_utils.c"
+-            include "color_cache_utils.c"
+-            include "filters_utils.c"
+-            include "huffman_utils.c"
+-            include "palette.c"
+-            include "quant_levels_dec_utils.c"
+-            include "random_utils.c"
+-            include "rescaler_utils.c"
+-            include "thread_utils.c"
+-            include "utils.c"
+-            srcDir "src/dsp"
+-            include "cost.c"
+-            include "cost_mips32.c"
+-            include "cost_mips_dsp_r2.c"
+-            include "cost_neon.$NEON"
+-            include "cost_sse2.c"
+-            include "enc.c"
+-            include "enc_mips32.c"
+-            include "enc_mips_dsp_r2.c"
+-            include "enc_msa.c"
+-            include "enc_neon.$NEON"
+-            include "enc_sse2.c"
+-            include "enc_sse41.c"
+-            include "lossless_enc.c"
+-            include "lossless_enc_mips32.c"
+-            include "lossless_enc_mips_dsp_r2.c"
+-            include "lossless_enc_msa.c"
+-            include "lossless_enc_neon.$NEON"
+-            include "lossless_enc_sse2.c"
+-            include "lossless_enc_sse41.c"
+-            include "ssim.c"
+-            include "ssim_sse2.c"
+-            srcDir "src/enc"
+-            include "alpha_enc.c"
+-            include "analysis_enc.c"
+-            include "backward_references_cost_enc.c"
+-            include "backward_references_enc.c"
+-            include "config_enc.c"
+-            include "cost_enc.c"
+-            include "filter_enc.c"
+-            include "frame_enc.c"
+-            include "histogram_enc.c"
+-            include "iterator_enc.c"
+-            include "near_lossless_enc.c"
+-            include "picture_enc.c"
+-            include "picture_csp_enc.c"
+-            include "picture_psnr_enc.c"
+-            include "picture_rescale_enc.c"
+-            include "picture_tools_enc.c"
+-            include "predictor_enc.c"
+-            include "quant_enc.c"
+-            include "syntax_enc.c"
+-            include "token_enc.c"
+-            include "tree_enc.c"
+-            include "vp8l_enc.c"
+-            include "webp_enc.c"
+-            srcDir "src/utils"
+-            include "bit_writer_utils.c"
+-            include "huffman_encode_utils.c"
+-            include "quant_levels_utils.c"
+-          }
+-          exportedHeaders {
+-            srcDir "src"
+-          }
+-        }
+-      }
+-    }
+-
+-    webpdemux(NativeLibrarySpec) {
+-      sources {
+-        c {
+-          source {
+-            srcDir "src/demux"
+-            include "anim_decode.c"
+-            include "demux.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    webpmux(NativeLibrarySpec) {
+-      sources {
+-        c {
+-          source {
+-            srcDir "src/mux/"
+-            include "anim_encode.c"
+-            include "muxedit.c"
+-            include "muxinternal.c"
+-            include "muxread.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    // Executables from examples.
+-    example_util(NativeLibrarySpec) {
+-      binaries {
+-        all {
+-          lib library: "webp", linkage: "static"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./examples"
+-            include "example_util.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    imageio_util(NativeLibrarySpec) {
+-      binaries {
+-        all {
+-          lib library: "webp", linkage: "static"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./imageio"
+-            include "imageio_util.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    imagedec(NativeLibrarySpec) {
+-      binaries {
+-        all {
+-          lib library: "webpdemux", linkage: "static"
+-          lib library: "webp", linkage: "static"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./imageio"
+-            include "image_dec.c"
+-            include "jpegdec.c"
+-            include "metadata.c"
+-            include "pngdec.c"
+-            include "pnmdec.c"
+-            include "tiffdec.c"
+-            include "webpdec.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    imageenc(NativeLibrarySpec) {
+-      binaries {
+-        all {
+-          lib library: "webp", linkage: "static"
+-          lib library: "imageio_util", linkage: "static"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./imageio"
+-            include "image_enc.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    cwebp(NativeExecutableSpec) {
+-      binaries {
+-        all {
+-          lib library: "example_util", linkage: "static"
+-          lib library: "imagedec", linkage: "static"
+-          lib library: "imageio_util", linkage: "static"
+-          lib library: "webpdemux", linkage: "static"
+-          lib library: "webp", linkage: "static"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./examples"
+-            include "cwebp.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    dwebp(NativeExecutableSpec) {
+-      binaries {
+-        all {
+-          lib library: "example_util", linkage: "static"
+-          lib library: "imagedec", linkage: "static"
+-          lib library: "imageenc", linkage: "static"
+-          lib library: "imageio_util", linkage: "static"
+-          lib library: "webpdemux", linkage: "static"
+-          lib library: "webp"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-              srcDir "./examples"
+-              include "dwebp.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    webpmux_example(NativeExecutableSpec) {
+-      binaries {
+-        all {
+-          lib library: "example_util", linkage: "static"
+-          lib library: "imageio_util", linkage: "static"
+-          lib library: "webpmux", linkage: "static"
+-          lib library: "webp"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./examples"
+-            include "webpmux.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    img2webp_example(NativeExecutableSpec) {
+-      binaries {
+-        all {
+-          lib library: "example_util", linkage: "static"
+-          lib library: "imagedec", linkage: "static"
+-          lib library: "imageio_util", linkage: "static"
+-          lib library: "webpmux", linkage: "static"
+-          lib library: "webpdemux", linkage: "static"
+-          lib library: "webp"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./examples"
+-            include "img2webp.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    webpinfo_example(NativeExecutableSpec) {
+-      binaries {
+-        all {
+-          lib library: "example_util", linkage: "static"
+-          lib library: "imageio_util", linkage: "static"
+-          lib library: "webp"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./examples"
+-            include "webpinfo.c"
+-          }
+-        }
+-      }
+-    }
+-  }
+-  tasks {
+-    // Task to test all possible configurations.
+-    buildAllExecutables(Task) {
+-      dependsOn $.binaries.findAll { it.buildable }
+-    }
+-  }
+-}
+diff --git a/core.679 b/core.679
+new file mode 100644
+index 0000000000000000000000000000000000000000..5c7b8059badacda1ccb92411878c598c82d31482
+GIT binary patch
+literal 307200
+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
+
+literal 0
+HcmV?d00001
+
+diff --git a/sharpyuv/sharpyuv.c b/sharpyuv/sharpyuv.c
+index 5a00967fcba8074c709161cb8269eff1ac14677e..992b0372ae23835c00ee9b0a92b74c8dd10620a2 100644
+--- a/sharpyuv/sharpyuv.c
++++ b/sharpyuv/sharpyuv.c
+@@ -473,19 +473,110 @@ int SharpYuvOptionsInitInternal(const SharpYuvConversionMatrix* yuv_matrix,
+   return 1;
+ }
+ 
++// Rescale one matrix row into yuv_bit_depth. Slopes use 64-bit multiply so a
++// wide coefficient cannot overflow int32; the offset is shifted in 64-bit for
++// the same reason. Returns 0 if a result does not fit in int.
++static int ScaleMatrixRow(const int in[4], int out[4], int same_depth,
++                          int yuv_max, int rgb_max, int rgb_round, int sfix) {
++  int i;
++  for (i = 0; i < 3; ++i) {
++    const int64_t scaled =
++        same_depth ? (int64_t)in[i]
++                   : ((int64_t)in[i] * yuv_max + rgb_round) / rgb_max;
++    if (scaled > INT_MAX || scaled < INT_MIN) return 0;
++    out[i] = (int)scaled;
++  }
++  {
++    int64_t shifted;
++    if (sfix >= 0) {
++      if (sfix >= 63) return 0;
++      shifted = (int64_t)((uint64_t)in[3] << (unsigned)sfix);
++    } else {
++      if (sfix <= -63) return 0;
++      shifted = (int64_t)in[3] >> (unsigned)(-sfix);
++    }
++    if (shifted > INT_MAX || shifted < INT_MIN) return 0;
++    out[3] = (int)shifted;
++  }
++  return 1;
++}
++
++static int BuildScaledMatrix(const SharpYuvConversionMatrix* in,
++                             SharpYuvConversionMatrix* out, int rgb_bit_depth,
++                             int yuv_bit_depth) {
++  const int same = (rgb_bit_depth == yuv_bit_depth);
++  const int rgb_max = (1 << rgb_bit_depth) - 1;
++  const int rgb_round = 1 << (rgb_bit_depth - 1);
++  const int yuv_max = (1 << yuv_bit_depth) - 1;
++  const int sfix = GetPrecisionShift(rgb_bit_depth);
++  if (!ScaleMatrixRow(in->rgb_to_y, out->rgb_to_y, same, yuv_max, rgb_max,
++                      rgb_round, sfix) ||
++      !ScaleMatrixRow(in->rgb_to_u, out->rgb_to_u, same, yuv_max, rgb_max,
++                      rgb_round, sfix) ||
++      !ScaleMatrixRow(in->rgb_to_v, out->rgb_to_v, same, yuv_max, rgb_max,
++                      rgb_round, sfix)) {
++    return 0;
++  }
++  return 1;
++}
++
++// Rewrite a bottom-up plane (negative rgb_stride) into a top-down buffer so
++// the row iterator's 2 * stride add cannot overflow int32.
++static int NormalizeNegativeStride(const uint8_t** r_ptr, const uint8_t** g_ptr,
++                                   const uint8_t** b_ptr, int* rgb_stride,
++                                   int height, uint8_t** storage) {
++  const int64_t stride64 = *rgb_stride;
++  const uint64_t abs_stride = (uint64_t)(-stride64);
++  const uint64_t plane_bytes64 = (uint64_t)height * abs_stride;
++  uint8_t* buf;
++  const uint8_t* srcs[3];
++  int p;
++  if (abs_stride > (uint64_t)INT_MAX || plane_bytes64 != (size_t)plane_bytes64 ||
++      plane_bytes64 > SIZE_MAX / 3) {
++    return 0;
++  }
++  buf = (uint8_t*)malloc((size_t)plane_bytes64 * 3);
++  if (buf == NULL) return 0;
++  srcs[0] = *r_ptr;
++  srcs[1] = *g_ptr;
++  srcs[2] = *b_ptr;
++  for (p = 0; p < 3; ++p) {
++    const int64_t base_off = (int64_t)height * stride64;
++    const uint8_t* const base = srcs[p] + (ptrdiff_t)base_off;
++    uint8_t* const dst = buf + (size_t)p * (size_t)plane_bytes64;
++    memcpy(dst, base, (size_t)plane_bytes64);
++  }
++  *r_ptr = buf;
++  *g_ptr = buf + (size_t)plane_bytes64;
++  *b_ptr = buf + 2 * (size_t)plane_bytes64;
++  *rgb_stride = (int)abs_stride;
++  *storage = buf;
++  return 1;
++}
++
+ int SharpYuvConvertWithOptions(const void* r_ptr, const void* g_ptr,
+                                const void* b_ptr, int rgb_step, int rgb_stride,
+                                int rgb_bit_depth, void* y_ptr, int y_stride,
+                                void* u_ptr, int u_stride, void* v_ptr,
+                                int v_stride, int yuv_bit_depth, int width,
+                                int height, const SharpYuvOptions* options) {
+-  const SharpYuvConversionMatrix* yuv_matrix = options->yuv_matrix;
+-  SharpYuvTransferFunctionType transfer_type = options->transfer_type;
++  const SharpYuvConversionMatrix* yuv_matrix;
++  SharpYuvTransferFunctionType transfer_type;
+   SharpYuvConversionMatrix scaled_matrix;
+-  const int rgb_max = (1 << rgb_bit_depth) - 1;
+-  const int rgb_round = 1 << (rgb_bit_depth - 1);
+-  const int yuv_max = (1 << yuv_bit_depth) - 1;
+-  const int sfix = GetPrecisionShift(rgb_bit_depth);
++  const uint8_t* r_bytes;
++  const uint8_t* g_bytes;
++  const uint8_t* b_bytes;
++  uint8_t* repacked = NULL;
++  int use_stride = rgb_stride;
++  int ok;
++
++  if (options == NULL || options->yuv_matrix == NULL) return 0;
++  yuv_matrix = options->yuv_matrix;
++  transfer_type = options->transfer_type;
++  if (transfer_type < kSharpYuvTransferFunctionBt709 ||
++      transfer_type >= kSharpYuvTransferFunctionNum) {
++    return 0;
++  }
+ 
+   if (width < 1 || height < 1 || width == INT_MAX || height == INT_MAX ||
+       r_ptr == NULL || g_ptr == NULL || b_ptr == NULL || y_ptr == NULL ||
+@@ -537,34 +628,31 @@ int SharpYuvConvertWithOptions(const void* r_ptr, const void* g_ptr,
+     // Stride should be even for uint16_t buffers.
+     return 0;
+   }
+-  // The address of the function pointer is used to avoid a read race.
+-  SharpYuvInit((VP8CPUInfo)&SharpYuvGetCPUInfo);
++  if (!BuildScaledMatrix(yuv_matrix, &scaled_matrix, rgb_bit_depth,
++                         yuv_bit_depth)) {
++    return 0;
++  }
+ 
+-  // Add scaling factor to go from rgb_bit_depth to yuv_bit_depth, to the
+-  // rgb->yuv conversion matrix.
+-  if (rgb_bit_depth == yuv_bit_depth) {
+-    memcpy(&scaled_matrix, yuv_matrix, sizeof(scaled_matrix));
+-  } else {
+-    int i;
+-    for (i = 0; i < 3; ++i) {
+-      scaled_matrix.rgb_to_y[i] =
+-          (yuv_matrix->rgb_to_y[i] * yuv_max + rgb_round) / rgb_max;
+-      scaled_matrix.rgb_to_u[i] =
+-          (yuv_matrix->rgb_to_u[i] * yuv_max + rgb_round) / rgb_max;
+-      scaled_matrix.rgb_to_v[i] =
+-          (yuv_matrix->rgb_to_v[i] * yuv_max + rgb_round) / rgb_max;
++  r_bytes = (const uint8_t*)r_ptr;
++  g_bytes = (const uint8_t*)g_ptr;
++  b_bytes = (const uint8_t*)b_ptr;
++  if (rgb_stride < 0) {
++    if (!NormalizeNegativeStride(&r_bytes, &g_bytes, &b_bytes, &use_stride,
++                                 height, &repacked)) {
++      return 0;
+     }
+   }
+-  // Also incorporate precision change scaling.
+-  scaled_matrix.rgb_to_y[3] = Shift(yuv_matrix->rgb_to_y[3], sfix);
+-  scaled_matrix.rgb_to_u[3] = Shift(yuv_matrix->rgb_to_u[3], sfix);
+-  scaled_matrix.rgb_to_v[3] = Shift(yuv_matrix->rgb_to_v[3], sfix);
+-
+-  return DoSharpArgbToYuv(
+-      (const uint8_t*)r_ptr, (const uint8_t*)g_ptr, (const uint8_t*)b_ptr,
+-      rgb_step, rgb_stride, rgb_bit_depth, (uint8_t*)y_ptr, y_stride,
+-      (uint8_t*)u_ptr, u_stride, (uint8_t*)v_ptr, v_stride, yuv_bit_depth,
+-      width, height, &scaled_matrix, transfer_type);
++
++  // The address of the function pointer is used to avoid a read race.
++  SharpYuvInit((VP8CPUInfo)&SharpYuvGetCPUInfo);
++
++  ok = DoSharpArgbToYuv(r_bytes, g_bytes, b_bytes, rgb_step, use_stride,
++                        rgb_bit_depth, (uint8_t*)y_ptr, y_stride,
++                        (uint8_t*)u_ptr, u_stride, (uint8_t*)v_ptr, v_stride,
++                        yuv_bit_depth, width, height, &scaled_matrix,
++                        transfer_type);
++  free(repacked);
++  return ok;
+ }
+ 
+ //------------------------------------------------------------------------------

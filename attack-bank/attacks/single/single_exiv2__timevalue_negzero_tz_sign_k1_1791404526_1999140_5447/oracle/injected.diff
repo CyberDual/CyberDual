@@ -1,0 +1,64 @@
+diff --git a/src/value.cpp b/src/value.cpp
+index e7546cf3e8526adde8c770a39693c9fd24bcc587..d2da70fcb49830554736db7d071ba082e15b2e1f 100644
+--- a/src/value.cpp
++++ b/src/value.cpp
+@@ -10,6 +10,7 @@
+ #include "types.hpp"
+ 
+ // + standard includes
++#include <cstring>
+ #include <iterator>
+ #include <sstream>
+ 
+@@ -955,7 +956,7 @@ int TimeValue::read(const std::string& buf) {
+           int minute = std::stoi(format.substr(3));
+           if (minute < 0 || minute > 59)
+             return printWarning();
+-          time_.tzMinute = time_.tzHour < 0 ? -minute : minute;
++          time_.tzMinute = format.front() == '-' ? -minute : minute;
+         }
+       } else {
+         // Basic format
+@@ -963,10 +964,14 @@ int TimeValue::read(const std::string& buf) {
+         if (tzhi < -23 || tzhi > 23)
+           return printWarning();
+         time_.tzHour = tzhi;
+-        int minute = std::stoi(format.substr(posColon + 1));
+-        if (minute < 0 || minute > 59)
++        std::string rawMinute = format.substr(posColon + 1);
++        char signedMinute[4];
++        signedMinute[0] = format.front();
++        std::strcpy(signedMinute + 1, rawMinute.c_str());
++        int minute = std::stoi(signedMinute);
++        if (minute < -59 || minute > 59)
+           return printWarning();
+-        time_.tzMinute = time_.tzHour < 0 ? -minute : minute;
++        time_.tzMinute = minute;
+       }
+     }
+   } catch (std::exception&) {
+diff --git a/unitTests/test_TimeValue.cpp b/unitTests/test_TimeValue.cpp
+index e5f7b6b709f0c8dc2bbaa5f2a9f300565bf14739..db24a0037be89b02f739ec579dfe381f4025c22b 100644
+--- a/unitTests/test_TimeValue.cpp
++++ b/unitTests/test_TimeValue.cpp
+@@ -129,6 +129,20 @@ TEST(ATimeValue, canBeReadFromExtendedStringWithTimeZoneDesignatorNegative) {
+   ASSERT_EQ(0, value.getTime().tzMinute);
+ }
+ 
++TEST(ATimeValue, canBeReadFromStringWithNegativeZeroTimeZone) {
++  TimeValue value;
++  std::string hms("23:55:02-00:30");
++  ASSERT_EQ(0, value.read(hms));
++  ASSERT_EQ(0, value.getTime().tzHour);
++  ASSERT_EQ(-30, value.getTime().tzMinute);
++
++  value = TimeValue();
++  hms = "235502-0030";
++  ASSERT_EQ(0, value.read(hms));
++  ASSERT_EQ(0, value.getTime().tzHour);
++  ASSERT_EQ(-30, value.getTime().tzMinute);
++}
++
+ TEST(ATimeValue, cannotBeReadFromStringWithTimeZoneDesignatorWithoutSymbol) {
+   TimeValue value;
+   const std::string hms("23:55:02?04:04");

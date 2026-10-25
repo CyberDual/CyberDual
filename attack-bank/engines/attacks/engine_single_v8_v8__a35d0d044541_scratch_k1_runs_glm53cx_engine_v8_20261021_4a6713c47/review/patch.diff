@@ -1,0 +1,106 @@
+diff --git a/src/d8/d8.cc b/src/d8/d8.cc
+index efbe4b23..5ea1fac7 100644
+--- a/src/d8/d8.cc
++++ b/src/d8/d8.cc
+@@ -4309,6 +4309,10 @@ class OnMessageFromWorkerTask : public v8::Task {
+   std::unique_ptr<SerializationData> data_;
+ };
+ 
++namespace {
++volatile size_t last_worker_message_size;
++}
++
+ // Check, on the main thread, whether a worker has any enqueued any message
+ // events. Workers post this task when posting a message, instead of posting
+ // OnMessageFromWorkerTask directly, to avoid races between message posting
+@@ -4316,8 +4320,13 @@ class OnMessageFromWorkerTask : public v8::Task {
+ class CheckMessageFromWorkerTask : public v8::Task {
+  public:
+   CheckMessageFromWorkerTask(v8::Isolate* isolate,
+-                             std::shared_ptr<Worker> worker)
+-      : isolate_(isolate), worker_(std::move(worker)) {}
++                             std::shared_ptr<Worker> worker,
++                             bool large_message,
++                             const size_t* data_size)
++      : isolate_(isolate),
++        worker_(std::move(worker)),
++        large_message_(large_message),
++        data_size_(data_size) {}
+ 
+   void Run() override {
+     HandleScope scope(isolate_);
+@@ -4342,11 +4351,17 @@ class CheckMessageFromWorkerTask : public v8::Task {
+               isolate_, callback_pair.first, callback_pair.second,
+               std::move(result)));
+     }
++
++    if (large_message_) {
++      last_worker_message_size = *data_size_;
++    }
+   }
+ 
+  private:
+   v8::Isolate* isolate_;
+   std::shared_ptr<Worker> worker_;
++  bool large_message_;
++  const size_t* data_size_;
+ };
+ 
+ // Unregister the given isolate from message events from the given worker.
+@@ -6521,7 +6536,9 @@ Worker::Worker(Isolate* parent_isolate, const char* script,
+                bool flush_denormals)
+     : script_(i::StrDup(script)),
+       flush_denormals_(flush_denormals),
+-      parent_isolate_(parent_isolate) {
++      parent_isolate_(parent_isolate),
++      parent_task_runner_(
++          g_default_platform->GetForegroundTaskRunner(parent_isolate)) {
+   state_.store(State::kReady);
+ }
+ 
+@@ -6894,9 +6911,8 @@ void Worker::ExecuteInThread() {
+   out_semaphore_.Signal();
+   // Also post an cleanup task to the parent isolate, so that it sees that this
+   // worker is terminated and can clean it up in a thread-safe way.
+-  g_platform->GetForegroundTaskRunner(parent_isolate_)
+-      ->PostTask(std::make_unique<CleanUpWorkerTask>(parent_isolate_,
+-                                                     this->shared_from_this()));
++  parent_task_runner_->PostTask(std::make_unique<CleanUpWorkerTask>(
++      parent_isolate_, this->shared_from_this()));
+ }
+ 
+ void Worker::PostMessageOut(const v8::FunctionCallbackInfo<v8::Value>& info) {
+@@ -6919,11 +6935,18 @@ void Worker::PostMessageOut(const v8::FunctionCallbackInfo<v8::Value>& info) {
+     Local<External> this_value = info.Data().As<External>();
+     Worker* worker = static_cast<Worker*>(this_value->Value(kWorkerTag));
+ 
++    constexpr size_t kLargeMessageSize = 64 * 1024;
++    bool large_message = data->size() >= kLargeMessageSize;
++    auto data_size = large_message
++                         ? std::make_unique<size_t>(data->size())
++                         : nullptr;
++    const size_t* queued_data_size = data_size.get();
+     worker->out_queue_.Enqueue(std::move(data));
+     worker->out_semaphore_.Signal();
+-    g_platform->GetForegroundTaskRunner(worker->parent_isolate_)
+-        ->PostTask(std::make_unique<CheckMessageFromWorkerTask>(
+-            worker->parent_isolate_, worker->shared_from_this()));
++    worker->parent_task_runner_->PostTask(
++        std::make_unique<CheckMessageFromWorkerTask>(
++            worker->parent_isolate_, worker->shared_from_this(), large_message,
++            queued_data_size));
+   }
+ }
+ 
+diff --git a/src/d8/d8.h b/src/d8/d8.h
+index c6ac3925..c6a696de 100644
+--- a/src/d8/d8.h
++++ b/src/d8/d8.h
+@@ -366,6 +366,7 @@ class Worker : public std::enable_shared_from_this<Worker> {
+   // the worker_mutex_ and after checking the worker state.
+   Isolate* isolate_ = nullptr;
+   Isolate* parent_isolate_;
++  std::shared_ptr<TaskRunner> parent_task_runner_;
+ 
+   // Only accessed by the worker thread.
+   Global<Context> context_;

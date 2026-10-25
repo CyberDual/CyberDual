@@ -1,0 +1,118 @@
+diff --git a/lib/urlapi.c b/lib/urlapi.c
+index 1c4db04e46388df390e037b5147724b62e40d809..4ee4f99555062e4df2d7f8467bf7c4a0446ff453 100644
+--- a/lib/urlapi.c
++++ b/lib/urlapi.c
+@@ -2056,10 +2056,26 @@ static CURLUcode url_sethost(CURLU *u, struct dynbuf *encp,
+     CURLcode result = Curl_urldecode(newp, n, &decoded, &dlen, REJECT_CTRL);
+     if(result || hostname_check6(u, decoded, dlen))
+       bad = TRUE;
++    else {
++      /* a legacy numerical IPv4 address is stored in its canonical dot
++         decimal form, like when the host is parsed as part of a full URL */
++      struct dynbuf dbuf;
++      curlx_dyn_init(&dbuf, CURL_MAX_INPUT_LENGTH);
++      if(curlx_dyn_addn(&dbuf, decoded, dlen))
++        bad = TRUE;
++      else if(ipv4_normalize(&dbuf) == HOST_IPV4) {
++        size_t nlen = curlx_dyn_len(&dbuf);
++        memcpy(newp, curlx_dyn_ptr(&dbuf), nlen + 1);
++        curlx_dyn_setlen(encp, nlen);
++      }
++      curlx_dyn_free(&dbuf);
++    }
+     curlx_free(decoded);
+   }
+   else if(hostname_check6(u, newp, n))
+     bad = TRUE;
++  else if(ipv4_normalize(encp) == HOST_ERROR)
++    bad = TRUE;
+   if(bad) {
+     curlx_dyn_free(encp);
+     return CURLUE_BAD_HOSTNAME;
+diff --git a/tests/libtest/lib1560.c b/tests/libtest/lib1560.c
+index 03d99ccbbf3b9444aa6e316eeeeea7fb5c50476d..f045474be3c834c48c23fdb43f160c16282d5924 100644
+--- a/tests/libtest/lib1560.c
++++ b/tests/libtest/lib1560.c
+@@ -1297,7 +1297,7 @@ static const struct setcase set_parts_list[] = {
+   {"https://example.com/",
+    "host=0xff,", /* '++' there is no automatic URL decode when setting this
+                   part */
+-   "https://0xff/",
++   "https://0.0.0.255/",
+    0, /* get */
+    0, /* set */
+    CURLUE_OK, CURLUE_OK},
+diff --git a/tests/unit/unit1675.c b/tests/unit/unit1675.c
+index ca5b8e316b3cfdef0e958e705e04d15fe300d51d..443ecf3f3f70ae9c7e2bb8c1797b47e75f359977 100644
+--- a/tests/unit/unit1675.c
++++ b/tests/unit/unit1675.c
+@@ -438,5 +438,69 @@ loop_end:
+     abort_if(fails, "parse_hostname_login tests failed");
+   }
+ 
++  /* Test that legacy numerical IPv4 hosts set with CURLUPART_HOST are
++     normalized the same way as when parsed as part of a full URL */
++  {
++    int fails = 0;
++    unsigned int i;
++    struct host_test {
++      const char *host;
++      const char *out;
++    };
++    static const struct host_test tests[] = {
++      { "2130706433", "127.0.0.1" },
++      { "0177.1", "127.0.0.1" },
++      { "0x7f.1", "127.0.0.1" },
++      { "0xc0a80001", "192.168.0.1" },
++      { "017700000001", "127.0.0.1" },
++      { "127.0.0.1", "127.0.0.1" },
++      { "example.com", "example.com" },
++    };
++
++    for(i = 0; i < CURL_ARRAYSIZE(tests); i++) {
++      CURLU *viaurl = curl_url();
++      CURLU *viahost = curl_url();
++      CURLUcode uc1, uc2;
++      char *urlbuf = curl_maprintf("http://%s/", tests[i].host);
++      char *gothost1 = NULL;
++      char *gothost2 = NULL;
++
++      if(!viaurl || !viahost || !urlbuf) {
++        curl_mfprintf(stderr, "%u: failed to allocate memory\n", i);
++        fails++;
++        goto host_loop_end;
++      }
++
++      uc1 = curl_url_set(viaurl, CURLUPART_URL, urlbuf, 0);
++      if(!uc1)
++        uc1 = curl_url_get(viaurl, CURLUPART_HOST, &gothost1, 0);
++
++      curl_url_set(viahost, CURLUPART_SCHEME, "http", 0);
++      uc2 = curl_url_set(viahost, CURLUPART_HOST, tests[i].host, 0);
++      if(!uc2)
++        uc2 = curl_url_get(viahost, CURLUPART_HOST, &gothost2, 0);
++
++      if(uc1 || uc2 ||
++         strcmp(gothost1, tests[i].out) ||
++         strcmp(gothost2, tests[i].out)) {
++        curl_mfprintf(stderr, "host '%s' mismatch: full-URL -> '%s' (%d), "
++                      "CURLUPART_HOST -> '%s' (%d), expected '%s'\n",
++                      tests[i].host,
++                      uc1 ? "error" : gothost1, (int)uc1,
++                      uc2 ? "error" : gothost2, (int)uc2,
++                      tests[i].out);
++        fails++;
++      }
++
++host_loop_end:
++      curl_free(gothost1);
++      curl_free(gothost2);
++      curl_free(urlbuf);
++      curl_url_cleanup(viaurl);
++      curl_url_cleanup(viahost);
++    }
++    abort_if(fails, "CURLUPART_HOST ipv4 normalization parity tests failed");
++  }
++
+   UNITTEST_END_SIMPLE
+ }

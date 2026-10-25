@@ -1,0 +1,92 @@
+diff --git a/src/openssl.c b/src/openssl.c
+index 2eaea66e1f899668683b5070ab6476015ac11497..c799d4a006782f8eacaa6cb1dc1defc77f17e809 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -3329,6 +3329,17 @@ clean_exit:
+ 
+ #endif /* LIBSSH2_ED25519 */
+ 
++/* Compare the key type read out of a decrypted OpenSSH private key against
++   a known type name using the exact length returned by the parser. The
++   decrypted buffer is not guaranteed to be NUL-terminated, so plain
++   strcmp() must not be used on it. */
++static int ossl_openssh_type_is(const unsigned char *buf, size_t buf_len,
++                                const char *name)
++{
++    size_t name_len = strlen(name);
++    return buf_len == name_len && memcmp(buf, name, name_len) == 0;
++}
++
+ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+                                  void **key_ctx,
+                                  const char *want_method,
+@@ -3342,6 +3353,7 @@ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+ {
+     int rc;
+     unsigned char *buf = NULL;
++    size_t buf_len = 0;
+     struct string_buf *decrypted = NULL;
+ #if LIBSSH2_ECDSA
+     ssh2_curve_type type;
+@@ -3365,7 +3377,7 @@ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+         return rc;
+ 
+     /* We have a new key file, now try and parse it using supported types */
+-    rc = ssh2_get_string(decrypted, &buf, NULL);
++    rc = ssh2_get_string(decrypted, &buf, &buf_len);
+     if(rc || !buf) {
+         rc = ssh2_err(session, LIBSSH2_ERROR_PROTO,
+                       "Public key type in decrypted key data not found");
+@@ -3380,14 +3392,14 @@ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+     (void)pubkeydata_len;
+ 
+ #if LIBSSH2_ED25519
+-    if(!strcmp("ssh-ed25519", (const char *)buf) &&
++    if(ossl_openssh_type_is(buf, buf_len, "ssh-ed25519") &&
+        (!want_method || !strcmp("ssh-ed25519", want_method)))
+         rc = ossl_ed25519_openssh_priv_to_pubkey(session, decrypted,
+                                                  method,
+                                                  pubkeydata, pubkeydata_len,
+                                                  (ssh2_ed25519_ctx **)key_ctx);
+ 
+-    if(!strcmp("sk-ssh-ed25519@openssh.com", (const char *)buf) &&
++    if(ossl_openssh_type_is(buf, buf_len, "sk-ssh-ed25519@openssh.com") &&
+        (!want_method || !strcmp("sk-ssh-ed25519@openssh.com", want_method)))
+         rc = ossl_ed25519_sk_openssh_priv_to_pubkey(session, decrypted,
+                                                     method,
+@@ -3396,7 +3408,7 @@ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+                                                  (ssh2_ed25519_ctx **)key_ctx);
+ #endif
+ #if LIBSSH2_RSA
+-    if(!strcmp("ssh-rsa", (const char *)buf) &&
++    if(ossl_openssh_type_is(buf, buf_len, "ssh-rsa") &&
+        (!want_method || !strcmp("ssh-rsa", want_method)))
+         rc = ossl_rsa_openssh_priv_to_pubkey(session, decrypted,
+                                              method,
+@@ -3404,7 +3416,7 @@ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+                                              (ssh2_rsa_ctx **)key_ctx);
+ #endif
+ #if LIBSSH2_DSA
+-    if(!strcmp("ssh-dss", (const char *)buf) &&
++    if(ossl_openssh_type_is(buf, buf_len, "ssh-dss") &&
+        (!want_method || !strcmp("ssh-dss", want_method)))
+         rc = ossl_dsa_openssh_priv_to_pubkey(session, decrypted,
+                                              method,
+@@ -3412,13 +3424,15 @@ static int ossl_key_from_openssh(LIBSSH2_SESSION *session,
+                                              (ssh2_dsa_ctx **)key_ctx);
+ #endif
+ #if LIBSSH2_ECDSA
+-    if(!strcmp("sk-ecdsa-sha2-nistp256@openssh.com", (const char *)buf))
++    if(ossl_openssh_type_is(buf, buf_len,
++                            "sk-ecdsa-sha2-nistp256@openssh.com"))
+         rc = ossl_ecdsa_sk_openssh_priv_to_pubkey(session, decrypted,
+                                                   method,
+                                                   pubkeydata, pubkeydata_len,
+                                                   NULL, NULL, NULL, NULL,
+                                                   (ssh2_ecdsa_ctx **)key_ctx);
+-    else if(ossl_ecdsa_curve_type_from_name((const char *)buf, &type) == 0 &&
++    else if(buf_len == 19 &&
++            ossl_ecdsa_curve_type_from_name((const char *)buf, &type) == 0 &&
+             (!want_method || !strcmp("ssh-ecdsa", want_method)))
+         rc = ossl_ecdsa_openssh_priv_to_pubkey(session, type, decrypted,
+                                                method,

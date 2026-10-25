@@ -1,0 +1,24 @@
+diff --git a/src/hb-ot-cff1-table.hh b/src/hb-ot-cff1-table.hh
+index 79f265050fc0cfac2f514576f9468f857f9da267..5129f12ac666a19bf27a24423dcae41fb098e699 100644
+--- a/src/hb-ot-cff1-table.hh
++++ b/src/hb-ot-cff1-table.hh
+@@ -774,7 +774,7 @@ struct cff1_top_dict_opset_t : top_dict_opset_t<cff1_top_dict_val_t>
+   static void process_op (op_code_t op, cff1_top_dict_interp_env_t& env, cff1_top_dict_values_t& dictval)
+   {
+     cff1_top_dict_val_t  val;
+-    val.last_arg_offset = (env.last_offset-1) - dictval.opStart;  /* offset to the last argument */
++    val.last_arg_offset = env.last_offset - dictval.opStart;  /* offset to the last argument */
+ 
+     switch (op) {
+       case OpCode_version:
+@@ -844,7 +844,9 @@ struct cff1_top_dict_opset_t : top_dict_opset_t<cff1_top_dict_val_t>
+ 	break;
+ 
+       default:
+-	env.last_offset = env.str_ref.get_offset ();
++	/* keep the start of the last one-byte token */
++	if (op <= OpCode_OneByteIntLast)
++	  env.last_offset = env.str_ref.get_offset () - 1;
+ 	top_dict_opset_t<cff1_top_dict_val_t>::process_op (op, env, dictval);
+ 	/* Record this operand below if stack is empty, otherwise done */
+ 	if (!env.argStack.is_empty ()) return;

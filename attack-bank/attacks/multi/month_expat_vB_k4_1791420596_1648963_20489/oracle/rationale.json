@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "fa8f58a78acafa5cbad122ee17313a4daf822303",
+      "edited_message": null,
+      "patch": "diff --git a/expat/lib/xmltok_impl.c b/expat/lib/xmltok_impl.c\nindex b7a9b5e..cc2adeb 100644\n--- a/expat/lib/xmltok_impl.c\n+++ b/expat/lib/xmltok_impl.c\n@@ -48,9 +48,13 @@\n #    define IS_INVALID_CHAR(enc, ptr, n) (0)\n #  endif\n \n+#  ifndef IS_INVALID_CHAR_PREFIX\n+#    define IS_INVALID_CHAR_PREFIX(enc, ptr, n) (0)\n+#  endif\n+\n #  define INVALID_LEAD_CASE(n, ptr, nextTokPtr)                                \\\n   case BT_LEAD##n:                                                             \\\n-    if (end - ptr < n)                                                         \\\n+    if (end - ptr < n && ! IS_INVALID_CHAR_PREFIX(enc, ptr, n))                \\\n       return XML_TOK_PARTIAL_CHAR;                                             \\\n     if (IS_INVALID_CHAR(enc, ptr, n)) {                                        \\\n       *(nextTokPtr) = (ptr);                                                   \\\n@@ -1818,5 +1822,6 @@ PREFIX(updatePosition)(const ENCODING *enc, const char *ptr, const char *end,\n #  undef CHECK_NAME_CASES\n #  undef CHECK_NMSTRT_CASE\n #  undef CHECK_NMSTRT_CASES\n+#  undef IS_INVALID_CHAR_PREFIX\n \n #endif /* XML_TOK_IMPL_C */\n"
+    },
+    {
+      "sha": "165a8e87d8a1e86a579cde7a295df97f8a60f443",
+      "edited_message": null,
+      "patch": "diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c\nindex 5f4e78e..dc1be1b 100644\n--- a/expat/lib/xmltok.c\n+++ b/expat/lib/xmltok.c\n@@ -822,10 +822,12 @@ little2_isInvalid4(const ENCODING *enc, const char *p) {\n #  define IS_NMSTRT_CHAR(enc, p, n) (0)\n #  define IS_NMSTRT_CHAR_MINBPC(enc, p) LITTLE2_IS_NMSTRT_CHAR_MINBPC(p)\n #  define IS_INVALID_CHAR(enc, p, n) LITTLE2_IS_INVALID_CHAR(p, n)\n+#  define IS_INVALID_CHAR_PREFIX(enc, p, n) LITTLE2_IS_INVALID_CHAR(p, n)\n \n #  define XML_TOK_IMPL_C\n #  include \"xmltok_impl.c\"\n #  undef XML_TOK_IMPL_C\n+#  undef IS_INVALID_CHAR_PREFIX\n \n #  undef MINBPC\n #  undef BYTE_TYPE\n@@ -967,10 +969,12 @@ big2_isInvalid4(const ENCODING *enc, const char *p) {\n #  define IS_NMSTRT_CHAR(enc, p, n) (0)\n #  define IS_NMSTRT_CHAR_MINBPC(enc, p) BIG2_IS_NMSTRT_CHAR_MINBPC(p)\n #  define IS_INVALID_CHAR(enc, p, n) BIG2_IS_INVALID_CHAR(p, n)\n+#  define IS_INVALID_CHAR_PREFIX(enc, p, n) BIG2_IS_INVALID_CHAR(p, n)\n \n #  define XML_TOK_IMPL_C\n #  include \"xmltok_impl.c\"\n #  undef XML_TOK_IMPL_C\n+#  undef IS_INVALID_CHAR_PREFIX\n \n #  undef MINBPC\n #  undef BYTE_TYPE\n"
+    }
+  ],
+  "coupling": "The XML declaration commit adds a prefix-validation hook to the partial-character branch. At that point the hook is a no-op, so incomplete UTF-16 still returns XML_TOK_PARTIAL_CHAR. The later surrogate-validation commit binds the hook to the UTF-16 low-surrogate test, which reads the fourth byte. With both edits, a high surrogate in the final two bytes of the parse buffer reaches that read before the length check and reads beyond the allocation. Either edit alone leaves the prior safe behavior; repairing the fault requires checking the available byte count before invoking the concrete surrogate validator across these two layers.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "XML_ParserCreate, XML_GetBuffer, XML_ParseBuffer",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

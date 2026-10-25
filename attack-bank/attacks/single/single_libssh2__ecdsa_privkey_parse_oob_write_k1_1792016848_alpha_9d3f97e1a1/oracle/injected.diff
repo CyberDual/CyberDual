@@ -1,0 +1,42 @@
+diff --git a/src/openssl.c b/src/openssl.c
+index ad67f5cba9cb304771ced217d2ff8b2c46ea51b3..c79cda55b952eca6267015eb4e95fab1aa674a08 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -183,6 +183,10 @@ static SSH2_INLINE void ossl_swap_bytes(unsigned char *buf, size_t len)
+ {
+ #if !defined(WORDS_BIGENDIAN) || !WORDS_BIGENDIAN
+     size_t i, j;
++
++    if(len < 2)
++        return;
++
+     for(i = 0, j = len - 1; i < j; i++, j--) {
+         unsigned char temp = buf[i];
+         buf[i] = buf[j];
+@@ -2569,6 +2573,7 @@ static int ossl_ecdsa_openssh_priv_to_pubkey(LIBSSH2_SESSION *session,
+     int rc = 0;
+     size_t curvebuf_len, exponent_len, pointbuf_len;
+     unsigned char *curvebuf, *exponent, *pointbuf;
++    const char *expected_curve;
+     ssh2_ecdsa_ctx *ctx = NULL;
+ 
+ #ifdef USE_OPENSSL_3
+@@ -2588,6 +2593,18 @@ static int ossl_ecdsa_openssh_priv_to_pubkey(LIBSSH2_SESSION *session,
+         return -1;
+     }
+ 
++    if(curve == SSH2_EC_CURVE_NISTP384)
++        expected_curve = "nistp384";
++    else if(curve == SSH2_EC_CURVE_NISTP521)
++        expected_curve = "nistp521";
++    else
++        expected_curve = "nistp256";
++
++    if(memcmp(curvebuf, expected_curve, strlen(expected_curve))) {
++        ssh2_err(session, LIBSSH2_ERROR_PROTO, "ECDSA curve mismatch");
++        return -1;
++    }
++
+     if(ssh2_get_string(decrypted, &pointbuf, &pointbuf_len)) {
+         ssh2_err(session, LIBSSH2_ERROR_PROTO, "ECDSA no point");
+         return -1;

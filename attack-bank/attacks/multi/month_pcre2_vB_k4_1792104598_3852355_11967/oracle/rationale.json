@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "a742adc782bbe8ed236d17f705b0b5f939b5ce88",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2_jit_simd_inc.h b/src/pcre2_jit_simd_inc.h\n--- a/src/pcre2_jit_simd_inc.h\n+++ b/src/pcre2_jit_simd_inc.h\n@@ -79,7 +79,7 @@\n {\n /* A range ends at a transition, except for the last one when it runs to the\n    end of the bitmap, so twice max_ranges transitions is always enough. */\n-int transitions[MAX_START_BITS_RANGES * 2];\n+int transitions[MAX_START_BITS_RANGES];\n int count = 0, covered = 0;\n int i, length;\n \n"
+    },
+    {
+      "sha": "dd94dfd4a239616e8a94e1288cfbe9ec0cea90d2",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2_jit_simd_inc.h b/src/pcre2_jit_simd_inc.h\n--- a/src/pcre2_jit_simd_inc.h\n+++ b/src/pcre2_jit_simd_inc.h\n@@ -458,7 +458,7 @@\n    two vector registers for its bounds; beyond this the code unit at a time\n    bitmap scan is likely to be the better option anyway, since every extra\n    range adds three or four instructions to each loop iteration. */\n-#define X86_START_BITS_MAX_RANGES 4\n+#define X86_START_BITS_MAX_RANGES 5\n \n /* Largest number of accepted code units before the class counts as dense and\n    the code unit at a time scan is left to do the job. A vector scan only pays\n"
+    }
+  ],
+  "coupling": "The first commit sizes the temporary transition array for the existing four-range x86 SIMD caller: eight entries accommodate its maximum eight bitmap transitions. The later commit expands that caller to five ranges, which can produce ten transitions, while the helper still passes a ten-entry limit to extract_class_ranges. That function writes past the eight-entry array during public JIT compilation of a five-range character class. Either edit alone remains within the original bound; a correct fix must reconcile the caller limit with the helper capacity across the two commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "pcre2_compile and pcre2_jit_compile (public 8-bit API)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

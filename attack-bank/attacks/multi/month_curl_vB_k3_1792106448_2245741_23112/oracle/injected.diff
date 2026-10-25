@@ -1,0 +1,30 @@
+diff --git a/lib/mprintf.c b/lib/mprintf.c
+index 571c417..398132c 100644
+--- a/lib/mprintf.c
++++ b/lib/mprintf.c
+@@ -984,7 +984,9 @@ static bool out_string(void *userp,
+     /* Write null string if there is space. */
+     if(prec == -1 || prec >= (int)CURL_CSTRLEN(nilstr)) {
+       str = nilstr;
+-      len = CURL_CSTRLEN(nilstr);
++      /* The bounded scan stops at the constant's terminator, so the
++         requested precision is the right bound, as for a real string. */
++      len = (prec == -1) ? CURL_CSTRLEN(nilstr) : (size_t)prec;
+       /* Disable quotes around (nil) */
+       flags &= ~(unsigned int)FLAGS_ALT;
+     }
+@@ -1012,9 +1014,11 @@ static bool out_string(void *userp,
+   }
+ 
+   /* With no precision, len is already the exact length; emit it without
+-     scanning again. With precision, scan up to len but stop at NUL, since
+-     the string may be shorter or the buffer may not be null-terminated. */
+-  if(prec == -1) {
++     scanning again. The (nil) substitution is a constant of known length
++     and likewise needs no scan. With precision, scan up to len but stop
++     at NUL, since the string may be shorter or the buffer may not be
++     null-terminated. */
++  if(prec == -1 || str == nilstr) {
+     if(stream_run(userp, stream, streamn,
+                   (const unsigned char *)str, len, donep))
+       return TRUE;

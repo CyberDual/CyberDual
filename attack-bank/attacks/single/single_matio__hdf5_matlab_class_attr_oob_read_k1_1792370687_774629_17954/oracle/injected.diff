@@ -1,0 +1,60 @@
+diff --git a/src/mat73.c b/src/mat73.c
+index f9dbfc414f02aad863100456eb614f10d2897ee7..4200f61a1789afd9289e2ffe97c48880c112f074 100644
+--- a/src/mat73.c
++++ b/src/mat73.c
+@@ -72,6 +72,11 @@ struct ReadGroupInfoIterData
+ #define MAX_RANK (3)
+ #endif
+ 
++#if !defined(MAT73_MAX_CLASS_NAME)
++/* Maximal accepted length of the MATLAB_class attribute string (cf. mxMAXNAM) */
++#define MAT73_MAX_CLASS_NAME (64)
++#endif
++
+ /*===========================================================================
+  *  Private functions
+  *===========================================================================
+@@ -572,7 +577,34 @@ Mat_H5ReadVarInfo(matvar_t *matvar, hid_t dset_id)
+         H5Aclose(attr_id);
+         return MATIO_E_FAIL_TO_IDENTIFY;
+     }
++    /* The MATLAB_class attribute is expected to be a scalar, fixed-length
++     * string. Reject non-scalar dataspaces, variable-length strings and
++     * overlong class names as file format violations. */
++    {
++        hid_t space_id = H5Aget_space(attr_id);
++        H5S_class_t attr_class;
++        hssize_t npoints;
++        if ( space_id < 0 ) {
++            H5Tclose(type_id);
++            H5Aclose(attr_id);
++            return MATIO_E_FAIL_TO_IDENTIFY;
++        }
++        attr_class = H5Sget_simple_extent_type(space_id);
++        npoints = H5Sget_simple_extent_npoints(space_id);
++        H5Sclose(space_id);
++        if ( ((H5S_SCALAR != attr_class) && (H5S_SIMPLE != attr_class)) || 1 != npoints ||
++             H5T_STRING != H5Tget_class(type_id) || H5Tis_variable_str(type_id) ) {
++            H5Tclose(type_id);
++            H5Aclose(attr_id);
++            return MATIO_E_FILE_FORMAT_VIOLATION;
++        }
++    }
+     class_len = H5Tget_size(type_id);
++    if ( 0 == class_len || class_len > MAT73_MAX_CLASS_NAME ) {
++        H5Tclose(type_id);
++        H5Aclose(attr_id);
++        return MATIO_E_FILE_FORMAT_VIOLATION;
++    }
+     mem_type_id = H5Tcopy(H5T_C_S1);
+     if ( mem_type_id == H5I_INVALID_HID ) {
+         H5Tclose(type_id);
+@@ -586,7 +618,7 @@ Mat_H5ReadVarInfo(matvar_t *matvar, hid_t dset_id)
+         H5Aclose(attr_id);
+         return MATIO_E_FAIL_TO_IDENTIFY;
+     }
+-    class_str = (char *)calloc(class_len + 1, 1);
++    class_str = (char *)calloc(MAT73_MAX_CLASS_NAME, 1);
+     if ( NULL != class_str ) {
+         herr_t herr = H5Aread(attr_id, mem_type_id, class_str);
+         if ( herr < 0 ) {

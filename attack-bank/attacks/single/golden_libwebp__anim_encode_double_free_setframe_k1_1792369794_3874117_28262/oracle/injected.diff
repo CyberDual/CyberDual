@@ -1,0 +1,16 @@
+diff --git a/src/mux/anim_encode.c b/src/mux/anim_encode.c
+index 86aeef0624bb2ed5345e7435e16af4da885fb045..ef7f766a160e54d234454141cc2e4b174d4efe72 100644
+--- a/src/mux/anim_encode.c
++++ b/src/mux/anim_encode.c
+@@ -957,6 +957,11 @@ static void PickBestCandidate(WebPAnimEncoder* const enc,
+       // selected when a non keyframe was assumed.
+       SetPreviousDisposeMethod(enc, dispose_method);
+ 
++      // The sub frame bitstream is aliased into 'encoded_frame' and is
++      // released by FrameRelease(), so clear 'evaluate' to keep the error
++      // cleanup in SetFrame() from freeing it as well.
++      candidate->evaluate = 0;
++
+       enc->best_candidate_carries_over = candidate->carries_over;
+       if (candidate->carries_over) {
+         // Save the best_candidate_carryover_mask to be able to generate the

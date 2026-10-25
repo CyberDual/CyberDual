@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "c1e0ad66298fefc5d9c05c056aea09f364a227a9",
+      "edited_message": null,
+      "patch": "diff --git a/src/media_tools/av_parsers.c b/src/media_tools/av_parsers.c\nindex 22d75fb..204d2a8 100644\n--- a/src/media_tools/av_parsers.c\n+++ b/src/media_tools/av_parsers.c\n@@ -15489,26 +15489,16 @@ static Bool gf_ac4_substream_info_obj(GF_BitStream *bs,\n {\n \tu32 i, res_bytes, j;\n \tu32 n_signals, isf_config;\n-\tu32 N_OBJECTS_CODE_TO_NUM_OBJECTS[] = {0, 1, 2, 3, 5, 7};\n+\tu32 N_OBJECTS_CODE_TO_NUM_OBJECTS[] = {0, 1, 2, 3, 5, 7, 0, 0};\n \tu32 BED_CHAN_ASSIGN_CODE_TO_NUM_OBJECTS[] = {2, 3, 6, 8, 10, 8, 10, 12};\n \tu32 STD_BED_FLAG_TO_NUM_OBJECTS[] = {2, 1, 1, 2, 2, 2, 2, 2, 2, 1};\n \tu32 ISF_CONFIG_TO_NUM_OBJECTS[] = {4, 8, 10, 14, 15, 30};\n \n \tsubstream->n_objects_code = gf_bs_read_int_log(bs, 3, \"n_objects_code\");\n \n-\tif (substream->n_objects_code == 0) {\n-\t\tn_signals = 0;\n-\t} else if (substream->n_objects_code == 1) {\n-\t\tn_signals = 1;\n-\t} else if (substream->n_objects_code == 2) {\n-\t\tn_signals = 2;\n-\t} else if (substream->n_objects_code == 3) {\n-\t\tn_signals = 3;\n-\t} else if (substream->n_objects_code == 4) {\n-\t\tn_signals = 5;\n-\t} else {\n-\t\tn_signals = 0;\n-\t}\n+\t// ETSI TS 103 190-2 V1.3.1 (2025-07) Table 60: one signal per object for the\n+\t// defined codes, the LFE signal is added below; reserved codes carry no signal\n+\tn_signals = N_OBJECTS_CODE_TO_NUM_OBJECTS[substream->n_objects_code];\n \n \t// ETSI TS 103 190-2 V1.3.1 (2025-07) Table 60\n \t// use the default presentation as the default for channel count\n"
+    },
+    {
+      "sha": "278c474b7d59f4dd1b8687a46eb808da4cac1799",
+      "edited_message": null,
+      "patch": "diff --git a/src/media_tools/av_parsers.c b/src/media_tools/av_parsers.c\nindex 5331c34..88def34 100644\n--- a/src/media_tools/av_parsers.c\n+++ b/src/media_tools/av_parsers.c\n@@ -15494,7 +15494,7 @@ static Bool gf_ac4_substream_info_obj(GF_BitStream *bs,\n {\n \tu32 i, res_bytes, j;\n \tu32 n_signals, isf_config;\n-\tu32 N_OBJECTS_CODE_TO_NUM_OBJECTS[] = {0, 1, 2, 3, 5, 7, 0, 0};\n+\tu32 N_OBJECTS_CODE_TO_NUM_OBJECTS[] = {0, 1, 2, 3, 5, 7};\n \tu32 BED_CHAN_ASSIGN_CODE_TO_NUM_OBJECTS[] = {2, 3, 6, 8, 10, 8, 10, 12};\n \tu32 STD_BED_FLAG_TO_NUM_OBJECTS[] = {2, 1, 1, 2, 2, 2, 2, 2, 2, 1};\n \tu32 ISF_CONFIG_TO_NUM_OBJECTS[] = {4, 8, 10, 14, 15, 30};\n"
+    }
+  ],
+  "coupling": "The defect is split across two commits in gf_ac4_substream_info_obj() (src/media_tools/av_parsers.c), and only their composition is unsafe. (1) c1e0ad6 'Fix the assignment of n_signals' replaces the if/else chain that mapped n_objects_code to n_signals with a direct lookup into N_OBJECTS_CODE_TO_NUM_OBJECTS and, to keep that new lookup total over the full 3-bit domain (0..7), pads the table from 6 to 8 entries. Read alone this is correct maintenance: the table now covers every value the unguarded 3-bit read can produce, so the lookup is in bounds for all inputs. (2) 278c474 'fuzz: ac4 mem fixes' adds a bounds guard before the *other* user of the same table (the dynamic-objects loop) and, as part of the same fuzz cleanup, restores the table initializer to the spec's 6 defined codes. Read alone this is also correct maintenance: in the tree this commit actually sees, n_signals is still computed by the if/else chain (reserved codes fall to the else branch), the only table user left is the loop it just guarded with GF_ARRAY_LENGTH, and every reserved value is rejected before any indexing. Neither commit exposes a bug on its own: the edit-1-only tree (8-entry table, unguarded lookup) and the edit-2-only tree (identical in content to the original batch) both run the PoC cleanly under the sanitizer. The bug exists only at the composed tip, where the unguarded 'n_signals = N_OBJECTS_CODE_TO_NUM_OBJECTS[substream->n_objects_code]' introduced by commit 1 survives while the table it indexes has been shrunk to 6 entries by commit 2: for the reserved codes 6 and 7 the lookup reads past the 24-byte stack array. A correct fix is necessarily non-local: reverting commit 2's table shrink alone reintroduces non-spec values in a table that other code treats as spec-defined; guarding commit 1's lookup alone leaves the invariant split across two sites so the next reader of either commit re-breaks it. The reviewer must recognize that commit 1 created an unguarded consumer whose safety depended on the 8-entry width, and that commit 2 silently removed that width while guarding only its own use site - the fix (guard the lookup, or make the reserved-code mapping explicit) has to reason about both diffs together.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "gf_ac4_parser (libgpac public API, include/gpac/avparse.h)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

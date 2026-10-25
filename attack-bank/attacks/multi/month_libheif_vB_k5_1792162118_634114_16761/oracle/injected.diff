@@ -1,0 +1,95 @@
+diff --git a/libheif/image/pixelimage.cc b/libheif/image/pixelimage.cc
+index 3a5f43f..53fa219 100644
+--- a/libheif/image/pixelimage.cc
++++ b/libheif/image/pixelimage.cc
+@@ -383,22 +383,32 @@ Error HeifPixelImage::add_channel(heif_channel channel, uint32_t width, uint32_t
+             "Use an interleaved format with alpha (e.g. heif_chroma_interleaved_RGBA) instead."};
+   }
+ 
+-  // A Cb/Cr plane must have exactly the chroma-subsampled size of the logical image
++  // A Cb/Cr plane must have the chroma-subsampled size of the logical image
+   // (round_up), the invariant has_standard_plane_sizes() and check_plane_layout()
+-  // enforce elsewhere. Building one at a different size makes the plane's actual
++  // enforce elsewhere. An odd luma width is the one exception: the coded chroma
++  // width is even, one sample past round_up, and that sample is row padding rather
++  // than a chroma location. Building one at any other size makes the plane's actual
+   // allocation disagree with the size that code derives from the logical image
+   // dimensions, and that mismatch is a memory-safety hazard: an oversized plane
+   // fooled the per-row fill in extend_to_size_with_zero() into an unsigned underflow
+   // and a ~4 GB out-of-bounds write (GHSA-j2rv-58fh-w8pw), an undersized one caused
+   // out-of-bounds reads during RGB conversion (issue #1796). Reject the mismatch at
+-  // construction so the inconsistent image cannot be built in the first place. Only
+-  // Cb/Cr are constrained; alpha, depth, disparity and other auxiliary planes may
+-  // legitimately have a size that differs from the colour planes.
++  // construction so the inconsistent image cannot be built in the first place. The
++  // alignment sample cannot be extended away: extend_to_size_with_zero() preflights
++  // any target that would shrink a plane. Only Cb/Cr are constrained; alpha, depth,
++  // disparity and other auxiliary planes may legitimately have a size that differs
++  // from the colour planes.
+   if (channel == heif_channel_Cb || channel == heif_channel_Cr) {
+     uint32_t expected_width, expected_height;
+     get_subsampled_size(m_width, m_height, channel, m_chroma, &expected_width, &expected_height);
+ 
+-    if (width != expected_width || height != expected_height) {
++    // Odd luma width: allow the single even-alignment sample past round_up.
++    uint32_t max_width = expected_width;
++    if (m_width & 1) {
++      max_width += 1;
++    }
++
++    if (width < expected_width || width > max_width || height != expected_height) {
+       return {heif_error_Usage_error,
+               heif_suberror_Invalid_parameter_value,
+               "A Cb/Cr plane must have the chroma-subsampled size of the image."};
+@@ -711,7 +721,18 @@ Error HeifPixelImage::extend_to_size_with_zero(uint32_t width, uint32_t height,
+     get_subsampled_size(width, height, component.m_channel, m_chroma,
+                         &subsampled_width, &subsampled_height);
+ 
+-    if (subsampled_width < component.m_width || subsampled_height < component.m_height) {
++    // Cb/Cr are stored at the chroma-subsampled size of the logical image, which
++    // add_channel() enforces, so the size derived from the logical image is the
++    // plane's size. Use that here, as every other consumer does, instead of the
++    // width recorded on the plane.
++    uint32_t plane_width = component.m_width;
++    uint32_t plane_height = component.m_height;
++    if (component.m_channel == heif_channel_Cb || component.m_channel == heif_channel_Cr) {
++      get_subsampled_size(m_width, m_height, component.m_channel, m_chroma,
++                          &plane_width, &plane_height);
++    }
++
++    if (subsampled_width < plane_width || subsampled_height < plane_height) {
+       return Error{heif_error_Usage_error,
+                    heif_suberror_Invalid_parameter_value,
+                    "Cannot extend an image to a size smaller than an existing plane."};
+diff --git a/tests/add_channel_checks.cc b/tests/add_channel_checks.cc
+index c38ce4b..72da4f7 100644
+--- a/tests/add_channel_checks.cc
++++ b/tests/add_channel_checks.cc
+@@ -29,8 +29,9 @@
+ 
+ // Regression tests for the Cb/Cr size check in HeifPixelImage::add_channel().
+ //
+-// A Cb/Cr plane must have exactly the chroma-subsampled size of the logical image
+-// (round_up). Building one at a different size makes the plane's allocation disagree
++// A Cb/Cr plane must have the chroma-subsampled size of the logical image
++// (round_up), plus at most one even-alignment sample when the luma width is odd.
++// Building one at a different size makes the plane's allocation disagree
+ // with the size other code derives from the logical dimensions. An oversized plane
+ // let extend_to_size_with_zero() underflow its per-row fill length and write ~4 GB
+ // past the plane (GHSA-j2rv-58fh-w8pw); an undersized plane caused out-of-bounds
+@@ -82,6 +83,15 @@ TEST_CASE("add_channel accepts correctly-subsampled chroma planes") {
+     REQUIRE(image->add_channel(heif_channel_Cr, 7, 5, 8, limits).error_code == heif_error_Ok);
+   }
+ 
++  SECTION("4:2:0, odd width keeps one alignment sample") {
++    auto image = std::make_shared<HeifPixelImage>();
++    image->create(13, 8, heif_colorspace_YCbCr, heif_chroma_420);
++    REQUIRE(image->add_channel(heif_channel_Y, 13, 8, 8, limits).error_code == heif_error_Ok);
++    // round_up is 7x4; the even coded width is one sample wider.
++    REQUIRE(image->add_channel(heif_channel_Cb, 8, 4, 8, limits).error_code == heif_error_Ok);
++    REQUIRE(image->add_channel(heif_channel_Cr, 8, 4, 8, limits).error_code == heif_error_Ok);
++  }
++
+   SECTION("4:2:2 subsamples width only") {
+     auto image = std::make_shared<HeifPixelImage>();
+     image->create(12, 8, heif_colorspace_YCbCr, heif_chroma_422);

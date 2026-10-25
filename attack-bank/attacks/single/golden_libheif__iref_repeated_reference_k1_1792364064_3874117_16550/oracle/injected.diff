@@ -1,0 +1,130 @@
+diff --git a/libheif/box.cc b/libheif/box.cc
+index 504e26e6988de13f77ac24b5d6be2fdbaa5f76eb..d096afe9526547fe1ee0072066b61a4575c0af0c 100644
+--- a/libheif/box.cc
++++ b/libheif/box.cc
+@@ -4045,11 +4045,10 @@ Error Box_iref::parse(BitstreamRange& range, const heif_security_limits* limits)
+   }
+ 
+ 
+-  // --- check for duplicate references
+-
+-  if (auto error = check_for_double_references()) {
+-    return error;
+-  }
++  // Note: the same item may be listed several times within one reference entry.
++  // ISO/IEC 14496-12 does not forbid it, and derived images rely on it: an 'iovl'
++  // that places the same input image at two positions references it twice in its
++  // 'dimg' entry (one offset per reference). Conformance file C021 does this.
+ 
+ 
+ #if 0
+@@ -4148,26 +4147,6 @@ Error Box_iref::parse(BitstreamRange& range, const heif_security_limits* limits)
+ }
+ 
+ 
+-Error Box_iref::check_for_double_references() const
+-{
+-  for (const auto& ref : m_references) {
+-    std::set<heif_item_id> to_ids;
+-    for (const auto to_id : ref.to_item_ID) {
+-      if (to_ids.find(to_id) == to_ids.end()) {
+-        to_ids.insert(to_id);
+-      }
+-      else {
+-        return {heif_error_Invalid_input,
+-                heif_suberror_Unspecified,
+-                "'iref' has double references"};
+-      }
+-    }
+-  }
+-
+-  return Error::Ok;
+-}
+-
+-
+ void Box_iref::derive_box_version()
+ {
+   uint8_t version = 0;
+@@ -4192,10 +4171,6 @@ void Box_iref::derive_box_version()
+ 
+ Error Box_iref::write(StreamWriter& writer) const
+ {
+-  if (auto error = check_for_double_references()) {
+-    return error;
+-  }
+-
+   size_t box_start = reserve_box_header_space(writer);
+ 
+   int id_size = ((get_version() == 0) ? 2 : 4);
+diff --git a/libheif/box.h b/libheif/box.h
+index 424aebd124392205fa4d2063ed77ced44a98fe45..a686fd7cd0e93b679ebc15fbfe45f064389c95da 100644
+--- a/libheif/box.h
++++ b/libheif/box.h
+@@ -1105,8 +1105,6 @@ protected:
+ 
+   void derive_box_version() override;
+ 
+-  Error check_for_double_references() const;
+-
+ private:
+   std::vector<Reference> m_references;
+ 
+diff --git a/libheif/image-items/overlay.cc b/libheif/image-items/overlay.cc
+index 5ab6ab201c2345a1d2b9c581e295f7b12ab51b26..78f3d7cb86ecf7e54c6728b0cbeea646aff72717 100644
+--- a/libheif/image-items/overlay.cc
++++ b/libheif/image-items/overlay.cc
+@@ -98,7 +98,10 @@ Error ImageOverlay::parse(size_t num_images, const std::vector<uint8_t>& data)
+   int field_len = ((m_flags & 1) ? 4 : 2);
+   int ptr = 2;
+ 
+-  if (ptr + 4 * 2 + 2 * field_len + num_images * 2 * field_len > data.size()) {
++  // The item data holds one (x,y) offset pair per 'dimg' reference, also when
++  // the same input image is referenced more than once: it is referenced once
++  // per position at which it is placed onto the canvas.
++  if (ptr + 4 * 2 + num_images * 2 * field_len > data.size()) {
+     return eofError;
+   }
+ 
+diff --git a/tests/overlay_amplification.cc b/tests/overlay_amplification.cc
+index 52af71873aac4ab782d066ecac669d24017e8cea..2025709a88820091ea0bb03e83eb340c9e1b8b24 100644
+--- a/tests/overlay_amplification.cc
++++ b/tests/overlay_amplification.cc
+@@ -202,8 +202,9 @@ std::vector<uint8_t> build_file(const std::vector<Item>& items, uint16_t primary
+ 
+ // Build the exponential amplification gadget: a chain of `depth` overlays where
+ // each overlay composites the next one twice, through two distinct 'iden' items
+-// (a direct double reference would be rejected by Box_iref). Without the fix,
+-// decoding the primary overlay decodes the base 2^depth times.
++// (listing the same item twice in one 'dimg' entry is legal too, but the two
++// items keep the gadget independent of that). Without the fix, decoding the
++// primary overlay decodes the base 2^depth times.
+ //
+ // Item layout: id 1 = base ('mski'); then per level k = 0..depth-1:
+ //   iovl_k  = 2 + 3*k
+@@ -314,3 +315,26 @@ TEST_CASE("overlay amplification: a shallow legitimate overlay still decodes") {
+   REQUIRE(read_ok);
+   REQUIRE(err.code == heif_error_Ok);
+ }
++
++// An 'iovl' may list the same input image several times in its 'dimg' entry;
++// it is referenced once per position at which it is placed onto the canvas
++// (ISO/IEC 23008-12; the HEIF conformance file C021 does this).
++TEST_CASE("overlay amplification: repeated references to the same image decode") {
++  std::vector<Item> items;
++  items.push_back({1, "mski", {}, std::vector<uint8_t>(64, 0x7F)});
++
++  // Primary overlay places the base image twice: at (0,0) and at (4,4).
++  // The offset pairs start after the 14-byte header; (x1,y1) are bytes 18..21.
++  auto spec = make_overlay_spec(8, 8, 2);
++  spec[19] = 4;
++  spec[21] = 4;
++  items.push_back({2, "iovl", {1, 1}, spec});
++
++  auto data = build_file(items, /*primary=*/2);
++
++  bool read_ok = false;
++  heif_error err = decode_primary(data, read_ok);
++
++  REQUIRE(read_ok);
++  REQUIRE(err.code == heif_error_Ok);
++}

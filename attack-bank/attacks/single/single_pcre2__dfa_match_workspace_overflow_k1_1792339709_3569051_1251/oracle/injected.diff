@@ -1,0 +1,42 @@
+diff --git a/src/pcre2_dfa_match.c b/src/pcre2_dfa_match.c
+index 314e97754e25f9629091d4aaaf4bc7625b32e5e3..04f00727595316fa7c52cc44a468e0f2826b5f16 100644
+--- a/src/pcre2_dfa_match.c
++++ b/src/pcre2_dfa_match.c
+@@ -426,6 +426,8 @@ RWS_anchor *new;
+ if (rws->next != NULL)
+   {
+   new = rws->next;
++  if (new->free < RWS_RSIZE + ovecsize + RWS_ANCHOR_SIZE)
++    return PCRE2_ERROR_HEAPLIMIT;
+   }
+ 
+ /* Sizes in the RWS_anchor blocks are in units of sizeof(int), but
+@@ -434,18 +436,21 @@ overflow. */
+ 
+ else
+   {
+-  uint32_t newsize = (rws->size >= UINT32_MAX/(sizeof(int)*2))? UINT32_MAX/sizeof(int) : rws->size * 2;
+-  uint32_t newsizeK = newsize/(1024/sizeof(int));
++  uint64_t newsize = (uint64_t)rws->size * 2;
++  uint64_t newsizeK = (newsize * sizeof(int) + 1023)/1024;
++  uint64_t heap_remaining = mb->heap_used < mb->heap_limit?
++    mb->heap_limit - mb->heap_used : 0;
+ 
+-  if (newsizeK + mb->heap_used > mb->heap_limit)
+-    newsizeK = (uint32_t)(mb->heap_limit - mb->heap_used);
+-  newsize = newsizeK*(1024/sizeof(int));
++  if (newsizeK > heap_remaining) newsizeK = heap_remaining;
++  newsize = newsizeK*1024/sizeof(int);
++  if (newsize > UINT32_MAX/sizeof(int))
++    newsize = UINT32_MAX/sizeof(int);
+ 
+   if (newsize < RWS_RSIZE + ovecsize + RWS_ANCHOR_SIZE)
+     return PCRE2_ERROR_HEAPLIMIT;
+-  new = mb->memctl.malloc(newsize*sizeof(int), mb->memctl.memory_data);
++  new = mb->memctl.malloc(newsize*sizeof(int) - 1024, mb->memctl.memory_data);
+   if (new == NULL) return PCRE2_ERROR_NOMEMORY;
+-  mb->heap_used += newsizeK;
++  mb->heap_used += (newsize * sizeof(int) + 1023)/1024;
+   new->next = NULL;
+   new->size = newsize;
+   rws->next = new;

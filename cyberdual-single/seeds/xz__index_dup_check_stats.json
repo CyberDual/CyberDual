@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "6097929ae8f8c2a1714aacd844a8e9747b071cdc",
+  "parent_sha": "6097929ae8f8c2a1714aacd844a8e9747b071cdc",
+  "project": "xz",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/tukaani-project/xz",
+  "repo_url": "https://github.com/tukaani-project/xz",
+  "source": "reselect",
+  "target": "xz",
+  "task": "Public lzma_index_dup() dropped the cached per-Stream Check bitmask (dest->checks), so lzma_index_checks() on a duplicated multi-Stream Index reports only the last Stream's Check type; single file src/liblzma/common/index.c, genuine correctness fault.",
+  "task_iid": "xz__index_dup_check_stats",
+  "vuln_desc": "Public lzma_index_dup() dropped the cached per-Stream Check bitmask (dest->checks), so lzma_index_checks() on a duplicated multi-Stream Index reports only the last Stream's Check type; single file src/liblzma/common/index.c, genuine correctness fault."
+}

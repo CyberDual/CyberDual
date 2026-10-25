@@ -1,0 +1,50 @@
+diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c
+index 3c46a32efd3e1bc108ffa299473c1109d929626d..8f10e639ace501088ec4b0750b3d5597d6341865 100644
+--- a/src/dec/vp8l_dec.c
++++ b/src/dec/vp8l_dec.c
+@@ -475,15 +475,32 @@ int ReadHuffmanCodesHelper(int color_cache_bits, int num_htree_groups,
+   const int table_size = kTableSize[color_cache_bits];
+   int* code_lengths = NULL;
+   int total_huffman_table_size;
++  int num_allocated_groups;
+ 
+   if ((mapping == NULL && num_htree_groups != num_htree_groups_max) ||
+       num_htree_groups > num_htree_groups_max) {
+     goto Error;
+   }
+ 
++  // Each Huffman group holds five trees and each tree needs at least four
++  // bits of bitstream, so a group is never shorter than twenty bits. A group
++  // count that the remaining bits cannot cover comes from a truncated stream:
++  // size the group allocation with the number of groups the bitstream can
++  // still describe. The estimate keeps a full prefetch window of margin, as
++  // the bit reader can have consumed part of its window when the count is
++  // made.
++  {
++    const uint64_t available_bits =
++        (uint64_t)(dec->br.len - dec->br.pos) * 8 + 2 * VP8L_LBITS;
++    const int max_num_groups = (int)(available_bits / 20);
++    num_allocated_groups = (num_htree_groups > max_num_groups)
++                               ? max_num_groups
++                               : num_htree_groups;
++  }
++
+   code_lengths =
+       (int*)WebPSafeCalloc((uint64_t)max_alphabet_size, sizeof(*code_lengths));
+-  *htree_groups = VP8LHtreeGroupsNew(num_htree_groups);
++  *htree_groups = VP8LHtreeGroupsNew(num_allocated_groups);
+ 
+   // MAX_HUFF_IMAGE_SIZE is above what the libwebp encoder allows so something
+   // fishy might be happening. Do not allocate too much yet.
+@@ -526,10 +543,10 @@ int ReadHuffmanCodesHelper(int color_cache_bits, int num_htree_groups,
+         }
+         size =
+             ReadHuffmanCode(alphabet_size, dec, code_lengths, huffman_tables);
+-        htrees[j] = huffman_tables->curr_segment->curr_table;
+         if (size == 0) {
+           goto Error;
+         }
++        htrees[j] = huffman_tables->curr_segment->curr_table;
+         if (is_trivial_literal && kLiteralMap[j] == 1) {
+           is_trivial_literal = (htrees[j]->bits == 0);
+         }

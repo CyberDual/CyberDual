@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "991f4227b40b502aceea881d46d9cd1ad1500d9b",
+      "edited_message": null,
+      "patch": "diff --git a/src/knownhost.c b/src/knownhost.c\nindex 2bd41deb..49572cae 100644\n--- a/src/knownhost.c\n+++ b/src/knownhost.c\n@@ -514,8 +514,9 @@ static int knownhost_parse_ipv6(const char *src, size_t len,\n     return 1;\n }\n \n-static int knownhost_ipv6_part(const char *host, const char **address,\n-                               size_t *address_len, const char **suffix)\n+static int knownhost_ipv6_part(const char *host, const char *end,\n+                               const char **address, size_t *address_len,\n+                               const char **suffix)\n {\n     if(host[0] == '[') {\n         const char *close = strchr(host + 1, ']');\n@@ -537,8 +538,8 @@ static int knownhost_ipv6_part(const char *host, const char **address,\n     }\n     else {\n         *address = host;\n-        *address_len = strlen(host);\n-        *suffix = host + *address_len;\n+        *address_len = (size_t)(end - host);\n+        *suffix = end;\n     }\n \n     return 1;\n@@ -561,8 +562,10 @@ static int knownhost_plain_match(const char *host, const char *known)\n     if((host[0] == '[') != (known[0] == '['))\n         return 0;\n \n-    if(!knownhost_ipv6_part(host, &host_address, &host_len, &host_suffix) ||\n-       !knownhost_ipv6_part(known, &known_address, &known_len,\n+    if(!knownhost_ipv6_part(host, host + strlen(host),\n+                            &host_address, &host_len, &host_suffix) ||\n+       !knownhost_ipv6_part(known, known + strlen(known),\n+                            &known_address, &known_len,\n+                            &known_suffix) ||\n        strcmp(host_suffix, known_suffix))\n         return 0;\n"
+    },
+    {
+      "sha": "bafd574b628a08e09a3266bc34d6dddaa026f88f",
+      "edited_message": "tidy-up: miscellaneous\n\n- wincng: add version comments.\n  Follow-up to 7a26697ede3e8e8696501bc51ca230ad5f2262d9 #397\n- wincng: fix two version support comments.\n- tests/keys-generate.sh: add comment, newlines.\n- mbedtls: casing in comment.\n- wording: use `null-terminator` more.\n- typos: `ssh-dss`.\n- knownhost: drop obsolete comment.\n- knownhost: validate bracketed host entries.\n- include/libssh2.h: clarify comments.\n- include/libssh2.h: drop empty lines.\n- libssh2_knownhost_writeline.md: fix grammar.\n- GHA: reorder Cygwin settings, improve package search URL.\n- fixup newlines.\n\nCloses #2617\n",
+      "patch": "diff --git a/src/knownhost.c b/src/knownhost.c\n--- a/src/knownhost.c\n+++ b/src/knownhost.c\n@@ -874,6 +874,18 @@\n                                 \"Failed to parse known_hosts line \"\n                                 \"(unexpected length)\");\n \n+            if(name[0] == '[') {\n+                const char *address;\n+                const char *suffix;\n+                size_t address_len;\n+\n+                if(!knownhost_ipv6_part(name, name + namelen, &address,\n+                                        &address_len, &suffix))\n+                    return ssh2_err(hosts->session,\n+                                    LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,\n+                                    \"Invalid bracketed known-host entry\");\n+            }\n+\n             /* copy hostname to the temp buffer and null-terminate */\n             memcpy(hostbuf, name, namelen);\n             hostbuf[namelen] = '\\0';\n"
+    }
+  ],
+  "coupling": "The IPv6 commit changes knownhost_ipv6_part() to accept an explicit end pointer and uses it for the unbracketed branch. At that commit, every caller passes a NUL-terminated C string plus its exact strlen-derived end, so the bracketed branch's strchr() remains within the caller's object. The later tidy-up commit preserves that maintenance change but starts validating each bracketed hostname token from knownhost_line_legacy(), passing name + namelen as the end of a bounded, non-NUL-terminated readline token. For a length-delimited public-API line whose host token begins with '[' and contains no ']', strchr() ignores the supplied end and reads past the heap allocation. The defect therefore appears only when the helper contract introduced by the first edited commit is combined with the bounded-token consumer introduced by the second. A correct repair must reconcile the helper's bounded-end contract with the line parser's non-NUL-terminated token representation across both changes; treating either commit's diff in isolation does not establish the invariant needed by the other.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "libssh2_knownhost_readline",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+ "project": "xz",
+ "window_id": "2e2bf9e18b3d106710af665b5d0a418b7cd2db9e19b80edc6c1af4fbd9669adc",
+ "base": "e95cd90da9c620cf9ceca1f9e94025bcb437fca9",
+ "maint_batch_tip": "31a7991eb5f18b9e3812306a7f4b33ef6ae1809c",
+ "tree": "10c23afec49c53aa7c36c813508b0d1bad53e0df",
+ "n_commits": 63,
+ "n_editable": 63,
+ "list_sha1": "b61552bc3ed55854160586a7beb456a056f87f7e",
+ "tar_sha256": "db2aca7665c53b5d5a9185d9e890063527c7d7a604d3ab3cd6804d70db612f89",
+ "tar_bytes": 17029120,
+ "built_utc": "2026-10-17T20:13:24Z",
+ "cyberdual": "f685a97c"
+}

@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "764014208048de3e294dd5856d620592cf71d22d",
+      "edited_message": "u8_strset: rename and mask\n\nMove `uint-hashset.[ch]` to `u8_strset.[ch]` for clarity.\n\nAdd `uint8_t slotmask` in struct to keep precomputed mask\ninstead of array lookups.\n\nNew member fits in \"hole\", struct size stays unchanged.\n\nCloses #22983\n\nCo-Authored-By: Claude Code <noreply@anthropic.com>\n",
+      "patch": "diff --git a/lib/u8_strset.c b/lib/u8_strset.c\nindex be1148c..29b9e40 100644\n--- a/lib/u8_strset.c\n+++ b/lib/u8_strset.c\n@@ -35,7 +35,7 @@\n \n #define CURL_SWAP(a, b) (((a) ^= (b)), ((b) ^= (a)), ((a) ^= (b)))\n \n-#define CURL_U8_STRSET_SLOT_IDX(s, i)    (uint8_t)((i) & (s)->slotmask)\n+#define CURL_U8_STRSET_SLOT_IDX(s, i)    (uint8_t)((i) & ((s)->slotmask - 1))\n #define CURL_U8_SLOT_CNT(i)              (uint16_t)((i) ? (1U << (i)) : 0)\n #define CURL_U8_SLOT_MASK(i)             (uint8_t)((1U << (i)) - 1)\n #define CURL_U8_STRSET_SLOT_CNT(s)       CURL_U8_SLOT_CNT((s)->slotbits)\n@@ -74,7 +74,7 @@ void Curl_u8_strset_init(struct u8_strset *set)\n   set->ids = set->sids;\n   set->psl = set->spsl;\n   set->slotbits = CURL_U8_STRSET_START_BITS;\n-  set->slotmask = CURL_U8_SLOT_MASK(set->slotbits);\n+  set->slotmask = CURL_U8_SLOT_CNT(set->slotbits);\n   set->count = 0;\n #ifdef DEBUGBUILD\n   set->init = CURL_U8_STRSET_MAGIC;\n@@ -149,7 +149,7 @@ static bool u8_strset_grow(struct u8_strset *set)\n   set->ids = (uint8_t *)d + (nslots * sizeof(char *));\n   set->psl = set->ids + nslots;\n   set->slotbits = nslotbits;\n-  set->slotmask = CURL_U8_SLOT_MASK(set->slotbits);\n+  set->slotmask = CURL_U8_SLOT_CNT(set->slotbits);\n   set->count = 0;\n   /* re-add previous entries */\n   for(i = 0; i < CURL_U8_SLOT_CNT(prev_slots); ++i) {\n"
+    },
+    {
+      "sha": "e0f45f45f89f005ac9c6fbf19377faedaf9fcf24",
+      "edited_message": "u8_strset, u32_ptrset: fix boundaries handling\n\n- u8_strset: iterator over all entries using a uint16_t index\n- u8_strset: bound the clear loop by the precomputed mask\n- u32_ptrset: limit max size to 31 bits, managing INT32_MAX entries\n\nCloses #22991\n\nCo-Authored-By: Claude Code <noreply@anthropic.com>\n",
+      "patch": "--- a/lib/u8_strset.c\n+++ b/lib/u8_strset.c\n@@ -85,7 +85,7 @@\n {\n   uint16_t i;\n   DEBUGASSERT(set->init == CURL_U8_STRSET_MAGIC);\n-  for(i = 0; i < CURL_U8_STRSET_SLOT_CNT(set); ++i)\n+  for(i = 0; i <= set->slotmask; ++i)\n     curlx_safefree(set->data[i]);\n \n   if(set->data != set->sdata)\n"
+    }
+  ],
+  "coupling": "Representation divergence on the `slotmask` member of struct u8_strset (lib/u8_strset.c), the Robin Hood hash set backing every string CURLOPT_* option. Commit 7640142 (\"u8_strset: rename and mask\") introduces the uint8_t slotmask field; the edited version stores the slot COUNT in it (CURL_U8_SLOT_CNT(slotbits)) and makes the only reader at the time, the CURL_U8_STRSET_SLOT_IDX macro, mask with `slotmask - 1`. Because the count is always a power of two, `i & (count-1)` is a perfectly correct modulo-count (including the 256-slot wrap to 0), so the commit is self-consistent, fully working, and benign on its own. Twenty commits later, e0f45f4 (\"u8_strset, u32_ptrset: fix boundaries handling\") reworks full-table iteration and, trusting the member's name, bounds Curl_u8_strset_clear() with `for(i = 0; i <= set->slotmask; ++i)` -- an inclusive last-index bound that is exactly correct under the first commit's original mask semantics (slots-1), so it too is benign and passes on its own. Only the composition is wrong: slotmask now holds the count N, so clear() frees data[0..N], one slot past the table. With the inline 8-slot table, data[8] aliases the adjacent sids[0..7] array inside the Curl_easy allocation, reinterpreted as a char*; as soon as any string option is set, those id bytes form a nonzero pointer and curlx_safefree() releases a wild pointer (ASan: attempting free on address which was not malloc()-ed, in Curl_u8_strset_clear via curl_easy_cleanup). A correct fix is non-local: reverting only the first commit's diff (mask semantics) leaves the second commit's <= loop correct-but-different and is a semantic rewrite of that commit's intent, while reverting only the second commit's diff restores the slow SLOT_CNT loop and ignores that the field is a count-in-a-mask-named-member; the minimal true fix must reconcile the two commits (e.g. store the mask again, or bound the loop by the count), which requires reasoning across both. Fixing either single edited commit's diff alone, while keeping the other exactly as written, does remove the crash in the composed tree, but each single-commit variant is itself a correct program -- the defect exists only in their combination.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "curl_easy_setopt/curl_easy_cleanup (libcurl easy API, <curl/curl.h>)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

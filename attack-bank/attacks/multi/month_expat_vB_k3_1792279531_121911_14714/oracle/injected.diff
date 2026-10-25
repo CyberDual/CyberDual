@@ -1,0 +1,48 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db91..5dd3a5a7 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2446,7 +2446,7 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal) {
+     parser->m_parsingStatus.parsing = XML_PARSING;
+   }
+ 
+-  if (len > EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd)) {
++  if (len > EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferPtr)) {
+     parser->m_errorCode = XML_ERROR_INVALID_ARGUMENT;
+     return XML_STATUS_ERROR;
+   }
+diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c
+index a3bf5e0e..afd021b9 100644
+--- a/expat/lib/xmltok.c
++++ b/expat/lib/xmltok.c
+@@ -1196,12 +1196,12 @@ static const char KW_1_dot[] = {ASCII_1, ASCII_PERIOD, '\0'};
+ 
+ /* Checks a version pseudo-attribute value against the VersionNum production.
+    XML 1.0 Fourth Edition only allows the literal "1.0", but the Fifth
+-   Edition relaxed this to "1." followed by one or more digits, since Expat
+-   only implements 1.0 itself but plans to track the Fifth Edition's laxer
+-   grammar here so that "1.1" and similar aren't rejected only to have that
+-   rejection reverted later. Returns true for a value matching "1.[0-9]+".
+-   val/valEnd bound the value itself; valEnd is the upper bound used when
+-   decoding the individual characters between them. */
++   Edition relaxed this to "1." followed by one or more characters, since
++   Expat only implements 1.0 itself but plans to track the Fifth Edition's
++   laxer grammar here so that "1.1" and similar aren't rejected only to have
++   that rejection reverted later. Returns true for any non-empty value with
++   that prefix; only the major generation of the version decides whether
++   Expat's XML 1.0 semantics apply. val/valEnd bound the value itself. */
+ static bool
+ checkXmlDeclVersionNum(const ENCODING *enc, const char *val,
+                        const char *valEnd) {
+@@ -1212,11 +1212,6 @@ checkXmlDeclVersionNum(const ENCODING *enc, const char *val,
+   val += 2 * enc->minBytesPerChar;
+   if (val == valEnd)
+     return false;
+-  for (; val != valEnd; val += enc->minBytesPerChar) {
+-    int c = toAscii(enc, val, valEnd);
+-    if (c < ASCII_0 || c > ASCII_9)
+-      return false;
+-  }
+   return true;
+ }
+ 

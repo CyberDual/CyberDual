@@ -1,0 +1,43 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5b..7aee5fae 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -514,13 +514,19 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+     return 1;
+ }
+ 
++static const char *knownhost_ipv6_close(const char *host)
++{
++    return strchr(host + 1, ']');
++}
++
+ static int knownhost_ipv6_part(const char *host, const char **address,
+                                size_t *address_len, const char **suffix)
+ {
+     if(host[0] == '[') {
+-        const char *close = strchr(host + 1, ']');
++        const char *close;
+         const char *port;
+ 
++        close = knownhost_ipv6_close(host);
+         if(!close || close == host + 1 || close[1] != ':' || !close[2])
+             return 0;
+ 
+@@ -1158,6 +1164,17 @@ int libssh2_knownhost_readline(LIBSSH2_KNOWNHOSTS *hosts,
+     /* key length is the parsed span, naturally excluding newline */
+     keylen = cp - keyp;
+ 
++    if(hostp[0] == '[') {
++        const char *address;
++        const char *suffix;
++        size_t address_len;
++
++        if(!knownhost_ipv6_part(hostp, &address, &address_len, &suffix))
++            return ssh2_err(hosts->session,
++                            LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
++                            "Failed to parse known_hosts line");
++    }
++
+     /* deal with this one host+key line */
+     rc = knownhost_line(hosts, hostp, hostlen, keyp, keylen);
+     if(rc)

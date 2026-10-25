@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "270525a6eac452c8b788382239d6d49dc8210e41",
+      "edited_message": null,
+      "patch": "diff --git a/lib/mprintf.c b/lib/mprintf.c\nindex abe0df4..ae6e76b 100644\n--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -668,7 +668,7 @@\n                        mp_streamn streamn,\n                        const unsigned char *buf, size_t len, int *donep)\n {\n-  if(!len)\n+  if(!len && !streamn)\n     return FALSE;\n   if(streamn) {\n     size_t n = streamn(buf, len, userp);\n"
+    },
+    {
+      "sha": "75e8aa11e937dcd0726c31cdf8e0fd46699d0bd8",
+      "edited_message": null,
+      "patch": "diff --git a/lib/mprintf.c b/lib/mprintf.c\nindex 1ad26d3..b1ee127 100644\n--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -1468,6 +1468,11 @@\n   struct ioprintf *i = f;\n   size_t n;\n   FILE *s = i->fd;\n+  if(len <= 1) {\n+    int rc = fputc(buf[len - 1], s);\n+    i->error = (rc == EOF);\n+    return i->error ? 0 : len;\n+  }\n   n = fwrite(buf, 1, len, s);\n   i->error = (n != len);\n   return n;\n"
+    }
+  ],
+  "coupling": "The earlier mprintf commit forwards zero-length runs to block output callbacks. The later file-output change uses a one-byte fast path for runs of length at most one and reads buf[len - 1]. An empty public %s conversion therefore makes the later callback read before the string. Either edit in isolation is safe: the old producer skips empty runs, while the old file callback accepts a zero-length fwrite. Repair requires reconciling the producer callback contract with the file consumer across both commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "curl_mfprintf",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

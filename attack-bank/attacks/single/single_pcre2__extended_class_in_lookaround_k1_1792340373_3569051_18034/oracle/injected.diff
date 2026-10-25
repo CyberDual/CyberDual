@@ -1,0 +1,36 @@
+diff --git a/src/pcre2_compile.c b/src/pcre2_compile.c
+index 8393640a60b5f9afcbe8394d7f1efcb2fdbd3ba5..351a756fbae0d1a164b1628b8bec58a0c2b30e50 100644
+--- a/src/pcre2_compile.c
++++ b/src/pcre2_compile.c
+@@ -9394,6 +9394,8 @@ static uint32_t *
+ parsed_skip(uint32_t *pptr, uint32_t skiptype)
+ {
+ uint32_t nestlevel = 0;
++uint32_t class_nestlevel = 0;
++uint32_t *class_starts[ECLASS_NEST_LIMIT];
+ 
+ for (;; pptr++)
+   {
+@@ -9436,7 +9438,21 @@ for (;; pptr++)
+     /* These are the "active" items in this loop. */
+ 
+     case META_CLASS_END:
+-    if (skiptype == PSKIP_CLASS) return pptr;
++    if (skiptype == PSKIP_CLASS)
++      {
++      if (class_nestlevel == 1) return pptr;
++      class_nestlevel--;
++      if (class_starts[class_nestlevel] == NULL) return NULL;
++      }
++    break;
++
++    case META_CLASS:
++    case META_CLASS_NOT:
++    if (skiptype == PSKIP_CLASS)
++      {
++      class_nestlevel++;
++      class_starts[class_nestlevel] = pptr;
++      }
+     break;
+ 
+     case META_ATOMIC:

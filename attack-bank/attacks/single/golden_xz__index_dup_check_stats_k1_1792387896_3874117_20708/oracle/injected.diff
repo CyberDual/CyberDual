@@ -1,0 +1,32 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index c4aadb9b008d1deb4cdaddb955f1e3abdbd1cc81..83e73573a8c73a8c863be95cead70bd75d25aeb5 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -975,7 +975,10 @@ lzma_index_dup(const lzma_index *src, const lzma_allocator *allocator)
+ 	dest->record_count = src->record_count;
+ 	dest->index_list_size = src->index_list_size;
+ 
+-	// Copy the Streams and the groups in them.
++	// Copy the Streams and the groups in them. The Check type of every
++	// Stream but the last one is cached into the bitmask; the Check type
++	// of the last Stream is read from its Stream Flags in
++	// lzma_index_checks().
+ 	const index_stream *srcstream
+ 			= (const index_stream *)(src->streams.leftmost);
+ 	do {
+@@ -989,6 +992,15 @@ lzma_index_dup(const lzma_index *src, const lzma_allocator *allocator)
+ 		index_tree_append(&dest->streams, &deststream->node);
+ 
+ 		srcstream = index_tree_next(&srcstream->node);
++
++		// Now that one more Stream follows it, the Check type of the
++		// Stream that was just duplicated belongs to the cached
++		// bitmask.
++		if (deststream->stream_flags.version != UINT32_MAX
++				&& srcstream->stream_flags.version
++					!= UINT32_MAX)
++			dest->checks |= UINT32_C(1)
++					<< deststream->stream_flags.check;
+ 	} while (srcstream != NULL);
+ 
+ 	return dest;

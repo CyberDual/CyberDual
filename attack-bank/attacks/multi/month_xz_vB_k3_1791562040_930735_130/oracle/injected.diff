@@ -1,0 +1,27 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index 3fbb5b1..e29a340 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -312,7 +312,7 @@ index_tree_append(index_tree *tree, index_tree_node *node, bool prepend)
+ 		pivot->parent = node->parent;
+ 
+ 		if (prepend) {
+-			node->left = pivot->right;
++			node->left = pivot->left;
+ 			if (node->left != NULL)
+ 				node->left->parent = node;
+ 
+@@ -819,9 +819,10 @@ typedef struct {
+ } index_cat_info;
+ 
+ 
+-/// Add the Stream nodes from the source index to dest using recursion.
+-/// Simplest iterative traversal of the source tree wouldn't work, because
+-/// we update the pointers in nodes when moving them to the destination tree.
++/// Prepend the Stream nodes from dest into src's tree using recursion,
++/// walking dest's tree from the rightmost Stream to the leftmost one.
++/// Simplest iterative traversal wouldn't work, because we update the
++/// pointers in nodes when moving them to the destination tree.
+ static void
+ index_cat_helper(const index_cat_info *info, index_stream *this)
+ {

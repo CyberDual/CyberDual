@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "d939d15557ecd6309d19b6ac18be329adbced45d",
+  "parent_sha": "d939d15557ecd6309d19b6ac18be329adbced45d",
+  "project": "freetype",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/freetype/freetype",
+  "repo_url": "https://github.com/freetype/freetype",
+  "source": "reselect",
+  "target": "freetype",
+  "task": "Behaviour: load a variable font, select a named instance (FT_Set_Named_Instance), then query FT_Get_Advance/FT_Get_Advances. Pre-feature base ignores HVAR/VVAR advance deltas for named instances (only FT_IS_VARIATION checked), returning the default advance; fixed tree (tt_face_get_metrics, src/sfnt/ttmtx.c) also honors FT_IS_NAMED_INSTANCE, yielding the HVAR/VVAR-adjusted advance. Single file; fixes upstream #1452.",
+  "task_iid": "freetype__hvar_named_instance_advance",
+  "vuln_desc": "Behaviour: load a variable font, select a named instance (FT_Set_Named_Instance), then query FT_Get_Advance/FT_Get_Advances. Pre-feature base ignores HVAR/VVAR advance deltas for named instances (only FT_IS_VARIATION checked), returning the default advance; fixed tree (tt_face_get_metrics, src/sfnt/ttmtx.c) also honors FT_IS_NAMED_INSTANCE, yielding the HVAR/VVAR-adjusted advance. Single file; fixes upstream #1452."
+}

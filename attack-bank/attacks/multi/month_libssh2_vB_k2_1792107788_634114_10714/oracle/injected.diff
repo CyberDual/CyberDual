@@ -1,0 +1,67 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..ae3e8b6 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -121,7 +121,12 @@ static struct libssh2_knownhost *knownhost_to_external(struct known_host *node)
+     return ext;
+ }
+ 
+-#define KNOWNHOST_MAX_LEN  (1024 * 1024)
++#define KNOWNHOST_MAX_LEN    (1024 * 1024)
++/* Bytes a plain host token or a hashed-host salt may occupy in its
++   scratch buffer, including the terminating NUL. */
++#define KNOWNHOST_PLAIN_MAX  256
++#define KNOWNHOST_HASH_MAX   256
++#define KNOWNHOST_SALT_MAX   32
+ 
+ static int knownhost_add(LIBSSH2_KNOWNHOSTS *hosts,
+                          const char *host, const char *salt,
+@@ -852,6 +857,7 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+     int rc = 0;
+     size_t namelen = 0;
+     const char *name = host + hostlen;
++    char hostbuf[255];
+ 
+     if(hostlen < 1)
+         return ssh2_err(hosts->session, LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+@@ -865,10 +871,8 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+            name to the collection */
+         if(name == host || *(name - 1) == ',') {
+ 
+-            char hostbuf[256];
+-
+             /* make sure we do not overflow the buffer */
+-            if(namelen >= sizeof(hostbuf) - 1)
++            if(namelen >= KNOWNHOST_PLAIN_MAX)
+                 return ssh2_err(hosts->session,
+                                 LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                                 "Failed to parse known_hosts line "
+@@ -907,8 +911,8 @@ static int knownhost_line_hashed(LIBSSH2_KNOWNHOSTS *hosts,
+                                  const char *comment, size_t commentlen)
+ {
+     const char *p;
+-    char saltbuf[32];
+-    char hostbuf[256];
++    char saltbuf[31];
++    char hostbuf[255];
+ 
+     const char *salt = &host[3]; /* skip the magic marker */
+     hostlen -= 3; /* deduct the marker */
+@@ -920,7 +924,7 @@ static int knownhost_line_hashed(LIBSSH2_KNOWNHOSTS *hosts,
+     if((size_t)(p - salt) < hostlen && *p == '|') {
+         const char *hash = NULL;
+         size_t saltlen = p - salt;
+-        if(saltlen >= (sizeof(saltbuf) - 1)) /* weird length */
++        if(saltlen >= KNOWNHOST_SALT_MAX) /* weird length */
+             return ssh2_err(hosts->session, LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                             "Failed to parse known_hosts line "
+                             "(unexpectedly long salt)");
+@@ -936,7 +940,7 @@ static int knownhost_line_hashed(LIBSSH2_KNOWNHOSTS *hosts,
+         hostlen -= saltlen + 1; /* deduct the salt and separator */
+ 
+         /* check that the lengths seem sensible */
+-        if(hostlen >= sizeof(hostbuf) - 1)
++        if(hostlen >= KNOWNHOST_HASH_MAX)
+             return ssh2_err(hosts->session, LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                             "Failed to parse known_hosts line "
+                             "(unexpected length)");

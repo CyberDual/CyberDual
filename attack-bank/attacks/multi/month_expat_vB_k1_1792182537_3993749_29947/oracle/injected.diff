@@ -1,0 +1,34 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db9..7dc356b 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -1193,8 +1193,6 @@ callUnknownEncodingRelease(XML_Parser parser) {
+   beforeHandler(parser);
+   parser->m_unknownEncodingRelease(parser->m_unknownEncodingData);
+   afterHandler(parser);
+-  parser->m_unknownEncodingRelease = NULL;
+-  parser->m_unknownEncodingData = NULL;
+ }
+ 
+ static int XMLCALL
+@@ -1400,6 +1398,11 @@ parserCreate(const XML_Char *encodingName,
+ 
+   parser->m_buffer = NULL;
+   parser->m_bufferLim = NULL;
++  // The unknown-encoding release hook and its data pointer are one-time,
++  // parser-lifetime state, so they are initialized here at creation rather
++  // than re-cleared on every parserInit() call.
++  parser->m_unknownEncodingRelease = NULL;
++  parser->m_unknownEncodingData = NULL;
+ 
+   parser->m_attsSize = INIT_ATTS_SIZE;
+   parser->m_atts = MALLOC(parser, parser->m_attsSize * sizeof(ATTRIBUTE));
+@@ -1541,8 +1544,6 @@ parserInit(XML_Parser parser, const XML_Char *encodingName) {
+   parser->m_nSpecifiedAtts = 0;
+   parser->m_unknownEncodingMem = NULL;
+   parser->m_unknownEncodingConvert = NULL;
+-  parser->m_unknownEncodingRelease = NULL;
+-  parser->m_unknownEncodingData = NULL;
+   parser->m_parsingStatus.parsing = XML_INITIALIZED;
+   // Reentry can only be triggered inside m_processor calls
+   parser->m_reenter = XML_FALSE;

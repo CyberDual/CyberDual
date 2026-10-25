@@ -1,0 +1,29 @@
+diff --git a/src/builtins/x64/builtins-x64.cc b/src/builtins/x64/builtins-x64.cc
+index c945d7d5..e4a802c6 100644
+--- a/src/builtins/x64/builtins-x64.cc
++++ b/src/builtins/x64/builtins-x64.cc
+@@ -2407,6 +2407,11 @@ void Generate_AllocateSpaceAndShiftExistingArguments(
+   __ movq(old_rsp, rsp);
+ 
+   __ leaq(new_space, Operand(count, times_system_pointer_size, 0));
++  Label aligned;
++  __ cmpq(count, Immediate(1024));
++  __ j(below, &aligned);
++  __ andq(new_space, Immediate(-16));
++  __ bind(&aligned);
+   __ AllocateStackSpace(new_space);
+ 
+   Register copy_count = argc_in_out;
+@@ -2470,6 +2475,12 @@ void Builtins::Generate_CallOrConstructVarargs(MacroAssembler* masm,
+   }
+ 
+   Label stack_overflow;
++  __ cmpq(rax, Immediate(Code::kMaxArguments));
++  __ j(above, &stack_overflow);
++  __ movq(r9, Immediate(Code::kMaxArguments));
++  __ subq(r9, rax);
++  __ cmpq(rcx, r9);
++  __ j(above, &stack_overflow);
+   __ StackOverflowCheck(rcx, &stack_overflow,
+                         DEBUG_BOOL ? Label::kFar : Label::kNear);
+ 

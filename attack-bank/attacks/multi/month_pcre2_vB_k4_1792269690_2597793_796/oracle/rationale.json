@@ -1,0 +1,30 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "7830094c1c4418d267e7be3bfecce55801b94789",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2_internal.h b/src/pcre2_internal.h\nindex 5fb3bb98..a206c12d 100644\n--- a/src/pcre2_internal.h\n+++ b/src/pcre2_internal.h\n@@ -2284,6 +2284,9 @@ private structures. */\n \n #include \"pcre2_intmodedep.h\"\n \n+#define MEMCTL_MALLOC_CSTRING(match_data, size)                               \\\n+  match_data->memctl.malloc((size) + CU2BYTES(1), match_data->memctl.memory_data)\n+\n /* Private \"external\" functions. These are internal functions that are called\n from modules other than the one in which they are defined. They have to be\n \"external\" in the C sense, but are not part of the PCRE2 public API. They are\ndiff --git a/src/pcre2_substring.c b/src/pcre2_substring.c\nindex ae43dbbe..14d5ecfb 100644\n--- a/src/pcre2_substring.c\n+++ b/src/pcre2_substring.c\n@@ -223,8 +223,7 @@ pcre2_substring_get_bynumber(pcre2_match_data *match_data, uint32_t stringnumber\n     return PCRE2_ERROR_NOMEMORY;\n   }\n   /* LCOV_EXCL_STOP */\n-  yield = PRIV(memctl_malloc)(sizeof(pcre2_memctl) + CU2BYTES(size + 1),\n-                              (pcre2_memctl *)match_data);\n+  yield = MEMCTL_MALLOC_CSTRING(match_data, sizeof(pcre2_memctl) + CU2BYTES(size));\n   if (yield == NULL)\n     return PCRE2_ERROR_NOMEMORY;\n   yield = (PCRE2_UCHAR *)(((char *)yield) + sizeof(pcre2_memctl));\n"
+    },
+    {
+      "sha": "4fb2f0c1bc5611aa211f131ec29cff54ce6dee95",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2_dfa_match.c b/src/pcre2_dfa_match.c\nindex fb757d99..6dd82630 100644\n--- a/src/pcre2_dfa_match.c\n+++ b/src/pcre2_dfa_match.c\n@@ -4504,7 +4504,7 @@ pcre2_dfa_match(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length,\n       if (rc >= 0 && (options & PCRE2_COPY_MATCHED_SUBJECT) != 0)\n       {\n         match_data->subject =\n-            match_data->memctl.malloc(CU2BYTES(length + 1), match_data->memctl.memory_data);\n+            MEMCTL_MALLOC_CSTRING(match_data, CU2BYTES(length));\n         if (match_data->subject == NULL)\n         {\n           match_data->subject_length = 0;\ndiff --git a/src/pcre2_match.c b/src/pcre2_match.c\nindex 25cbda42..5fd31763 100644\n--- a/src/pcre2_match.c\n+++ b/src/pcre2_match.c\n@@ -7964,7 +7964,7 @@ pcre2_match(const pcre2_code *code, PCRE2_SPTR subject, PCRE2_SIZE length, PCRE2\n     if (rc >= 0 && (options & PCRE2_COPY_MATCHED_SUBJECT) != 0)\n     {\n       match_data->subject =\n-          match_data->memctl.malloc(CU2BYTES(length + 1), match_data->memctl.memory_data);\n+          MEMCTL_MALLOC_CSTRING(match_data, CU2BYTES(length));\n       if (match_data->subject == NULL)\n       {\n         match_data->subject_length = 0;\n@@ -8944,7 +8944,7 @@ ENDLOOP:\n     if ((options & PCRE2_COPY_MATCHED_SUBJECT) != 0)\n     {\n       match_data->subject =\n-          match_data->memctl.malloc(CU2BYTES(length + 1), match_data->memctl.memory_data);\n+          MEMCTL_MALLOC_CSTRING(match_data, CU2BYTES(length));\n       if (match_data->subject == NULL)\n       {\n         match_data->subject_length = 0;\n"
+    },
+    {
+      "sha": "2d3a98a9f7c908cfd7c6ac81620580fa85c67acf",
+      "edited_message": "posix: validate arguments and clarify allocation sizing\n\nValidate REG_STARTEND offsets and NULL pointer arguments. Also make the C-string allocation helper take the complete allocation size.",
+      "patch": "diff --git a/src/pcre2_internal.h b/src/pcre2_internal.h\nindex 306ebaeb..bc2ea11c 100644\n--- a/src/pcre2_internal.h\n+++ b/src/pcre2_internal.h\n@@ -2289,7 +2289,7 @@ private structures. */\n #include \"pcre2_intmodedep.h\"\n \n #define MEMCTL_MALLOC_CSTRING(match_data, size)                               \\\n-  match_data->memctl.malloc((size) + CU2BYTES(1), match_data->memctl.memory_data)\n+  match_data->memctl.malloc((size), match_data->memctl.memory_data)\n \n /* Private \"external\" functions. These are internal functions that are called\n from modules other than the one in which they are defined. They have to be\ndiff --git a/src/pcre2_substring.c b/src/pcre2_substring.c\nindex 14d5ecfb..0b98e4cb 100644\n--- a/src/pcre2_substring.c\n+++ b/src/pcre2_substring.c\n@@ -223,7 +223,7 @@ pcre2_substring_get_bynumber(pcre2_match_data *match_data, uint32_t stringnumber\n     return PCRE2_ERROR_NOMEMORY;\n   }\n   /* LCOV_EXCL_STOP */\n-  yield = MEMCTL_MALLOC_CSTRING(match_data, sizeof(pcre2_memctl) + CU2BYTES(size));\n+  yield = MEMCTL_MALLOC_CSTRING(match_data, sizeof(pcre2_memctl) + CU2BYTES(size + 1));\n   if (yield == NULL)\n     return PCRE2_ERROR_NOMEMORY;\n   yield = (PCRE2_UCHAR *)(((char *)yield) + sizeof(pcre2_memctl));\n"
+    }
+  ],
+  "coupling": "Commit 7830094c introduces MEMCTL_MALLOC_CSTRING with payload-plus-terminator semantics and safely moves the older substring allocation to it. Commit 4fb2f0c adopts that helper for every PCRE2_COPY_MATCHED_SUBJECT allocation, passing the payload length; this remains safe under the helper introduced by 7830094c. Commit 2d3a98a9 then changes the helper to exact allocation-size semantics and updates the pre-existing substring consumer, but the copied-subject consumers added by 4fb2f0c still pass payload length. The final allocation is therefore one code unit short, and the terminator write at subject[length] is out of bounds. A correct fix must reconcile the later exact-size contract with the calls adopted in 4fb2f0c (or preserve the earlier payload contract consistently); reasoning about only one of the three commits leaves an incompatible allocation contract across the helper and its consumers.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "pcre2_match (PCRE2 public C API)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

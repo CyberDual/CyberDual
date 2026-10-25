@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-191",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "46994a5f4ec900c739ec1fa171183841bcbe5aae",
+  "parent_sha": "46994a5f4ec900c739ec1fa171183841bcbe5aae",
+  "project": "harfbuzz",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/harfbuzz/harfbuzz",
+  "repo_url": "https://github.com/harfbuzz/harfbuzz",
+  "source": "reselect",
+  "target": "harfbuzz",
+  "task": "Loading/subsetting a crafted CFF1 font (hb_face_create + hb_ot_font / hb_subset) whose top DICT is processed before args are popped -> (env.last_offset-1)-opStart underflows to a bogus last_arg_offset; single file src/hb-ot-cff1-table.hh.",
+  "task_iid": "harfbuzz__cff1_topdict_last_arg_underflow",
+  "vuln_desc": "Loading/subsetting a crafted CFF1 font (hb_face_create + hb_ot_font / hb_subset) whose top DICT is processed before args are popped -> (env.last_offset-1)-opStart underflows to a bogus last_arg_offset; single file src/hb-ot-cff1-table.hh."
+}

@@ -1,0 +1,26 @@
+diff --git a/src/dec/io_dec.c b/src/dec/io_dec.c
+index 8fa5ba33..d19c9e75 100644
+--- a/src/dec/io_dec.c
++++ b/src/dec/io_dec.c
+@@ -281,7 +281,7 @@ static int EmitRescaledYUV(const VP8Io* const io, WebPDecParams* const p) {
+   num_lines_out =
+       Rescale(io->y, io->y_stride, mb_h, scaler, buf->y, buf->y_stride);
+   Rescale(io->u, io->uv_stride, uv_mb_h, p->scaler_u, buf->u, buf->u_stride);
+-  Rescale(io->v, io->uv_stride, uv_mb_h, p->scaler_v, buf->v, buf->v_stride);
++  Rescale(io->v, io->uv_stride, uv_mb_h, p->scaler_v, buf->v, buf->u_stride);
+   return num_lines_out;
+ }
+ 
+diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c
+index b3bdb731..35ed337d 100644
+--- a/src/dec/vp8l_dec.c
++++ b/src/dec/vp8l_dec.c
+@@ -816,7 +816,7 @@ static int EmitRowsYUVA(const uint8_t* const in, const VP8Io* const io,
+   // Process pairs of lines.
+   WebPImportYUVAFromRGBA(r_ptr, g_ptr, b_ptr, a_ptr, /*step=*/4, in_stride,
+                          has_alpha, width, num_rows, tmp_rgb, y_stride,
+-                         u_stride, v_stride, a_stride, dst_y, dst_u, dst_v,
++                         v_stride, u_stride, a_stride, dst_y, dst_u, dst_v,
+                          dst_a);
+ 
+   y_pos += num_rows;

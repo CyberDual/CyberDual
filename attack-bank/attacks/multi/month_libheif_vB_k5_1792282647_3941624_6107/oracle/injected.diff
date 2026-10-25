@@ -1,0 +1,45 @@
+diff --git a/libheif/color-conversion/alpha.cc b/libheif/color-conversion/alpha.cc
+index b585a7e3..490d5757 100644
+--- a/libheif/color-conversion/alpha.cc
++++ b/libheif/color-conversion/alpha.cc
+@@ -139,14 +139,14 @@ Op_flatten_alpha_plane<Pixel>::state_after_conversion(const ColorState& input_st
+   // declare a different depth per plane ('unci'); reading a one-byte plane as two-byte
+   // samples would run past its end (GHSA-r7gr-2xm2-23wf), and a plane wider than two
+   // bytes cannot be read through either instance. Decline anything else.
+-  if (!input_state.all_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel)))) {
++  if (!input_state.color_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel)))) {
+     return {};
+   }
+ 
+-  // The colour planes are converted to RGB at one common depth and the alpha plane is
+-  // composited at that depth, so all of them have to agree (0 = the colour planes differ).
++  // The colour planes are converted to RGB at one common depth, and an alpha
++  // plane that is no deeper than them is composited at its own depth.
+   int color_bpp = input_state.get_uniform_color_bits_per_pixel();
+-  if (color_bpp == 0 || (input_state.has_alpha() && input_state.bits_per_pixel_alpha != color_bpp)) {
++  if (color_bpp == 0 || (input_state.has_alpha() && input_state.bits_per_pixel_alpha > color_bpp)) {
+     return {};
+   }
+ 
+@@ -260,17 +260,17 @@ Op_flatten_alpha_plane<Pixel>::convert_colorspace(const std::shared_ptr<const He
+                  "Op_flatten_alpha_plane: image has no alpha plane"};
+   }
+ 
+-  // The colour planes are converted at, and the alpha plane is composited at, one common depth
+-  // through the 'Pixel' type of this instance.
++  // The colour planes are converted at one common depth through the 'Pixel' type
++  // of this instance; a no-deeper alpha plane is composited at its own depth.
+   int color_bpp = input_state.get_uniform_color_bits_per_pixel();
+   int bpp_alpha = input_raw->get_bits_per_pixel(heif_channel_Alpha);
+ 
+   if (color_bpp == 0 ||
+-      bpp_alpha != color_bpp ||
++      bpp_alpha > color_bpp ||
+       bytes_per_sample_for_bit_depth(color_bpp) != static_cast<int>(sizeof(Pixel))) {
+     return Error{heif_error_Unsupported_feature,
+                  heif_suberror_Unsupported_color_conversion,
+-                 "Op_flatten_alpha_plane: colour and alpha planes must share one bit depth"};
++                 "Op_flatten_alpha_plane: colour and alpha planes must use compatible bit depths"};
+   }
+ 
+   // See composite_plane(): the composite accumulates in 32 bits, which is exact for samples

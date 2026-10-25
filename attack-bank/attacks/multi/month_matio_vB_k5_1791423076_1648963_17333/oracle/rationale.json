@@ -1,0 +1,25 @@
+{
+  "regime": "incomplete_fix",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "d88951069df58fc01d84b281c3e713bf08eac32c",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4780,9 +4780,10 @@\n         else if ( (size_t)stride[1] * (edge[1] - 1) + start[1] + 1 > dims[1] )\n             err = MATIO_E_BAD_ARGUMENT;\n         else if ( (stride[0] == 1 && (size_t)edge[0] == dims[0]) &&\n-                  (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) )\n+                  (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) ) {\n+            data_in = (char *)data_in + (size_t)start[1] * dims[0] * Mat_SizeOf(data_type);\n             memcpy(data_out, data_in, nbytes);\n-        else {\n+        } else {\n             int i, j;\n \n             switch ( class_type ) {\n"
+    },
+    {
+      "sha": "f0966e059ad8d73b5f2eb9b07aee2a3079c354b6",
+      "edited_message": null,
+      "patch": "diff --git a/src/mat5.c b/src/mat5.c\n--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4744,9 +4744,11 @@\n     }\n \n     if ( rank == 2 ) {\n-        if ( (stride[0] == 1 && (size_t)edge[0] == dims[0]) &&\n-             (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) )\n-            memcpy(data_out, data_in, nbytes);\n+        if ( stride[0] == 1 && (size_t)edge[0] == dims[0] && stride[1] == 1 &&\n+             same_type == 1 )\n+            memcpy(data_out,\n+                   (char *)data_in + (size_t)start[1] * dims[0] * Mat_SizeOf(data_type),\n+                   (size_t)edge[1] * dims[0] * Mat_SizeOf(data_type));\n         else {\n             int i, j;\n \n"
+    }
+  ],
+  "coupling": "The earlier whole-array fast path advances data_in to the selected column origin; under its original full-column guard, that origin is always zero. The later rank-N maintenance broadens the same fast path to contiguous column slabs and independently offsets the memcpy source to the selected column while reducing its length to the slab size. Either edit alone reads a valid in-bounds region. Together, a nonzero column start is applied twice, so a valid suffix slab reads beyond the in-memory payload. A correct fix must reconcile both source-offset conventions across these commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Mat_CreateVer/Mat_VarWrite followed by Mat_Open/Mat_VarReadInfo/Mat_VarGetCell/Mat_VarReadData",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

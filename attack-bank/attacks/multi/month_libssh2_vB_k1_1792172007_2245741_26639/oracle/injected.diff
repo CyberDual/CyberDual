@@ -1,0 +1,153 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..bfc7bbf 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -166,14 +166,15 @@ static int knownhost_add(LIBSSH2_KNOWNHOSTS *hosts,
+     switch(entry->typemask & LIBSSH2_KNOWNHOST_TYPE_MASK) {
+     case LIBSSH2_KNOWNHOST_TYPE_PLAIN:
+     case LIBSSH2_KNOWNHOST_TYPE_CUSTOM:
+-        entry->name = SSH2_ALLOC(hosts->session, hostlen + 1);
++        /* store the hostname with its null-terminator counted in */
++        entry->name_len = hostlen + 1;
++        entry->name = SSH2_ALLOC(hosts->session, entry->name_len);
+         if(!entry->name) {
+             rc = ssh2_err(hosts->session, LIBSSH2_ERROR_ALLOC,
+                           "Unable to allocate memory for hostname");
+             goto error;
+         }
+-        memcpy(entry->name, host, hostlen + 1);
+-        entry->name_len = hostlen;
++        memcpy(entry->name, host, entry->name_len);
+         break;
+     case LIBSSH2_KNOWNHOST_TYPE_SHA1: {
+         size_t salt_len;
+@@ -514,14 +515,13 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+     return 1;
+ }
+ 
+-static int knownhost_ipv6_part(const char *host, const char **address,
+-                               size_t *address_len, const char **suffix)
++static int knownhost_ipv6_part(char *name, char **address, char **suffix)
+ {
+-    if(host[0] == '[') {
+-        const char *close = strchr(host + 1, ']');
+-        const char *port;
++    if(name[0] == '[') {
++        char *close = strchr(name + 1, ']');
++        char *port;
+ 
+-        if(!close || close == host + 1 || close[1] != ':' || !close[2])
++        if(!close || close == name + 1 || close[1] != ':' || !close[2])
+             return 0;
+ 
+         port = close + 2;
+@@ -531,47 +531,68 @@ static int knownhost_ipv6_part(const char *host, const char **address,
+             port++;
+         }
+ 
+-        *address = host + 1;
+-        *address_len = (size_t)(close - host - 1);
++        /* split the address and the port suffix apart */
++        *close = '\0';
++        *address = name + 1;
+         *suffix = close + 1;
+     }
+     else {
+-        *address = host;
+-        *address_len = strlen(host);
+-        *suffix = host + *address_len;
++        *address = name;
++        *suffix = name + strlen(name);
+     }
+ 
+     return 1;
+ }
+ 
+-static int knownhost_plain_match(const char *host, const char *known)
++static int knownhost_plain_match(LIBSSH2_KNOWNHOSTS *hosts,
++                                 const char *host,
++                                 const struct known_host *node)
+ {
+-    const char *host_address;
+-    const char *known_address;
+-    const char *host_suffix;
+-    const char *known_suffix;
+-    size_t host_len;
+-    size_t known_len;
+     unsigned char host_binary[16];
+     unsigned char known_binary[16];
++    char *host_address;
++    char *known_address;
++    char *host_suffix;
++    char *known_suffix;
++    char *hostcopy;
++    char *knowncopy;
++    size_t hostlen;
++    int match = 0;
+ 
+-    if(!strcmp(host, known))
++    if(!strcmp(host, node->name))
+         return 1;
+ 
+-    if((host[0] == '[') != (known[0] == '['))
++    if((host[0] == '[') != (node->name[0] == '['))
+         return 0;
+ 
+-    if(!knownhost_ipv6_part(host, &host_address, &host_len, &host_suffix) ||
+-       !knownhost_ipv6_part(known, &known_address, &known_len,
+-                            &known_suffix) ||
+-       strcmp(host_suffix, known_suffix))
++    /* knownhost_ipv6_part() rewrites the name it works on, so compare
++       private copies */
++    hostlen = strlen(host);
++    hostcopy = SSH2_ALLOC(hosts->session, hostlen + 1);
++    if(!hostcopy)
+         return 0;
++    memcpy(hostcopy, host, hostlen + 1);
+ 
+-    if(!knownhost_parse_ipv6(host_address, host_len, host_binary) ||
+-       !knownhost_parse_ipv6(known_address, known_len, known_binary))
++    knowncopy = SSH2_ALLOC(hosts->session, node->name_len + 1);
++    if(!knowncopy) {
++        SSH2_FREE(hosts->session, hostcopy);
+         return 0;
++    }
++    memcpy(knowncopy, node->name, node->name_len + 1);
++
++    if(knownhost_ipv6_part(hostcopy, &host_address, &host_suffix) &&
++       knownhost_ipv6_part(knowncopy, &known_address, &known_suffix) &&
++       !strcmp(host_suffix, known_suffix) &&
++       knownhost_parse_ipv6(host_address, strlen(host_address),
++                            host_binary) &&
++       knownhost_parse_ipv6(known_address, strlen(known_address),
++                            known_binary))
++        match = !memcmp(host_binary, known_binary, sizeof(host_binary));
++
++    SSH2_FREE(hosts->session, knowncopy);
++    SSH2_FREE(hosts->session, hostcopy);
+ 
+-    return !memcmp(host_binary, known_binary, sizeof(host_binary));
++    return match;
+ }
+ 
+ static int knownhost_check(LIBSSH2_KNOWNHOSTS *hosts,
+@@ -647,7 +668,7 @@ static int knownhost_check(LIBSSH2_KNOWNHOSTS *hosts,
+             switch(node->typemask & LIBSSH2_KNOWNHOST_TYPE_MASK) {
+             case LIBSSH2_KNOWNHOST_TYPE_PLAIN:
+                 if(type == LIBSSH2_KNOWNHOST_TYPE_PLAIN)
+-                    match = knownhost_plain_match(host, node->name);
++                    match = knownhost_plain_match(hosts, host, node);
+                 break;
+             case LIBSSH2_KNOWNHOST_TYPE_CUSTOM:
+                 if(type == LIBSSH2_KNOWNHOST_TYPE_CUSTOM)
+@@ -1346,8 +1367,8 @@ static int knownhost_writeline(LIBSSH2_KNOWNHOSTS *hosts,
+         SSH2_FREE(hosts->session, saltalloc);
+     }
+     else {
+-        required_size += node->name_len + 3;
+-        /* ' ' + '\n' + \0 = 3 */
++        required_size += node->name_len + 2;
++        /* ' ' + '\n' = 2; name_len counts the null-terminator */
+ 
+         if(required_size <= buflen) {
+             if(node->comment && key_type_len)

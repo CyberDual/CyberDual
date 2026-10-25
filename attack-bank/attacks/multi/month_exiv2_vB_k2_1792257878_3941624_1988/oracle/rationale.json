@@ -1,0 +1,30 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "35a6d23f8d6794501884e4a01137954e02d9a13f",
+      "edited_message": null,
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 9a8b3c01..0ad824ee 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -702,9 +702,8 @@ void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size, size_t recursi\n   }\n \n   else if (equalsQTimeTag(buf, \"smhd\")) {\n-    io_->readOrThrow(buf.data(), 4);\n-    io_->readOrThrow(buf.data(), 4);\n-    xmpData_[\"Xmp.audio.Balance\"] = buf.read_uint16(0, bigEndian);\n+    io_->readOrThrow(buf.data(), size);\n+    xmpData_[\"Xmp.audio.Balance\"] = buf.read_uint16(4, bigEndian);\n   }\n \n   else {\n"
+    },
+    {
+      "sha": "a3191a4fe0e4d9fa3af5982ff0fc319910f1398a",
+      "edited_message": null,
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 6b5f65a0..e2574786 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -575,8 +575,7 @@ void QuickTimeVideo::readMetadata() {\n void QuickTimeVideo::decodeBlock(size_t recursion_depth, std::string const& entered_from) {\n   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);\n \n-  const long bufMinSize = 4;\n-  DataBuf buf(bufMinSize + 1);\n+  DataBuf buf(5);\n   uint64_t size = 0;\n   buf.data()[4] = '\\0';\n \n"
+    },
+    {
+      "sha": "6317457e6cb976184f72984cd344fd9551747338",
+      "edited_message": null,
+      "patch": "diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp\nindex 513f94bf..e053c2f0 100644\n--- a/src/quicktimevideo.cpp\n+++ b/src/quicktimevideo.cpp\n@@ -1629,7 +1627,7 @@ bool isQTimeType(BasicIo& iIo, bool advance) {\n       // we only match if we actually know the video type. This is done\n       // to avoid matching just on ftyp because bmffimage also has that\n       // header.\n-      if (Exiv2::find(qTimeFileType, Exiv2::toString(buf.data(8)))) {\n+      if (Exiv2::find(qTimeFileType, std::string{buf.c_str(8), 4})) {\n         matched = true;\n       }\n       break;\n"
+    }
+  ],
+  "coupling": "The decode-parameter commit first consolidates the two four-byte smhd reads into one read of the full atom payload size and reads the balance field from its original second-word offset. That commit is safe because decodeBlock still resizes buf to the payload size before tagDecoder runs. The later resize-removal commit removes that expansion and leaves a fixed five-byte DataBuf; on its own, the original two-read smhd consumer remains bounded, but composed with the earlier size-based read it writes an eight-byte smhd payload into five bytes. The string-termination commit keeps the QuickTime brand lookup bounded so ImageFactory::open accepts the in-contract input and reaches the composed parser path. A reviewer must reason across the commits: the size-based read depends on capacity supplied by decodeBlock, while the resize removal is only unsafe because of that consumer. A correct durable fix must either restore payload-aware capacity in decodeBlock or allocate/bound the payload read in tagDecoder; changing only the cosmetic buffer simplification or brand lookup does not address the capacity dependency.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Exiv2::ImageFactory::open(const byte*, size_t); Exiv2::Image::readMetadata()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

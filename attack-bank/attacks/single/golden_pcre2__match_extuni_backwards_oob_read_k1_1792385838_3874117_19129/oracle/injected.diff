@@ -1,0 +1,174 @@
+diff --git a/src/pcre2_extuni.c b/src/pcre2_extuni.c
+index 1b7f04b4b2f38e8896938fa09b18c7147833ae98..fea098a7631d668842303b7fd57d9810f1855505 100644
+--- a/src/pcre2_extuni.c
++++ b/src/pcre2_extuni.c
+@@ -54,12 +54,12 @@ support, because some compilers do not like functionless source files. */
+ 
+ #ifndef SUPPORT_UNICODE
+ PCRE2_SPTR
+-PRIV(extuni)(uint32_t c, PCRE2_SPTR eptr, PCRE2_SPTR start_subject,
++PRIV(extuni)(uint32_t c, PCRE2_SPTR eptr, PCRE2_SPTR check_subject,
+   PCRE2_SPTR end_subject, BOOL utf, int *xcount)
+ {
+ (void)c;
+ (void)eptr;
+-(void)start_subject;
++(void)check_subject;
+ (void)end_subject;
+ (void)utf;
+ (void)xcount;
+@@ -80,7 +80,7 @@ same behaviour.
+ Arguments:
+   c              the first character
+   eptr           pointer to next character
+-  start_subject  pointer to start of subject
++  check_subject  pointer to start of validated subject
+   end_subject    pointer to end of subject
+   utf            TRUE if in UTF mode
+   xcount         pointer to count of additional characters,
+@@ -90,7 +90,7 @@ Returns:         pointer after the end of the sequence
+ */
+ 
+ PCRE2_SPTR
+-PRIV(extuni)(uint32_t c, PCRE2_SPTR eptr, PCRE2_SPTR start_subject,
++PRIV(extuni)(uint32_t c, PCRE2_SPTR eptr, PCRE2_SPTR check_subject,
+   PCRE2_SPTR end_subject, BOOL utf, int *xcount)
+ {
+ BOOL was_ep_ZWJ = FALSE;
+@@ -121,7 +121,7 @@ while (eptr < end_subject)
+ 
+     /* bptr is pointing to the left-hand character */
+ 
+-    while (bptr > start_subject)
++    while (bptr > check_subject)
+       {
+       bptr--;
+       if (utf)
+diff --git a/src/pcre2_match.c b/src/pcre2_match.c
+index a5a8421f7c219dc66b7fbb87afffe148664bda40..139179a6103fd9ed0eb11a21f36322382c692dd6 100644
+--- a/src/pcre2_match.c
++++ b/src/pcre2_match.c
+@@ -2895,7 +2895,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+     else
+       {
+       GETCHARINCTEST(fc, Feptr);
+-      Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject, mb->end_subject, utf,
++      Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject, mb->end_subject, utf,
+         NULL);
+       }
+     CHECK_PARTIAL();
+@@ -3246,7 +3246,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+           else
+             {
+             GETCHARINCTEST(fc, Feptr);
+-            Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject,
++            Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject,
+               mb->end_subject, utf, NULL);
+             }
+           CHECK_PARTIAL();
+@@ -4071,7 +4071,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+           else
+             {
+             GETCHARINCTEST(fc, Feptr);
+-            Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject, mb->end_subject,
++            Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject, mb->end_subject,
+               utf, NULL);
+             }
+           CHECK_PARTIAL();
+@@ -4660,7 +4660,7 @@ fprintf(stderr, "++ %2ld op=%3d %s\n", Fecode - mb->start_code, *Fecode,
+           else
+             {
+             GETCHARINCTEST(fc, Feptr);
+-            Feptr = PRIV(extuni)(fc, Feptr, mb->start_subject, mb->end_subject,
++            Feptr = PRIV(extuni)(fc, Feptr, mb->check_subject, mb->end_subject,
+               utf, NULL);
+             }
+           CHECK_PARTIAL();
+diff --git a/testdata/testinput10 b/testdata/testinput10
+index d9e6ba8cbf3fda22238ed85e0f691e73408cc976..51df5d336c08e33ba4fdf2f171308ef138968e5e 100644
+--- a/testdata/testinput10
++++ b/testdata/testinput10
+@@ -585,6 +585,12 @@
+     AAA\x80BXYZ 
+     AAA\x80BBXYZ 
+ 
++# Backward scans must not enter the invalid prefix before check_subject.
++
++/\X\X/utf,match_invalid_utf
++\= Expect no match
++    \x80\x{1f1e6}\x{1f1e7}
++
+ /(?<=(.))/utf,match_invalid_utf
+     x\x80
+     \x{10000}\x80
+diff --git a/testdata/testinput12 b/testdata/testinput12
+index 01cc76a491b851dbe66959390da9cc6c2c458fc9..766123f2e2bd8f1021d9e150309660d410e5e26a 100644
+--- a/testdata/testinput12
++++ b/testdata/testinput12
+@@ -498,6 +498,12 @@
+ /(..)(*scs:(1)ab$)/match_invalid_utf
+     ab\x{df00}cde         
+ 
++# Backward scans must not enter the invalid prefix before check_subject.
++
++/\X\X/utf,match_invalid_utf
++\= Expect no match
++    \x{dc00}\x{1f1e6}\x{1f1e7}
++
+ /(?<=(.))/utf,match_invalid_utf
+     x\x{d800}
+     \x{10000}\x{dc00}
+diff --git a/testdata/testoutput10 b/testdata/testoutput10
+index 393ac2076ce3bb82993f42ff822759224c7c84f4..47c5f6ce9724a98d45ada82c815956df8225d95c 100644
+--- a/testdata/testoutput10
++++ b/testdata/testoutput10
+@@ -1779,6 +1779,13 @@ No match
+     AAA\x80BBXYZ 
+ No match
+ 
++# Backward scans must not enter the invalid prefix before check_subject.
++
++/\X\X/utf,match_invalid_utf
++\= Expect no match
++    \x80\x{1f1e6}\x{1f1e7}
++No match
++
+ /(?<=(.))/utf,match_invalid_utf
+     x\x80
+  0: 
+diff --git a/testdata/testoutput12-16 b/testdata/testoutput12-16
+index d235c11f2a1f4447a2a792dcbd2a93e69daad79c..5dc779216096902fdd5a39d2c8c6f40d4c5821cd 100644
+--- a/testdata/testoutput12-16
++++ b/testdata/testoutput12-16
+@@ -1659,6 +1659,13 @@ No match
+  0: ab
+  1: ab
+ 
++# Backward scans must not enter the invalid prefix before check_subject.
++
++/\X\X/utf,match_invalid_utf
++\= Expect no match
++    \x{dc00}\x{1f1e6}\x{1f1e7}
++No match
++
+ /(?<=(.))/utf,match_invalid_utf
+     x\x{d800}
+  0: 
+diff --git a/testdata/testoutput12-32 b/testdata/testoutput12-32
+index 725cb274ea7eefa38458f742377ca77a3bf2c1fe..1aded8a8f19d2edf8e24f1cf5a1a0f8c255c9923 100644
+--- a/testdata/testoutput12-32
++++ b/testdata/testoutput12-32
+@@ -1658,6 +1658,13 @@ No match
+  0: ab
+  1: ab
+ 
++# Backward scans must not enter the invalid prefix before check_subject.
++
++/\X\X/utf,match_invalid_utf
++\= Expect no match
++    \x{dc00}\x{1f1e6}\x{1f1e7}
++No match
++
+ /(?<=(.))/utf,match_invalid_utf
+     x\x{d800}
+  0: 

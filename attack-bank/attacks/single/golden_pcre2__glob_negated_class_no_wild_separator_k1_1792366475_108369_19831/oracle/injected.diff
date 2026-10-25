@@ -1,0 +1,78 @@
+diff --git a/src/pcre2_convert.c b/src/pcre2_convert.c
+index 8a2b293d5f732d59519041be17abed1ef2f157ce..614140e901dda599061769984c68a16bc55ce414 100644
+--- a/src/pcre2_convert.c
++++ b/src/pcre2_convert.c
+@@ -643,6 +643,7 @@ BOOL separator_seen = FALSE;
+ BOOL has_prev_c;
+ PCRE2_SPTR pattern = *from;
+ PCRE2_SPTR char_start = NULL;
++uint8_t prefix[3];
+ uint32_t c, prev_c;
+ int len, class_index;
+ 
+@@ -667,21 +668,23 @@ if (*pattern == CHAR_EXCLAMATION_MARK
+ 
+   is_negative = TRUE;
+ 
+-  out->out_str[0] = CHAR_LEFT_SQUARE_BRACKET;
+-  out->out_str[1] = CHAR_CIRCUMFLEX_ACCENT;
++  prefix[0] = CHAR_LEFT_SQUARE_BRACKET;
++  prefix[1] = CHAR_CIRCUMFLEX_ACCENT;
+   len = 2;
+ 
+   if (!no_wildsep)
+     {
+     if (with_escape)
+       {
+-      out->out_str[len] = CHAR_BACKSLASH;
++      prefix[len] = CHAR_BACKSLASH;
+       len++;
+       }
+-    out->out_str[len] = (uint8_t) separator;
++    prefix[len] = (uint8_t) separator;
++    len++;
+     }
+ 
+-  convert_glob_write_str(out, len + 1);
++  for (int index = 0; index < len; index++)
++    convert_glob_write(out, prefix[index]);
+   }
+ else
+   convert_glob_write(out, CHAR_LEFT_SQUARE_BRACKET);
+diff --git a/testdata/testinput24 b/testdata/testinput24
+index 03cecf9b2d34d3217d34ceda08f39a27243f1f3c..c024ebaa4da8f6f0f92e9378d2d32c43be9fe2e8 100644
+--- a/testdata/testinput24
++++ b/testdata/testinput24
+@@ -330,6 +330,12 @@
+ 
+ /??a??/
+ 
++/[!a]/
++
++/[^xy]/
++
++/a*[!b]/
++
+ #pattern convert=unset
+ #pattern convert=glob,convert_glob_escape=0
+ 
+diff --git a/testdata/testoutput24 b/testdata/testoutput24
+index feac502499d28f2ea18fffc0992d7eb509f1028e..1daf6cfb9d7e8b6138c6a459ef8af75aba43fe6f 100644
+--- a/testdata/testoutput24
++++ b/testdata/testoutput24
+@@ -512,6 +512,15 @@ No match
+ /??a??/
+ (?s)\A..a..\z
+ 
++/[!a]/
++(?s)\A[^a]\z
++
++/[^xy]/
++(?s)\A[^xy]\z
++
++/a*[!b]/
++(?s)\Aa(*COMMIT).*?[^b]\z
++
+ #pattern convert=unset
+ #pattern convert=glob,convert_glob_escape=0
+ 

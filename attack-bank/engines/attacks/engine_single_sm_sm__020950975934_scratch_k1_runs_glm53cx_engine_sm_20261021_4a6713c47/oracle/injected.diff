@@ -1,0 +1,29 @@
+diff --git a/js/src/wasm/WasmBCMemory.cpp b/js/src/wasm/WasmBCMemory.cpp
+index 5ac2246a35..f88a7f9275 100644
+--- a/js/src/wasm/WasmBCMemory.cpp
++++ b/js/src/wasm/WasmBCMemory.cpp
+@@ -90,6 +90,10 @@ using mozilla::Nothing;
+ 
+ void BaseCompiler::bceCheckLocal(MemoryAccessDesc* access, AccessCheck* check,
+                                  uint32_t local) {
++  if (compilerEnv_.debugEnabled()) {
++    return;
++  }
++
+   // We only eliminate bounds checks for memory 0
+   if (access->memoryIndex() != 0) {
+     return;
+diff --git a/js/src/wasm/WasmGC.h b/js/src/wasm/WasmGC.h
+index 25159ae906..f4d4c12a88 100644
+--- a/js/src/wasm/WasmGC.h
++++ b/js/src/wasm/WasmGC.h
+@@ -213,7 +213,8 @@ struct StackMap final {
+ 
+   inline Kind get(uint32_t index) const {
+     MOZ_ASSERT(index < header.numMappedWords);
+-    uint32_t wordIndex = index / mappedWordsPerBitmapElem;
++    uint32_t wordIndex =
++        index / mappedWordsPerBitmapElem + header.hasDebugFrameWithLiveRefs;
+     uint32_t wordOffset = index % mappedWordsPerBitmapElem * bitsPerMappedWord;
+     Kind result = Kind((bitmap[wordIndex] >> wordOffset) & valueMask);
+     return result;

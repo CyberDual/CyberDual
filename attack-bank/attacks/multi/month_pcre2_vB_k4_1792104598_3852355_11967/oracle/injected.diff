@@ -1,0 +1,22 @@
+diff --git a/src/pcre2_jit_simd_inc.h b/src/pcre2_jit_simd_inc.h
+index e4cb40f..eef506b 100644
+--- a/src/pcre2_jit_simd_inc.h
++++ b/src/pcre2_jit_simd_inc.h
+@@ -80,7 +80,7 @@ extract_start_bits_ranges(const sljit_u8 *bits, start_bits_range *ranges, int ma
+ {
+   /* A range ends at a transition, except for the last one when it runs to the
+      end of the bitmap, so twice max_ranges transitions is always enough. */
+-  int transitions[MAX_START_BITS_RANGES * 2];
++  int transitions[MAX_START_BITS_RANGES];
+   int count = 0, covered = 0;
+   int i, length;
+ 
+@@ -482,7 +482,7 @@ fast_forward_char_simd(compiler_common *common, PCRE2_UCHAR char1, PCRE2_UCHAR c
+    two vector registers for its bounds; beyond this the code unit at a time
+    bitmap scan is likely to be the better option anyway, since every extra
+    range adds three or four instructions to each loop iteration. */
+-#define X86_START_BITS_MAX_RANGES 4
++#define X86_START_BITS_MAX_RANGES 5
+ 
+ /* Largest number of accepted code units before the class counts as dense and
+    the code unit at a time scan is left to do the job. A vector scan only pays

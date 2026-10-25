@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "20a9a5444d2dfa9e9f692078f6915a49af487bdc",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2_jit_simd_inc.h b/src/pcre2_jit_simd_inc.h\n--- a/src/pcre2_jit_simd_inc.h\n+++ b/src/pcre2_jit_simd_inc.h\n@@ -458,7 +458,7 @@ if (common->utf && offset > 0)\n    two vector registers for its bounds; beyond this the code unit at a time\n    bitmap scan is likely to be the better option anyway, since every extra\n    range adds three or four instructions to each loop iteration. */\n-#define X86_START_BITS_MAX_RANGES 4\n+#define X86_START_BITS_MAX_RANGES 5\n \n /* Largest number of accepted code units before the class counts as dense and\n    the code unit at a time scan is left to do the job. A vector scan only pays"
+    },
+    {
+      "sha": "a742adc782bbe8ed236d17f705b0b5f939b5ce88",
+      "edited_message": null,
+      "patch": "diff --git a/src/pcre2_jit_simd_inc.h b/src/pcre2_jit_simd_inc.h\n--- a/src/pcre2_jit_simd_inc.h\n+++ b/src/pcre2_jit_simd_inc.h\n@@ -458,7 +458,8 @@ if (common->utf && offset > 0)\n    two vector registers for its bounds; beyond this the code unit at a time\n    bitmap scan is likely to be the better option anyway, since every extra\n    range adds three or four instructions to each loop iteration. */\n #define X86_START_BITS_MAX_RANGES 4\n+#define X86_START_BITS_STORAGE_RANGES 4\n \n /* Largest number of accepted code units before the class counts as dense and\n    the code unit at a time scan is left to do the job. A vector scan only pays\n@@ -542,7 +543,7 @@ struct sljit_label *start;\n struct sljit_label *restart;\n #endif\n struct sljit_jump *quit;\n-start_bits_range ranges[X86_START_BITS_MAX_RANGES];\n+start_bits_range ranges[X86_START_BITS_STORAGE_RANGES];\n sljit_s32 tmp1_reg_ind = sljit_get_register_index(SLJIT_GP_REGISTER, TMP1);\n sljit_s32 data_ind = sljit_get_register_index(reg_type, SLJIT_VR0);\n sljit_s32 acc_ind = sljit_get_register_index(reg_type, SLJIT_VR1);"
+    }
+  ],
+  "coupling": "The first edited commit raises the SIMD start-bits scan's accepted range limit from four to five while every temporary remains consistently sized by that same limit. The later interface commit introduces a separate four-entry storage constant for the x86 range array while the extraction call continues to use the five-range limit. Each change is invariant-preserving in its own context, but their composition passes max_ranges=5 to extract_start_bits_ranges() while its output array has only four entries. A public pattern such as [acegi] has five singleton ranges, so pcre2_jit_compile() writes ranges[4] beyond the stack array. A reviewer must compare the later storage declaration with the earlier raised limit and extraction call; changing only one side of that cross-commit invariant without understanding the other leaves the capacity/count relationship unresolved.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "public PCRE2 C API: pcre2_compile() followed by pcre2_jit_compile()",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

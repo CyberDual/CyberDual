@@ -1,0 +1,164 @@
+diff --git a/include/libssh2.h b/include/libssh2.h
+index c9b9e78c8735e034f47ae5574c9ea35f5af3f1b3..365e070222896bcfece140d351353ffd5721e894 100644
+--- a/include/libssh2.h
++++ b/include/libssh2.h
+@@ -994,6 +994,7 @@ LIBSSH2_API int libssh2_channel_flush_ex(LIBSSH2_CHANNEL *channel,
+     libssh2_channel_flush_ex(channel, SSH_EXTENDED_DATA_STDERR)
+ 
+ LIBSSH2_API int libssh2_channel_get_exit_status(LIBSSH2_CHANNEL *channel);
++LIBSSH2_API int libssh2_channel_has_exit_status(LIBSSH2_CHANNEL *channel);
+ LIBSSH2_API int libssh2_channel_get_exit_signal(LIBSSH2_CHANNEL *channel,
+                                                 char **exitsignal,
+                                                 size_t *exitsignal_len,
+diff --git a/src/channel.c b/src/channel.c
+index e3ab8bfebd1774d07f1207fd2e731f4a66eb2b66..b2ce36f87c2b87eb3cb100a0c64b7536f9cb85ce 100644
+--- a/src/channel.c
++++ b/src/channel.c
+@@ -1646,6 +1646,21 @@ int libssh2_channel_get_exit_status(LIBSSH2_CHANNEL *channel)
+     return channel->exit_status;
+ }
+ 
++/*
++ * Return 1 if the channel was told how its command ended, 0 if it was
++ * not.  libssh2_channel_get_exit_status() cannot tell these apart: a
++ * channel the peer closed without sending an exit-status request
++ * reports 0, the same value a command that exited cleanly reports.
++ * An exit signal counts as well.  We return a zero if channel is NULL.
++ */
++int libssh2_channel_has_exit_status(LIBSSH2_CHANNEL *channel)
++{
++    if(!channel)
++        return 0;
++
++    return channel->exit_status_received;
++}
++
+ /*
+  * Get exit signal (without leading "SIG"), error message, and language
+  * tag into newly allocated buffers of indicated length.  Caller can
+diff --git a/src/libssh2_priv.h b/src/libssh2_priv.h
+index e2f8a6e6a37deaeff3c07e37d8351c3114e0c047..ef68e37c3698df4a2a5992afbdfbe04f23549f5f 100644
+--- a/src/libssh2_priv.h
++++ b/src/libssh2_priv.h
+@@ -466,6 +466,9 @@ struct _LIBSSH2_CHANNEL {
+     /* channel's program exit status */
+     int exit_status;
+ 
++    /* set when an exit status or exit signal request has been received */
++    int exit_status_received;
++
+     /* channel's program exit signal (without the SIG prefix) */
+     char *exit_signal;
+ 
+diff --git a/src/packet.c b/src/packet.c
+index e040ba81d273b6662dea191fbf4d4f4baaecddc3..a512def99534bc3011561b92f9c89085ae494271 100644
+--- a/src/packet.c
++++ b/src/packet.c
+@@ -1108,6 +1108,8 @@ ssh2_packet_add_jump_point1:
+                         if(ssh2_get_u32(&buf, &status))
+                             rc = ssh2_err(session, LIBSSH2_ERROR_PROTO,
+                                           "exit-signal status error");
++                        else
++                            channelp->exit_status_received = 1;
+ 
+                         channelp->exit_status = (int)status;
+ 
+@@ -1128,6 +1130,9 @@ ssh2_packet_add_jump_point1:
+                         /* signal name (without SIG prefix) */
+                         unsigned char *sig_name = NULL;
+                         size_t sig_len = 0;
++
++                        channelp->exit_status_received = 1;
++
+                         if(ssh2_get_string(&buf, &sig_name, &sig_len))
+                             rc = ssh2_err(session, LIBSSH2_ERROR_PROTO,
+                                           "signal name protocol error");
+@@ -1139,7 +1144,7 @@ ssh2_packet_add_jump_point1:
+                             if(channelp->exit_signal)
+                                 SSH2_FREE(session, channelp->exit_signal);
+                             channelp->exit_signal =
+-                                SSH2_ALLOC(session, sig_len + 1);
++                                SSH2_ALLOC(session, sig_len);
+                             if(channelp->exit_signal) {
+                                 memcpy(channelp->exit_signal,
+                                        sig_name, sig_len);
+diff --git a/tests/Makefile.inc b/tests/Makefile.inc
+index 1351362d6775be40e502d7ea37d25a81f11ebfb6..0d8c014c4de638ca528e506ee27510f9b141143a 100644
+--- a/tests/Makefile.inc
++++ b/tests/Makefile.inc
+@@ -39,6 +39,7 @@ DOCKER_TESTS = \
+   test_auth_pubkey_ok_rsa_pem_signed \
+   test_auth_pubkey_ok_rsa_pkcs8 \
+   test_auth_pubkey_ok_rsa_pkcs8_encrypted \
++  test_exit_status \
+   test_hostkey_hash \
+   test_read
+ 
+diff --git a/tests/test_exit_status.c b/tests/test_exit_status.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..8f5df1e917fc52c0198f5afcf5f4346d6d1c7c1a
+--- /dev/null
++++ b/tests/test_exit_status.c
+@@ -0,0 +1,62 @@
++/* Copyright (C) The libssh2 project and its contributors.
++ *
++ * libssh2 test telling a received exit status apart from none
++ *
++ * SPDX-License-Identifier: BSD-3-Clause
++ */
++
++#include "runner.h"
++
++int test(LIBSSH2_SESSION *session)
++{
++    LIBSSH2_CHANNEL *channel;
++
++    /* set in Dockerfile */
++    if(test_auth_pubkey(session, 0, "libssh2", NULL,
++                        "keys/id_rsa_pem.pub", "keys/id_rsa_pem"))
++        return 1;
++
++    /* A finished command sends an exit-status, so its receipt is reported
++       and the value read back is a real 0. */
++    channel = libssh2_channel_open_session(session);
++    if(!channel) {
++        print_last_session_error("libssh2_channel_open_session");
++        return 1;
++    }
++    if(libssh2_channel_exec(channel, "exit 0")) {
++        print_last_session_error("libssh2_channel_exec");
++        return 1;
++    }
++    while(!libssh2_channel_eof(channel)) {
++        char buf[1024];
++        if(libssh2_channel_read(channel, buf, sizeof(buf)) < 0)
++            break;
++    }
++    libssh2_channel_close(channel);
++    if(!libssh2_channel_has_exit_status(channel)) {
++        fprintf(stderr, "exit status not reported as received\n");
++        return 1;
++    }
++    if(libssh2_channel_get_exit_status(channel) != 0) {
++        fprintf(stderr, "unexpected exit status: %d\n",
++                libssh2_channel_get_exit_status(channel));
++        return 1;
++    }
++    libssh2_channel_free(channel);
++
++    /* A channel that runs no command receives no exit-status, so its
++       absence is reported rather than read as a 0. */
++    channel = libssh2_channel_open_session(session);
++    if(!channel) {
++        print_last_session_error("libssh2_channel_open_session");
++        return 1;
++    }
++    libssh2_channel_close(channel);
++    if(libssh2_channel_has_exit_status(channel)) {
++        fprintf(stderr, "exit status reported for a channel that had none\n");
++        return 1;
++    }
++    libssh2_channel_free(channel);
++
++    return 0;
++}

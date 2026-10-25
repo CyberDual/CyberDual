@@ -1,0 +1,32 @@
+diff --git a/src/liblzma/common/alone_decoder.c b/src/liblzma/common/alone_decoder.c
+index 174b3b1..8ebbbe8 100644
+--- a/src/liblzma/common/alone_decoder.c
++++ b/src/liblzma/common/alone_decoder.c
+@@ -152,12 +152,8 @@ alone_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 			}
+ 		};
+ 
+-		const lzma_ret ret = lzma_next_filter_init(&coder->next,
+-				allocator, filters);
+-		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->next, allocator);
+-			return ret;
+-		}
++		return_if_error(lzma_next_filter_init(&coder->next,
++				allocator, filters));
+ 
+ 		coder->sequence = SEQ_CODE;
+ 		break;
+diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c
+index 6dc4cef..3080517 100644
+--- a/src/liblzma/lz/lz_decoder.c
++++ b/src/liblzma/lz/lz_decoder.c
+@@ -278,7 +278,7 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 
+ 	// Allocate and initialize the dictionary.
+ 	if (coder->dict.size != alloc_size) {
+-		coder->dict.size = 0;
++		coder->dict.has_wrapped = false;
+ 		lzma_free(coder->dict.buf, allocator);
+ 
+ 		// The LZ_DICT_EXTRA bytes at the end of the buffer aren't

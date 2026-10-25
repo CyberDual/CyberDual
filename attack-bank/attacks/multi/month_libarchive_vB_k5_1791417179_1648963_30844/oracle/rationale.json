@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "8a18514b61fd92f54661ba1f096ec3a1d4b96988",
+      "edited_message": "uu: Remove explicit ASCII check and reduce output buffering\n\nLines before the begin line can contain arbitrary bytes. Keep the output buffer aligned with the decoder batch limit while reducing its allocation for typical streams.",
+      "patch": "diff --git a/libarchive/archive_read_support_filter_uu.c b/libarchive/archive_read_support_filter_uu.c\n--- a/libarchive/archive_read_support_filter_uu.c\n+++ b/libarchive/archive_read_support_filter_uu.c\n@@ -50,7 +50,7 @@\n \tssize_t\t\t in_cnt;\n \tsize_t\t\t in_allocated;\n \tunsigned char\t*out_buff;\n-#define OUT_BUFF_SIZE\t(64 * 1024)\n+#define OUT_BUFF_SIZE\t(32 * 1024)\n \tint\t\t state;\n #define ST_FIND_HEAD\t0\n #define ST_READ_UU\t1\n"
+    },
+    {
+      "sha": "93ffc4aab6391b780ea5d284eec0ad3638b64187",
+      "edited_message": null,
+      "patch": "diff --git a/libarchive/archive_read_support_filter_uu.c b/libarchive/archive_read_support_filter_uu.c\n--- a/libarchive/archive_read_support_filter_uu.c\n+++ b/libarchive/archive_read_support_filter_uu.c\n@@ -446,7 +446,7 @@\n \t\t\t}\n \t\t\tbreak;\n \t\tcase ST_READ_UU:\n-\t\t\tif (total + len * 2 > OUT_BUFF_SIZE)\n+\t\t\tif (total + len * 2 > MAX_LINE_LENGTH / 2)\n \t\t\t\tgoto finish;\n \t\t\tbody = len;\n \t\t\tif (!uuchar[*b] || body <= 0) {\n@@ -511,7 +511,7 @@\n \t\t\t}\n \t\t\tbreak;\n \t\tcase ST_READ_BASE64:\n-\t\t\tif (total + len * 2 > OUT_BUFF_SIZE)\n+\t\t\tif (total + len * 2 > MAX_LINE_LENGTH / 2)\n \t\t\t\tgoto finish;\n \t\t\tl = len;\n \t\t\tif (l >= 3 && b[0] == '=' && b[1] == '=' &&\n"
+    }
+  ],
+  "coupling": "The earlier uu maintenance commit reduces OUT_BUFF_SIZE from 64 KiB to 32 KiB while the existing decoder limit still uses that macro, so it is safe alone. The later line-parsing refactor derives the decode batch limit from MAX_LINE_LENGTH / 2 (64 KiB), which is equivalent to the original allocation and safe alone. Together the decoder writes more than 32 KiB into the smaller heap buffer. A repair must reconcile the allocation with the batch limit across the two commits; neither isolated diff shows the mismatch.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "archive_read_open_memory / archive_read_next_header / archive_read_data",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

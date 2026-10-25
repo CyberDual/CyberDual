@@ -1,0 +1,13 @@
+diff --git a/src/dec/alpha_dec.c b/src/dec/alpha_dec.c
+index 9fb1448..d2e7391 100644
+--- a/src/dec/alpha_dec.c
++++ b/src/dec/alpha_dec.c
+@@ -261,7 +261,7 @@ WEBP_NODISCARD const uint8_t* VP8DecompressAlphaRows(VP8Decoder* const dec,
+           goto Error;
+         }
+       }
+-      if (dec->alpha_dithering > 0) {
++      if (dec->alph_dec->pre_processing == ALPHA_PREPROCESSED_LEVELS) {
+         num_rows = height - row;  // decode everything in one pass
+       }
+     }

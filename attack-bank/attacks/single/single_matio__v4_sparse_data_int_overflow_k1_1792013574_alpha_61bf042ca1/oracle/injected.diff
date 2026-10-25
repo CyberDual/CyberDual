@@ -1,0 +1,85 @@
+diff --git a/src/mat4.c b/src/mat4.c
+index 118835f5d2924180942a8b69fe9bcfd692f536a1..eb7dacfd5924b09a28173df8a896bd754febcc00 100644
+--- a/src/mat4.c
++++ b/src/mat4.c
+@@ -496,9 +496,60 @@ Mat_VarRead4(mat_t *mat, matvar_t *matvar)
+                 }
+                 sparse->ndata = sparse->nir;
+                 data_type = matvar->data_type;
++                if ( sparse->nir > 0 && matvar->dims[0] > 0 ) {
++                    size_t *row_nnz;
++                    mat_uint32_t j;
++                    err = Mul(&nBytes, matvar->dims[0], sizeof(*row_nnz));
++                    if ( err ) {
++                        free(sparse->jc);
++                        free(sparse->ir);
++                        free(matvar->data);
++                        matvar->data = NULL;
++                        Mat_Critical("Integer multiplication overflow");
++                        return err;
++                    }
++                    row_nnz = (size_t *)calloc(matvar->dims[0], sizeof(*row_nnz));
++                    if ( NULL == row_nnz ) {
++                        free(sparse->jc);
++                        free(sparse->ir);
++                        free(matvar->data);
++                        matvar->data = NULL;
++                        Mat_Critical("Couldn't allocate memory for the sparse row counts");
++                        return MATIO_E_OUT_OF_MEMORY;
++                    }
++                    for ( j = 0; j < sparse->nir; j++ ) {
++                        if ( (size_t)sparse->ir[j] < matvar->dims[0] + 1 ) {
++                            row_nnz[sparse->ir[j]]++;
++                            if ( row_nnz[sparse->ir[j]] > matvar->dims[1] ) {
++                                err = MATIO_E_FILE_FORMAT_VIOLATION;
++                                break;
++                            }
++                        } else {
++                            err = MATIO_E_FILE_FORMAT_VIOLATION;
++                            break;
++                        }
++                    }
++                    free(row_nnz);
++                    if ( err ) {
++                        free(sparse->jc);
++                        free(sparse->ir);
++                        free(matvar->data);
++                        matvar->data = NULL;
++                        return err;
++                    }
++                }
+                 if ( matvar->isComplex ) {
+-                    mat_complex_split_t *complex_data =
+-                        ComplexCalloc(sparse->ndata * Mat_SizeOf(data_type));
++                    mat_complex_split_t *complex_data;
++                    err = Mul(&nBytes, sparse->ndata, Mat_SizeOf(data_type));
++                    if ( err ) {
++                        free(sparse->jc);
++                        free(sparse->ir);
++                        free(matvar->data);
++                        matvar->data = NULL;
++                        Mat_Critical("Integer multiplication overflow");
++                        return err;
++                    }
++                    complex_data = ComplexCalloc(nBytes);
+                     if ( NULL != complex_data ) {
+                         sparse->data = complex_data;
+ #if defined(EXTENDED_SPARSE)
+@@ -640,7 +691,16 @@ Mat_VarRead4(mat_t *mat, matvar_t *matvar)
+                         return MATIO_E_OUT_OF_MEMORY;
+                     }
+                 } else if ( sparse->ndata > 0 ) {
+-                    sparse->data = malloc(sparse->ndata * Mat_SizeOf(data_type));
++                    err = Mul(&nBytes, sparse->ndata, Mat_SizeOf(data_type));
++                    if ( err ) {
++                        free(sparse->jc);
++                        free(sparse->ir);
++                        free(matvar->data);
++                        matvar->data = NULL;
++                        Mat_Critical("Integer multiplication overflow");
++                        return err;
++                    }
++                    sparse->data = malloc(nBytes);
+                     if ( sparse->data != NULL ) {
+ #if defined(EXTENDED_SPARSE)
+                         switch ( data_type ) {

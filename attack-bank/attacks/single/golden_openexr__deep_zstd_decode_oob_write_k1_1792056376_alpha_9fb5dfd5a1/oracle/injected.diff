@@ -1,0 +1,60 @@
+diff --git a/src/lib/OpenEXRCore/internal_zstd.c b/src/lib/OpenEXRCore/internal_zstd.c
+index 670b92a73c768ebf3b5cc4cec26d92c90fe23b79..26e2af64ad7002d2e0ee35aa29cfcbbf945892a4 100644
+--- a/src/lib/OpenEXRCore/internal_zstd.c
++++ b/src/lib/OpenEXRCore/internal_zstd.c
+@@ -644,12 +644,16 @@ zstd_inner_append_shuffled_segment (
+     return 0;
+ }
+ 
+-/** Read one inner segment: u64 LE length (must equal \a expected_len), then unshuffle. */
++/** Read one inner segment: u64 LE length (must equal \a expected_len), then
++ *  unshuffle into \a tgt, which must have at least \a tgt_cap bytes of
++ *  remaining capacity. Checked here so a mismatch between the file-derived
++ *  segment length and the destination bound cannot write past the buffer. */
+ static exr_result_t
+ zstd_inner_read_shuffled_segment (
+     const uint8_t** q,
+     const uint8_t*  qend,
+     uint8_t*        tgt,
++    uint64_t        tgt_cap,
+     uint64_t        expected_len,
+     uint64_t        el_bytes)
+ {
+@@ -658,6 +662,7 @@ zstd_inner_read_shuffled_segment (
+     *q += 8;
+     if (ilen > (uint64_t) (qend - *q)) return EXR_ERR_CORRUPT_CHUNK;
+     if (ilen != expected_len) return EXR_ERR_CORRUPT_CHUNK;
++    if (ilen > tgt_cap) return EXR_ERR_CORRUPT_CHUNK;
+     exr_zstd_shuffle_decode_bytes (tgt, *q, (size_t) ilen, el_bytes);
+     *q += ilen;
+     return EXR_ERR_SUCCESS;
+@@ -1308,6 +1313,13 @@ exr_undo_zstd_v1 (
+         pack_channel_count,
+         sorting_lookup);
+ 
++    /* split comes from the sample-count table; uncompressed_size comes from
++     * the chunk leader. The inner stream is bounded by max_dst, which is
++     * uncompressed_size plus the two 8-byte segment headers this layout can
++     * carry. A split past that bound cannot be a valid segment and would make
++     * exr_zstd_segment_layout() report a length the decode buffer cannot hold. */
++    if (split > max_dst) return EXR_ERR_CORRUPT_CHUNK;
++
+     uint64_t  inner_lens[2];
+     uint64_t  inner_els[2];
+     int const n_inner =
+@@ -1327,12 +1339,14 @@ exr_undo_zstd_v1 (
+     const uint8_t*       q    = (const uint8_t*) tls_dec->shuffle_buf;
+     const uint8_t* const qend = (const uint8_t*) tls_dec->shuffle_buf + dSize;
+     uint8_t*             tgt  = (uint8_t*) target;
++    uint64_t             tgt_remaining = max_dst;
+     for (int seg = 0; seg < n_inner; ++seg)
+     {
+         exr_result_t seg_rv = zstd_inner_read_shuffled_segment (
+-            &q, qend, tgt, inner_lens[seg], inner_els[seg]);
++            &q, qend, tgt, tgt_remaining, inner_lens[seg], inner_els[seg]);
+         if (seg_rv != EXR_ERR_SUCCESS) return seg_rv;
+         tgt += inner_lens[seg];
++        tgt_remaining -= inner_lens[seg];
+     }
+     if (q != qend) return EXR_ERR_CORRUPT_CHUNK;
+     if ((size_t) (tgt - (uint8_t*) target) != (size_t) uncompressed_size)

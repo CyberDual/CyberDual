@@ -1,0 +1,12 @@
+diff --git a/src/OT/Layout/GPOS/PairPosFormat1.hh b/src/OT/Layout/GPOS/PairPosFormat1.hh
+index de1f036..5f01bda 100644
+--- a/src/OT/Layout/GPOS/PairPosFormat1.hh
++++ b/src/OT/Layout/GPOS/PairPosFormat1.hh
+@@ -159,7 +159,6 @@ struct PairPosFormat1_3
+ 
+ #ifndef HB_NO_OT_LAYOUT_LOOKUP_CACHE
+     if (cache &&
+-	index < pairSet.len &&
+ 	!cache->pair_sets[index].may_have (buffer->info[skippy_iter.idx].codepoint))
+     {
+       buffer->unsafe_to_concat (buffer->idx, skippy_iter.idx + 1);

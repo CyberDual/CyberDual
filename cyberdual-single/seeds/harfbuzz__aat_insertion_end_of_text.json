@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "9f2f03173b7fee860cc00d999857d09fa4a362e2",
+  "parent_sha": "9f2f03173b7fee860cc00d999857d09fa4a362e2",
+  "project": "harfbuzz",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/harfbuzz/harfbuzz",
+  "repo_url": "https://github.com/harfbuzz/harfbuzz",
+  "source": "reuse",
+  "target": "harfbuzz",
+  "task": "hb_shape on an AAT (morx) font whose end-of-text transition fires an insertion action with no current glyph -> stray deleted-glyph sentinel gid 65535 in output; fix makes end-of-text insertion emit the intended run.",
+  "task_iid": "harfbuzz__aat_insertion_end_of_text",
+  "vuln_desc": "hb_shape on an AAT (morx) font whose end-of-text transition fires an insertion action with no current glyph -> stray deleted-glyph sentinel gid 65535 in output; fix makes end-of-text insertion emit the intended run."
+}

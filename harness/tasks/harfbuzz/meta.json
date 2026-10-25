@@ -1,0 +1,8 @@
+{
+  "project": "harfbuzz",
+  "repo": "harfbuzz/harfbuzz",
+  "repo_url": "https://github.com/harfbuzz/harfbuzz",
+  "link_libs": ["src/libharfbuzz-subset.a", "src/libharfbuzz.a"],
+  "meson_opts": ["-Dexperimental_api=true"],
+  "note": "base template: link_libs/meson_opts propagate to per-task metas (run_single / run_single_golden / run_month). parent_sha/fix_sha are set per-task by the runners. The subset lib + experimental_api are needed by hb_subset_depend_* PoCs; harfbuzz_run.sh also auto-detects this per-probe."
+}

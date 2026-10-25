@@ -1,0 +1,95 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..809067f 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -122,6 +122,7 @@ static struct libssh2_knownhost *knownhost_to_external(struct known_host *node)
+ }
+ 
+ #define KNOWNHOST_MAX_LEN  (1024 * 1024)
++#define KNOWNHOST_NAME_MAX 512
+ 
+ static int knownhost_add(LIBSSH2_KNOWNHOSTS *hosts,
+                          const char *host, const char *salt,
+@@ -514,9 +515,12 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+     return 1;
+ }
+ 
+-static int knownhost_ipv6_part(const char *host, const char **address,
+-                               size_t *address_len, const char **suffix)
++static int knownhost_ipv6_part(const char *host, char address[256],
++                               const char **suffix)
+ {
++    const char *start = host;
++    size_t len;
++
+     if(host[0] == '[') {
+         const char *close = strchr(host + 1, ']');
+         const char *port;
+@@ -531,27 +535,29 @@ static int knownhost_ipv6_part(const char *host, const char **address,
+             port++;
+         }
+ 
+-        *address = host + 1;
+-        *address_len = (size_t)(close - host - 1);
++        start = host + 1;
++        len = (size_t)(close - start);
+         *suffix = close + 1;
+     }
+     else {
+-        *address = host;
+-        *address_len = strlen(host);
+-        *suffix = host + *address_len;
++        len = strlen(host);
++        *suffix = host + len;
+     }
+ 
++    if(len >= KNOWNHOST_NAME_MAX)
++        return 0;
++
++    memcpy(address, start, len);
++    address[len] = '\0';
+     return 1;
+ }
+ 
+ static int knownhost_plain_match(const char *host, const char *known)
+ {
+-    const char *host_address;
+-    const char *known_address;
++    char host_address[256];
++    char known_address[256];
+     const char *host_suffix;
+     const char *known_suffix;
+-    size_t host_len;
+-    size_t known_len;
+     unsigned char host_binary[16];
+     unsigned char known_binary[16];
+ 
+@@ -561,14 +567,14 @@ static int knownhost_plain_match(const char *host, const char *known)
+     if((host[0] == '[') != (known[0] == '['))
+         return 0;
+ 
+-    if(!knownhost_ipv6_part(host, &host_address, &host_len, &host_suffix) ||
+-       !knownhost_ipv6_part(known, &known_address, &known_len,
+-                            &known_suffix) ||
++    if(!knownhost_ipv6_part(host, host_address, &host_suffix) ||
++       !knownhost_ipv6_part(known, known_address, &known_suffix) ||
+        strcmp(host_suffix, known_suffix))
+         return 0;
+ 
+-    if(!knownhost_parse_ipv6(host_address, host_len, host_binary) ||
+-       !knownhost_parse_ipv6(known_address, known_len, known_binary))
++    if(!knownhost_parse_ipv6(host_address, strlen(host_address), host_binary) ||
++       !knownhost_parse_ipv6(known_address, strlen(known_address),
++                             known_binary))
+         return 0;
+ 
+     return !memcmp(host_binary, known_binary, sizeof(host_binary));
+@@ -865,7 +871,7 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+            name to the collection */
+         if(name == host || *(name - 1) == ',') {
+ 
+-            char hostbuf[256];
++            char hostbuf[KNOWNHOST_NAME_MAX];
+ 
+             /* make sure we do not overflow the buffer */
+             if(namelen >= sizeof(hostbuf) - 1)

@@ -1,0 +1,36 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index b0b30e7350846b379726a8e794ae40c2187cac8b..71e7e0511e377eed5d9a8516818b66f3d29fc62a 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -7806,8 +7806,8 @@ dtdCopy(XML_Parser oldParser, DTD *newDtd, const DTD *oldDtd,
+       if (oldE->nDefaultAtts > SIZE_MAX / sizeof(DEFAULT_ATTRIBUTE)) {
+         return 0;
+       }
+-      newE->defaultAtts
+-          = MALLOC(parser, oldE->nDefaultAtts * sizeof(DEFAULT_ATTRIBUTE));
++      newE->defaultAtts = MALLOC(
++          parser, oldE->defaultAttForName.used * sizeof(DEFAULT_ATTRIBUTE));
+       if (! newE->defaultAtts) {
+         return 0;
+       }
+@@ -7832,11 +7832,17 @@ dtdCopy(XML_Parser oldParser, DTD *newDtd, const DTD *oldDtd,
+       } else
+         newE->defaultAtts[i].value = NULL;
+ 
+-      NAMED *const nameAddedOrFound = lookup(parser, &(newE->defaultAttForName),
+-                                             attributeName, sizeof(NAMED));
+-      if (! nameAddedOrFound) {
++      NAME_AND_DEFAULT_ATTRIBUTE *const nameAndDefaultAttribute
++          = (NAME_AND_DEFAULT_ATTRIBUTE *)lookup(
++              parser, &(newE->defaultAttForName), newE->defaultAtts[i].id->name,
++              sizeof(NAME_AND_DEFAULT_ATTRIBUTE));
++      if (! nameAndDefaultAttribute) {
+         return 0;
+       }
++      if (! nameAndDefaultAttribute->initialized) {
++        nameAndDefaultAttribute->attIndex = i;
++        nameAndDefaultAttribute->initialized = true;
++      }
+     }
+   }
+ 

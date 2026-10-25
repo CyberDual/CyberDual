@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "83d1df5d5ee964b4538d50b1b2630584a7acacf1",
+      "edited_message": "mprintf: track precision while avoiding string scans\n\nUse the exact string length already known for unbounded %s. Also mark formats with an explicit precision so output paths can distinguish them from default string handling.",
+      "patch": "diff --git a/lib/mprintf.c b/lib/mprintf.c\nindex abe0df4b75..517d986eb3 100644\n--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -85,7 +85,8 @@ enum {\n   FLAGS_CHAR       = 1 << 17, /* %c story */\n   FLAGS_FLOATE     = 1 << 18, /* %e or %E */\n   FLAGS_FLOATG     = 1 << 19, /* %g or %G */\n-  FLAGS_SUBSTR     = 1 << 20  /* no input, only substring */\n+  FLAGS_SUBSTR     = 1 << 20, /* no input, only substring */\n+  FLAGS_PREC_EXACT = 1 << 21  /* precision provides the length */\n };\n \n enum {\n@@ -205,7 +206,7 @@ static int parse_flags(const char **fmtp, unsigned int *flagsp, int use_dollar,\n     case '.':\n       if('*' == *fmt) {\n         /* The precision is picked from a specified parameter */\n-        flags |= FLAGS_PRECPARAM;\n+        flags |= FLAGS_PRECPARAM | FLAGS_PREC_EXACT;\n         fmt++;\n \n         if(use_dollar == DOLLAR_USE) {\n@@ -221,7 +222,7 @@ static int parse_flags(const char **fmtp, unsigned int *flagsp, int use_dollar,\n       else {\n         bool is_neg;\n         curl_off_t num;\n-        flags |= FLAGS_PREC;\n+        flags |= FLAGS_PREC | FLAGS_PREC_EXACT;\n         is_neg = ('-' == *fmt);\n         if(is_neg)\n           fmt++;\n"
+    },
+    {
+      "sha": "26a5aaf862960e3336be0f4f024f62267502c8ea",
+      "edited_message": "mprintf: use exact precision and native width\n\nThe bare %I modifier now follows SIZEOF_SIZE_T. Use the explicit-precision marker to emit bounded strings directly, retaining the NUL-aware scan for formats without that marker.",
+      "patch": "diff --git a/lib/mprintf.c b/lib/mprintf.c\nindex 1203008bbb..63f85a1131 100644\n--- a/lib/mprintf.c\n+++ b/lib/mprintf.c\n@@ -1006,10 +1007,9 @@ static bool out_string(void *userp,\n     width = 0;\n   }\n \n-  /* With no precision, len is already the exact length; emit it without\n-     scanning again. With precision, scan up to len but stop at NUL, since\n-     the string may be shorter or the buffer may not be NUL-terminated. */\n-  if(prec == -1) {\n+  /* With no precision or an exact precision, len is already the number of\n+     bytes to emit. Other precision forms scan up to len and stop at NUL. */\n+  if(prec == -1 || (flags & FLAGS_PREC_EXACT)) {\n     if(stream_run(userp, stream, streamn,\n                   (const unsigned char *)str, len, donep))\n       return TRUE;\n"
+    }
+  ],
+  "coupling": "The first commit introduces FLAGS_PREC_EXACT and sets it for every explicit precision while preserving the existing NUL-aware bounded-string scan, so its diff is behavior-preserving. The second commit changes the emitter to treat that marker as an exact byte count and use stream_run(); in isolation no parser path sets the marker, so its diff is also behavior-preserving. Only their composition makes %.8s mark the format as exact, set len to 8, and copy eight bytes from a four-byte NUL-terminated stack object. A correct repair must reconcile the parser's meaning of explicit precision with the emitter's exact-length assumption; changing only one side either loses the intended bounded-string optimization or leaves the two interpretations inconsistent.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "curl_maprintf",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

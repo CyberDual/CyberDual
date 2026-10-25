@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-787",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "abfe9f70710a8d4a9b6144512b5472ede551c4e2",
+  "parent_sha": "abfe9f70710a8d4a9b6144512b5472ede551c4e2",
+  "project": "openexr",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/AcademySoftwareFoundation/openexr",
+  "repo_url": "https://github.com/AcademySoftwareFoundation/openexr",
+  "source": "reuse",
+  "target": "openexr",
+  "task": "Decoding ZSTD-compressed deep-scanline chunks of a crafted EXR (DeepScanLineInputFile / exr_decoding_run) overflows a heap buffer; public read path, genuine core decode fault (existing task is provisional).",
+  "task_iid": "openexr__deep_zstd_decode_oob_write",
+  "vuln_desc": "Decoding ZSTD-compressed deep-scanline chunks of a crafted EXR (DeepScanLineInputFile / exr_decoding_run) overflows a heap buffer; public read path, genuine core decode fault (existing task is provisional)."
+}

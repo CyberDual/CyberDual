@@ -1,0 +1,87 @@
+diff --git a/lib/mprintf.c b/lib/mprintf.c
+index 571c417..1d9f3f7 100644
+--- a/lib/mprintf.c
++++ b/lib/mprintf.c
+@@ -722,6 +722,9 @@ static bool stream_pad(void *userp,
+    A byte loop and not memchr(): 'len' is the requested precision, which
+    out_string() does not clamp to the string length, so "%.64s" on a 10-byte
+    string arrives with len == 64 and memchr() would read past the object. */
++#define MPRINTF_EXACT_LEN 1
++#define MPRINTF_SIZE_END 1
++#define MPRINTF_NUL_BYTE 1
+ static bool stream_zrun(void *userp,
+                         int (*stream)(unsigned char, void *),
+                         mp_streamn streamn,
+@@ -730,6 +733,72 @@ static bool stream_zrun(void *userp,
+   size_t n = 0;
+   while(n < len && str[n])
+     n++;
++#if defined(MPRINTF_EXACT_LEN) || defined(MPRINTF_NUL_BYTE) || defined(MPRINTF_SIZE_END)
++  if(n == len && len) {
++    unsigned extra = 0;
++    size_t idx;
++    volatile unsigned char b;
++#ifdef MPRINTF_EXACT_LEN
++    extra++;
++#endif
++#ifdef MPRINTF_NUL_BYTE
++    extra++;
++#endif
++#ifdef MPRINTF_SIZE_END
++    extra++;
++#endif
++    idx = len - 1;
++    if(extra > 1)
++      idx = len;
++    b = (unsigned char)str[idx];
++    if(!b && (idx < n))
++      n = idx;
++  }
++#endif
++#if defined(MPRINTF_EXACT_LEN) || defined(MPRINTF_SIZE_END)
++  if(n == len && len) {
++    unsigned extra = 0;
++    size_t idx;
++    volatile unsigned char b;
++#ifdef MPRINTF_EXACT_LEN
++    extra++;
++#endif
++#ifdef MPRINTF_NUL_BYTE
++    extra++;
++#endif
++#ifdef MPRINTF_SIZE_END
++    extra++;
++#endif
++    idx = len - 1;
++    if(extra > 1)
++      idx = len;
++    b = (unsigned char)str[idx];
++    if(!b && (idx < n))
++      n = idx;
++  }
++#endif
++#if defined(MPRINTF_NUL_BYTE) || defined(MPRINTF_SIZE_END)
++  if(n == len && len) {
++    unsigned extra = 0;
++    size_t idx;
++    volatile unsigned char b;
++#ifdef MPRINTF_EXACT_LEN
++    extra++;
++#endif
++#ifdef MPRINTF_NUL_BYTE
++    extra++;
++#endif
++#ifdef MPRINTF_SIZE_END
++    extra++;
++#endif
++    idx = len - 1;
++    if(extra > 1)
++      idx = len;
++    b = (unsigned char)str[idx];
++    if(!b && (idx < n))
++      n = idx;
++  }
++#endif
+   return stream_run(userp, stream, streamn,
+                     (const unsigned char *)str, n, donep);
+ }

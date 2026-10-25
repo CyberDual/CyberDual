@@ -1,0 +1,52 @@
+diff --git a/src/mat73.c b/src/mat73.c
+index a94e59004e213d398604aa454e5ce87e9adaf1d6..bf979632f14870190ecd0e0af593d13c96027138 100644
+--- a/src/mat73.c
++++ b/src/mat73.c
+@@ -77,6 +77,11 @@ struct ReadGroupInfoIterData
+ #define MAX_CLASS_NAME (256)
+ #endif
+ 
++#if !defined(MAX_FIELD_NAME)
++/* Maximal number of characters in a MATLAB structure field name (namelengthmax) */
++#define MAX_FIELD_NAME (63)
++#endif
++
+ /*===========================================================================
+  *  Private functions
+  *===========================================================================
+@@ -1218,7 +1223,8 @@ Mat_H5ReadGroupInfo(mat_t *mat, matvar_t *matvar, hid_t dset_id)
+             /* First iteration to retrieve number of relevant links */
+             herr = H5Literate(dset_id, H5_INDEX_NAME, H5_ITER_NATIVE, NULL,
+                               Mat_H5ReadGroupInfoIterate, (void *)&group_data);
+-            if ( herr > 0 && group_data.nfields > 0 ) {
++            /* H5Literate returns 0 on full success; >0 only if callback short-circuits */
++            if ( herr >= 0 && group_data.nfields > 0 ) {
+                 matvar->internal->fieldnames = (char **)calloc(
+                     (size_t)(group_data.nfields), sizeof(*matvar->internal->fieldnames));
+                 group_data.nfields = 0;
+@@ -1473,7 +1479,14 @@ Mat_H5ReadGroupInfoIterate(hid_t dset_id, const char *name, const H5L_info_t *in
+             /* Fall through */
+         case H5O_TYPE_DATASET:
+             if ( matvar != NULL ) {
+-                matvar->internal->fieldnames[group_data->nfields] = strdup(name);
++                size_t len = strlen(name);
++                char fieldname[MAX_FIELD_NAME + 1];
++                /* Cap discovered link names at namelengthmax before storing them */
++                if ( len > sizeof(fieldname) )
++                    len = sizeof(fieldname);
++                memcpy(fieldname, name, len);
++                fieldname[len] = '\0';
++                matvar->internal->fieldnames[group_data->nfields] = strdup(fieldname);
+                 if ( NULL == matvar->internal->fieldnames[group_data->nfields] )
+                     return -1;
+             }
+@@ -1484,7 +1497,8 @@ Mat_H5ReadGroupInfoIterate(hid_t dset_id, const char *name, const H5L_info_t *in
+             break;
+     }
+ 
+-    return 1;
++    /* Return 0 so H5Literate continues over all structure fields */
++    return 0;
+ }
+ 
+ static int

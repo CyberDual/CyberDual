@@ -1,0 +1,59 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5b..6b867b5c 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -514,8 +514,9 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+     return 1;
+ }
+ 
+-static int knownhost_ipv6_part(const char *host, const char **address,
+-                               size_t *address_len, const char **suffix)
++static int knownhost_ipv6_part(const char *host, const char *end,
++                               const char **address, size_t *address_len,
++                               const char **suffix)
+ {
+     if(host[0] == '[') {
+         const char *close = strchr(host + 1, ']');
+@@ -537,8 +538,8 @@ static int knownhost_ipv6_part(const char *host, const char **address,
+     }
+     else {
+         *address = host;
+-        *address_len = strlen(host);
+-        *suffix = host + *address_len;
++        *address_len = (size_t)(end - host);
++        *suffix = end;
+     }
+ 
+     return 1;
+@@ -561,8 +562,10 @@ static int knownhost_plain_match(const char *host, const char *known)
+     if((host[0] == '[') != (known[0] == '['))
+         return 0;
+ 
+-    if(!knownhost_ipv6_part(host, &host_address, &host_len, &host_suffix) ||
+-       !knownhost_ipv6_part(known, &known_address, &known_len,
++    if(!knownhost_ipv6_part(host, host + strlen(host),
++                            &host_address, &host_len, &host_suffix) ||
++       !knownhost_ipv6_part(known, known + strlen(known),
++                            &known_address, &known_len,
+                             &known_suffix) ||
+        strcmp(host_suffix, known_suffix))
+         return 0;
+@@ -874,6 +877,18 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+                                 "Failed to parse known_hosts line "
+                                 "(unexpected length)");
+ 
++            if(name[0] == '[') {
++                const char *address;
++                const char *suffix;
++                size_t address_len;
++
++                if(!knownhost_ipv6_part(name, name + namelen, &address,
++                                        &address_len, &suffix))
++                    return ssh2_err(hosts->session,
++                                    LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
++                                    "Invalid bracketed known-host entry");
++            }
++
+             /* copy hostname to the temp buffer and null-terminate */
+             memcpy(hostbuf, name, namelen);
+             hostbuf[namelen] = '\0';

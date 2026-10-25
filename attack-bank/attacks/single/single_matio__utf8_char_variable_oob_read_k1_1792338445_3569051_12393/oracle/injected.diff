@@ -1,0 +1,113 @@
+diff --git a/src/inflate.c b/src/inflate.c
+index 7db42821c45ae1393bb2ba954385e07922902c7a..14a2314e108f08a657f6e075709416fb6e9d3eb7 100644
+--- a/src/inflate.c
++++ b/src/inflate.c
+@@ -355,7 +355,7 @@ InflateData(mat_t *mat, z_streamp z, void *buf, unsigned int nBytes)
+     z->next_out = ZLIB_BYTE_PTR(buf);
+     err = inflate(z, Z_NO_FLUSH);
+     if ( err == Z_STREAM_END ) {
+-        return MATIO_E_NO_ERROR;
++        return z->avail_out ? MATIO_E_FILE_FORMAT_VIOLATION : MATIO_E_NO_ERROR;
+     } else if ( err != Z_OK ) {
+         Mat_Critical("InflateData: inflate returned %s",
+                      zError(err == Z_NEED_DICT ? Z_DATA_ERROR : err));
+@@ -380,7 +380,7 @@ InflateData(mat_t *mat, z_streamp z, void *buf, unsigned int nBytes)
+         z->next_in = comp_buf;
+         err = inflate(z, Z_NO_FLUSH);
+         if ( err == Z_STREAM_END ) {
+-            err = MATIO_E_NO_ERROR;
++            err = z->avail_out ? MATIO_E_FILE_FORMAT_VIOLATION : MATIO_E_NO_ERROR;
+             break;
+         } else if ( err != Z_OK ) {
+             const char *errMsg = zError(err == Z_NEED_DICT ? Z_DATA_ERROR : err);
+@@ -403,6 +403,7 @@ InflateData(mat_t *mat, z_streamp z, void *buf, unsigned int nBytes)
+         Mat_Warning("InflateData: Read beyond EOF error: Processed %u bytes, expected %u bytes",
+                     nBytes - z->avail_out, nBytes);
+         memset(buf, 0, nBytes);
++        return MATIO_E_FILE_FORMAT_VIOLATION;
+     }
+ 
+     return err;
+diff --git a/src/mat5.c b/src/mat5.c
+index 9726ba2b9bd6c8e0b690100e98a46b3b961e60d9..d2ea91d99d8eb398c52ca7387d3a8532c1c2036a 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -3453,6 +3453,50 @@ Mat_VarReadNumeric5(mat_t *mat, matvar_t *matvar, void *data, size_t N)
+     return err;
+ }
+ 
++static int
++FileHasBytes(FILE *fp, size_t nbytes)
++{
++    mat_off_t data_pos, end_pos;
++
++    data_pos = ftello(fp);
++    end_pos = data_pos;
++    if ( data_pos != -1L && fseeko(fp, 0, SEEK_END) == 0 )
++        end_pos = ftello(fp);
++    if ( fseeko(fp, data_pos, SEEK_SET) != 0 )
++        return 0;
++
++    return end_pos >= data_pos && (mat_uint64_t)(end_pos - data_pos) >= (mat_uint64_t)nbytes;
++}
++
++static int
++ValidateUtf8(const mat_uint8_t *data, size_t nbytes)
++{
++    size_t i, length;
++
++    for ( i = 0; i < nbytes; i += length ) {
++        const mat_uint8_t value = data[i];
++        size_t j;
++
++        if ( value <= 0x7F ) {
++            length = 1;
++        } else if ( (value & 0xE0) == 0xC0 ) {
++            length = 2;
++        } else if ( (value & 0xF0) == 0xE0 ) {
++            length = 3;
++        } else if ( (value & 0xF8) == 0xF0 ) {
++            length = 4;
++        } else {
++            return MATIO_E_FILE_FORMAT_VIOLATION;
++        }
++        for ( j = 1; j < length; j++ ) {
++            if ( (data[i + j] & 0xC0) != 0x80 )
++                return MATIO_E_FILE_FORMAT_VIOLATION;
++        }
++    }
++
++    return MATIO_E_NO_ERROR;
++}
++
+ /** @if mat_devman
+  * @brief Reads the data of a version 5 MAT variable
+  *
+@@ -3617,6 +3661,12 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                 matvar->data_type = packed_type;
+                 matvar->data_size = Mat_SizeOf(matvar->data_type);
+             }
++            if ( matvar->compression == MAT_COMPRESSION_NONE && !FileHasBytes((FILE *)mat->fp,
++                                                                               matvar->nbytes) ) {
++                err = MATIO_E_FILE_FORMAT_VIOLATION;
++                Mat_Critical("Truncated character data");
++                break;
++            }
+             if ( matvar->isComplex ) {
+                 break;
+             }
+@@ -3700,6 +3750,14 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                 }
+ #endif
+             }
++            if ( !err && matvar->data_type == MAT_T_UTF8 ) {
++                err = ValidateUtf8((const mat_uint8_t *)matvar->data, matvar->nbytes);
++                if ( err ) {
++                    free(matvar->data);
++                    matvar->data = NULL;
++                    matvar->nbytes = 0;
++                }
++            }
+             break;
+         case MAT_C_STRUCT: {
+             matvar_t **fields;

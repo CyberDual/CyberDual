@@ -1,0 +1,21 @@
+# CYBERDUAL agent image: runs EITHER claude-code or codex as Role A / Role B, in the same
+# egress-controlled container with the project build toolchain. Build (or `./cyberdual build`):
+#   docker build -t cyberdual-agent:cc2.1.293-codex0.159.2 -f harness/Dockerfile.agent harness/   (./cyberdual build)
+# Both CLIs are pinned to the versions the reference runs used; a newer Claude Code or Codex is a different
+# agent, so change these only on purpose and record it.
+FROM node:22-bookworm
+ARG CLAUDE_CODE_VERSION=2.1.293
+ARG CODEX_VERSION=0.159.2
+# Build toolchain for ALL 14 project oracles (so the reviewer's shell can build+test every project, and
+# so grading is reproducible off-host). Missing meson/ninja previously left the reviewer unable to build
+# meson projects (HarfBuzz/libheif) -> it approved them blind. Deps gathered from harness/*_run.sh:
+#   build systems: cmake, meson, ninja, autotools, pkg-config, nasm, python3
+#   link libs: zlib libpng openssl(ssl/crypto) libmd lzma bz2 zstd
+RUN npm i -g "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" "@openai/codex@${CODEX_VERSION}" \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends \
+      git build-essential clang cmake meson ninja-build pkg-config nasm \
+      autoconf automake libtool python3 python3-pip \
+      zlib1g-dev libpng-dev libssl-dev libmd-dev liblzma-dev libbz2-dev libzstd-dev \
+      ca-certificates \
+ && rm -rf /var/lib/apt/lists/*

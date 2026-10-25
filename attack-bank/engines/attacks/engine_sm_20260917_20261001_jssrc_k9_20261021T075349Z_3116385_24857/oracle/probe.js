@@ -1,0 +1,10 @@
+const dependency = parseModule("export const x = 1;", "dependency.js");
+const importer = parseModule("export const p = import('dependency.js');", "importer.js");
+registerModule("dependency.js", dependency);
+moduleLoadAndLink(importer);
+moduleEvaluate(importer);
+const pending = getModuleEnvironmentValue(importer, "p");
+gczeal("Compact", 1);
+gc("shrinking");
+drainJobQueue();
+print("done", pending);

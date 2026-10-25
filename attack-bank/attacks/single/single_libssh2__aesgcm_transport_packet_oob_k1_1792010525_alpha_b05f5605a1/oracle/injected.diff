@@ -1,0 +1,49 @@
+diff --git a/src/openssl.c b/src/openssl.c
+index 6a38b55b91440c1c188472dde05a9770ea3a3f73..15db0a3963acfdabed7d85a57f008ac56880c2cf 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -946,12 +946,18 @@ int ssh2_cipher_crypt(ssh2_cipher_ctx *ctx, SSH2_CIPHER_T(algo), int encrypt,
+     /* size of AT, if present */
+     const int authenticationtag = IS_LAST(firstlast) ? authlen : 0;
+     /* length to encrypt */
+-    const int cryptlen = (unsigned int)blocksize - aadlen - authenticationtag;
++    int cryptlen;
+ 
+     (void)algo;
+ 
+-    assert(blocksize <= sizeof(buf));
+-    assert(cryptlen >= 0);
++    /* The working buffer is fixed-size. Reject a span that cannot fit, and
++       a span smaller than the AAD plus authentication tag (that subtraction
++       would wrap and walk off buf). */
++    if(blocksize > sizeof(buf) ||
++       blocksize < (size_t)aadlen + (size_t)authenticationtag)
++        return 1;
++
++    cryptlen = (int)(blocksize - (size_t)aadlen - (size_t)authenticationtag);
+ 
+ #if LIBSSH2_AES_GCM
+     /* First block */
+@@ -1017,7 +1023,21 @@ int ssh2_cipher_crypt(ssh2_cipher_ctx *ctx, SSH2_CIPHER_T(algo), int encrypt,
+         /* Copy en/decrypted data back to the caller.
+            The first aadlen should not be touched because they were not
+            encrypted and are unmodified. */
+-        memcpy(block + aadlen, buf + aadlen, cryptlen);
++        if(IS_LAST(firstlast) && is_aesgcm && !encrypt) {
++            unsigned char finalbuf[16 + 4];
++            size_t i;
++
++            for(i = 0; i < (size_t)cryptlen; i++)
++                finalbuf[i] = buf[aadlen + i];
++            for(i = 0; i < (size_t)authenticationtag; i++)
++                finalbuf[(size_t)cryptlen + i] =
++                    block[blocksize - (size_t)authenticationtag + i];
++            memcpy(block + aadlen, finalbuf, (size_t)cryptlen);
++            memcpy(block + blocksize - (size_t)authenticationtag,
++                   finalbuf + cryptlen, (size_t)authenticationtag);
++        }
++        else
++            memcpy(block + aadlen, buf + aadlen, (size_t)cryptlen);
+         rc = !ret;
+     }
+ 

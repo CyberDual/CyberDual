@@ -1,0 +1,42 @@
+diff --git a/src/base/ftstroke.c b/src/base/ftstroke.c
+index 064c94f2f..bf161734f 100644
+--- a/src/base/ftstroke.c
++++ b/src/base/ftstroke.c
+@@ -1875,7 +1875,7 @@
+     }
+ 
+     /* don't try to end the path if no segments have been generated */
+-    if ( stroker->first_point )
++    if ( stroker->first_point && stroker->line_length >= 0 )
+       goto Exit;
+ 
+     if ( stroker->subpath_open )
+@@ -2083,10 +2083,26 @@
+       first = last + 1;
+       last  = outline->contours[n];
+ 
+-      /* skip empty points; we don't stroke these */
+-      if ( last <= first )
++      /* skip empty and completely degenerate contours */
++      if ( last < first )
+         continue;
+ 
++      if ( last > first )
++      {
++        FT_Int  point_index;
++
++
++        for ( point_index = first + 1; point_index <= last; point_index++ )
++          if ( outline->points[point_index].x != outline->points[first].x ||
++               outline->points[point_index].y != outline->points[first].y )
++            break;
++
++        if ( point_index > last )
++          continue;
++      }
++
++      stroker->line_length = ( last == first ) ? -1 : 0;
++
+       limit = outline->points + last;
+ 
+       v_start = outline->points[first];

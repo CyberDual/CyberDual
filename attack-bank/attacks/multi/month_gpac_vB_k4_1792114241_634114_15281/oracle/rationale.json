@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "37599b985d9258c399a5a02ff99085bebb5c741f",
+      "edited_message": "Reject invalid CENC IV metadata before decryption\n\nValidate key records and IV sizes before configuring the decrypter. Check multikey SAI indices against the current declared key count so key-info changes cannot expose undeclared trailing records.\n\nSize the PIFF track-encryption box to its stored key record \u2014 algorithm id, IV size and KID \u2014 instead of the aligned in-memory object.\n\nKeep the shared validator available without ISO media support and add regression coverage for valid and malformed IV metadata.",
+      "patch": "diff --git a/src/isomedia/box_code_drm.c b/src/isomedia/box_code_drm.c\nindex a7f33f7..2fff640 100644\n--- a/src/isomedia/box_code_drm.c\n+++ b/src/isomedia/box_code_drm.c\n@@ -954,7 +954,12 @@ GF_Err tenc_box_size(GF_Box *s)\n \n GF_Box *piff_tenc_box_new()\n {\n-\tISOM_DECL_BOX_ALLOC(GF_PIFFTrackEncryptionBox, GF_ISOM_BOX_TYPE_UUID);\n+\tGF_PIFFTrackEncryptionBox *tmp;\n+\tu32 alloc_size = (u32) offsetof(GF_PIFFTrackEncryptionBox, key_info) + 20;\n+\ttmp = (GF_PIFFTrackEncryptionBox *) gf_malloc(alloc_size);\n+\tif (!tmp) return NULL;\n+\tmemset(tmp, 0, alloc_size);\n+\ttmp->type = GF_ISOM_BOX_TYPE_UUID;\n \ttmp->internal_4cc = GF_ISOM_BOX_UUID_TENC;\n \treturn (GF_Box *)tmp;\n }\n"
+    },
+    {
+      "sha": "f2140655528242445fd24992c709817189d1b789",
+      "edited_message": "Fix PIFF default key-info size\n\nThe PIFF default-info getter reports 19 bytes for a 20-byte key record. This truncates the advertised KID and causes CENC validation to reject valid PIFF streams.\n\nReturn the key-info array's size. When the per-sample IV size is zero, count the constant-IV size byte that follows the KID, as the tenc default-info length does.\n\nAdd a regression test that creates PIFF protection through the public API and checks the returned size, record contents, and validation.\n\nVerify valid PIFF playback, unchanged PIFF+CENC decryption output, and all 13 existing CLI reproduction cases.",
+      "patch": "diff --git a/src/isomedia/drm_sample.c b/src/isomedia/drm_sample.c\nindex a8066e1..65ba1cc 100644\n--- a/src/isomedia/drm_sample.c\n+++ b/src/isomedia/drm_sample.c\n@@ -1786,7 +1786,11 @@ void gf_isom_cenc_get_default_info_internal(GF_TrackBox *trak, u32 sampleDescrip\n \t} else if (sinf && sinf->info && sinf->info->piff_tenc) {\n \t\tif (default_IsEncrypted) *default_IsEncrypted = GF_TRUE;\n \t\tif (key_info) *key_info = sinf->info->piff_tenc->key_info;\n-\t\tif (key_info_size) *key_info_size = sizeof(sinf->info->piff_tenc->key_info);\n+\t\tif (key_info_size) {\n+\t\t\t*key_info_size = sizeof(sinf->info->piff_tenc->key_info);\n+\t\t\tif (!sinf->info->piff_tenc->key_info[3])\n+\t\t\t\t(*key_info_size)++;\n+\t\t}\n \t\t//set default value, overwritten below\n \t\tif (container_type) *container_type = GF_ISOM_BOX_UUID_PSEC;\n \t} else {\n"
+    }
+  ],
+  "coupling": "The overflowing read is not in either edited diff. gf_cenc_validate_key_info, moved unchanged by 37599b9, reads the constant-IV size at the first byte after a parsed single-key record once key_info_size reaches that index. 37599b9 allocates the PIFF tenc box to offsetof(key_info)+20, the stored algorithm/IV/KID record, instead of sizeof(GF_PIFFTrackEncryptionBox), which drops the 4-byte alignment tail after the array. Every access that commit still performs stays inside those 20 bytes, and the unedited f214065 getter reports exactly 20, so a zero per-sample IV is rejected before the following byte is touched. f214065 still returns sizeof(key_info) for the 8- and 16-byte IV sizes its regression test covers; when the per-sample IV size is 0 it counts one extra byte, the constant-IV size the tenc getter already accounts for. On a sizeof allocation that byte sits in the alignment tail, so the validator read does not fault. key_info[20] is therefore inside the historical object and one byte past the record-sized object, and the length is 21 only after f214065. Replaying either edited commit alone leaves this input clean. A correct fix has to reconcile the two contracts because the failing access is in neither hunk. Changing only the allocation diff leaves f214065 reporting a length the record-sized box does not contain; changing only the length diff leaves 37599b9's record-sized box in place for any caller that still counts the constant-IV byte. The overflow is the composition, so neither diff can be repaired in isolation without the other commit's contract.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "gf_isom_set_cenc_protection/gf_isom_cenc_get_default_info/gf_cenc_validate_key_info",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

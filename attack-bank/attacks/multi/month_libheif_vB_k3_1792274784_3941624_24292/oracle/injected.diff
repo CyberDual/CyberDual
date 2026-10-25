@@ -1,0 +1,60 @@
+diff --git a/libheif/color-conversion/alpha.cc b/libheif/color-conversion/alpha.cc
+index b585a7e3..b2994622 100644
+--- a/libheif/color-conversion/alpha.cc
++++ b/libheif/color-conversion/alpha.cc
+@@ -134,19 +134,19 @@ Op_flatten_alpha_plane<Pixel>::state_after_conversion(const ColorState& input_st
+                                                       const heif_color_conversion_options& options,
+                                                       const heif_color_conversion_options_ext& options_ext) const
+ {
+-  // The colour planes and the alpha plane are all read through the single 'Pixel' type
+-  // below, so every plane must be stored with sizeof(Pixel) bytes per sample. A file may
+-  // declare a different depth per plane ('unci'); reading a one-byte plane as two-byte
+-  // samples would run past its end (GHSA-r7gr-2xm2-23wf), and a plane wider than two
+-  // bytes cannot be read through either instance. Decline anything else.
+-  if (!input_state.all_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel)))) {
++  // The colour planes are read through the single 'Pixel' type below. For a luma-only
++  // image, the alpha plane can be carried through the conversion at its own width.
++  bool luma_only = input_state.chroma == heif_chroma_monochrome;
++  if (!input_state.color_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel))) ||
++      (!luma_only && !input_state.all_channels_have_bytes_per_sample(static_cast<int>(sizeof(Pixel))))) {
+     return {};
+   }
+ 
+-  // The colour planes are converted to RGB at one common depth and the alpha plane is
+-  // composited at that depth, so all of them have to agree (0 = the colour planes differ).
++  // The colour planes are converted to RGB at one common depth. A luma-only image can
++  // carry its alpha plane at another depth through the conversion.
+   int color_bpp = input_state.get_uniform_color_bits_per_pixel();
+-  if (color_bpp == 0 || (input_state.has_alpha() && input_state.bits_per_pixel_alpha != color_bpp)) {
++  if (color_bpp == 0 ||
++      (input_state.has_alpha() && input_state.bits_per_pixel_alpha != color_bpp && !luma_only)) {
+     return {};
+   }
+ 
+@@ -260,22 +260,21 @@ Op_flatten_alpha_plane<Pixel>::convert_colorspace(const std::shared_ptr<const He
+                  "Op_flatten_alpha_plane: image has no alpha plane"};
+   }
+ 
+-  // The colour planes are converted at, and the alpha plane is composited at, one common depth
+-  // through the 'Pixel' type of this instance.
++  // The colour planes are converted through the 'Pixel' type of this instance. The
++  // alpha plane of a luma-only image keeps its own sample width until it is composited.
+   int color_bpp = input_state.get_uniform_color_bits_per_pixel();
+   int bpp_alpha = input_raw->get_bits_per_pixel(heif_channel_Alpha);
+ 
+   if (color_bpp == 0 ||
+-      bpp_alpha != color_bpp ||
+       bytes_per_sample_for_bit_depth(color_bpp) != static_cast<int>(sizeof(Pixel))) {
+     return Error{heif_error_Unsupported_feature,
+                  heif_suberror_Unsupported_color_conversion,
+-                 "Op_flatten_alpha_plane: colour and alpha planes must share one bit depth"};
++                 "Op_flatten_alpha_plane: invalid colour plane bit depth"};
+   }
+ 
+   // See composite_plane(): the composite accumulates in 32 bits, which is exact for samples
+   // of up to 16 bits. Reject anything wider instead of overflowing.
+-  if (color_bpp > 16) {
++  if (color_bpp > 16 || bpp_alpha > 16) {
+     return Error{heif_error_Unsupported_feature,
+                  heif_suberror_Unsupported_bit_depth,
+                  "Alpha compositing is not supported for images with more than 16 bits per sample."};

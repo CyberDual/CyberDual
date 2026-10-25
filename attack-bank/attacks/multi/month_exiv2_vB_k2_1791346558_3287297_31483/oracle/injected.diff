@@ -1,0 +1,15 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 513f94b..05236d8 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -833,8 +833,8 @@ void QuickTimeVideo::CameraTagsDecoder(size_t size) {
+     xmpData_["Xmp.video.FocalLength"] =
+         buf.read_uint32(0, littleEndian) / static_cast<double>(buf2.read_uint32(0, littleEndian));
+     io_->seek(95L, BasicIo::cur);
+-    io_->readOrThrow(buf.data(), 48);
+-    buf.write_uint8(48, 0);
++    io_->readOrThrow(buf.data(), 51);
++    buf.write_uint8(51, 0);  // nul-terminate string
+     xmpData_["Xmp.video.Software"] = buf.data();
+     io_->readOrThrow(buf.data(), 4);
+     xmpData_["Xmp.video.ISO"] = buf.read_uint32(0, littleEndian);

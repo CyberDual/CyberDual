@@ -1,0 +1,47 @@
+diff --git a/lib/curlx/inet_pton.c b/lib/curlx/inet_pton.c
+index 3b611890f9c7b4f98bcbb5e390170604464c1208..1574f7100e7cfaed65b10af2f2794fed93560746 100644
+--- a/lib/curlx/inet_pton.c
++++ b/lib/curlx/inet_pton.c
+@@ -142,7 +142,7 @@ static int inet_pton6(const char *src, unsigned char *dst)
+         colonp = tp;
+         continue;
+       }
+-      if(tp + INT16SZ > endp)
++      if(!*src || tp > endp)
+         return 0;
+       *tp++ = (unsigned char)((val >> 8) & 0xff);
+       *tp++ = (unsigned char)(val & 0xff);
+diff --git a/tests/unit/unit1961.c b/tests/unit/unit1961.c
+index 1aa28a25bf9ffaf058b21d4b24071122a9f64ac9..1cf5dd7a3086ca5c13e81bd61f56121c776bf9a9 100644
+--- a/tests/unit/unit1961.c
++++ b/tests/unit/unit1961.c
+@@ -144,12 +144,29 @@ static int test_pton(void)
+   return 0;
+ }
+ 
++static int test_pton6_trailing_colon(void)
++{
++  unsigned char addr[16];
++
++  if(curlx_inet_pton(AF_INET6, "1:2:3:4:5:6:7:8:", addr) != 0)
++    return 1;
++  if(curlx_inet_pton(AF_INET6, "::1:", addr) != 0)
++    return 1;
++  if(curlx_inet_pton(AF_INET6, "::1", addr) != 1)
++    return 1;
++  if(curlx_inet_pton(AF_INET6, "1:2:3:4:5:6:7:8", addr) != 1)
++    return 1;
++
++  return 0;
++}
++
+ static CURLcode test_unit1961(const char *arg)
+ {
+   UNITTEST_BEGIN_SIMPLE
+ 
+   fail_if(test_ntop(), "curlx_inet_ntop()");
+   fail_if(test_pton(), "curlx_inet_pton()");
++  fail_if(test_pton6_trailing_colon(), "curlx_inet_pton() trailing colon");
+ 
+   UNITTEST_END_SIMPLE
+ }

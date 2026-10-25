@@ -1,0 +1,83 @@
+diff --git a/src/hb-aat-layout-common.hh b/src/hb-aat-layout-common.hh
+index 1a35363c7a3fd4dc37265a8d78a42a328c283c2f..04e4f42849b56304491105d62b45213ba2a2ef38 100644
+--- a/src/hb-aat-layout-common.hh
++++ b/src/hb-aat-layout-common.hh
+@@ -182,6 +182,36 @@ struct hb_aat_apply_context_t :
+       buffer_glyph_set->add_array (glyphs, count);
+     for (unsigned int i = 0; i < count; i++)
+     {
++      /* End-of-text has no current input glyph. Copy the previous output
++       * glyph into a newly reserved slot and apply insertion metadata there. */
++      if (buffer->idx == buffer->len)
++      {
++	hb_glyph_info_t *base = buffer->out_len ? &buffer->prev () : nullptr;
++	if (unlikely (!buffer->make_room_for (0, 1))) return false;
++
++	hb_glyph_info_t &slot = buffer->out_info[buffer->out_len];
++	if (base)
++	  slot = *base;
++	else
++	  hb_memset (&slot, 0, sizeof (slot));
++	slot.codepoint = glyphs[i];
++	if (glyphs[i] == DELETED_GLYPH)
++	{
++	  buffer->scratch_flags |= HB_BUFFER_SCRATCH_FLAG_AAT_HAS_DELETED;
++	  _hb_glyph_info_set_aat_deleted (&slot);
++	}
++	else
++	{
++#ifndef HB_NO_OT_LAYOUT
++	  if (has_glyph_classes)
++	    _hb_glyph_info_set_glyph_props (&slot,
++					    gdef.get_glyph_props (glyphs[i]));
++#endif
++	}
++	buffer->out_len++;
++	continue;
++      }
++
+       if (glyphs[i] == DELETED_GLYPH)
+       {
+         buffer->scratch_flags |= HB_BUFFER_SCRATCH_FLAG_AAT_HAS_DELETED;
+diff --git a/test/shape/data/in-house/fonts/5f1d25b1f66fc4ef6d55b7c98f34b045b4adaa9d.ttf b/test/shape/data/in-house/fonts/5f1d25b1f66fc4ef6d55b7c98f34b045b4adaa9d.ttf
+new file mode 100644
+index 0000000000000000000000000000000000000000..fbdcf55e023ce6d323a93cc90cd2ba1866b1ec28
+GIT binary patch
+literal 1976
+zcmbVNYiv_x7=FI*Y%L40*|Z&a2|2Y;FyUr93eL%8=;Sh1x56B^jl)(}%x-B5Y>A?Y
+zps)lPza-*}5R4(g%#aX6f(eAEq=W<$B>Zp)q6TAJ_yHP2cIxw<b_j+a#_#0od->kW
+z^S<XjU!eeu$6GKkHx{20Ugt@^2dD+qZffncdaw~UDW9hNVtYs5mV3K@{Tk3d>PC_Y
+zt8L1+i_Y;(&Z9{xT<@x%$lu|fn(WN<`m5C!v^^+tM|Z2GC+hd<PZ7ROtG5TeSj_Xu
+zl+DiWRIeGXJ_EQXP(I#ebtV>G-}p9AR79W4J>BUHR^U3|y2|qk2zKuH%ZFcRDXY2*
+z!?;BauI$`n3jO7y^j#qLhaS|IDZ2A%$<fESm1B+ih}h{tCz7yZtHjZiAi%!JQuLjI
+zVsdSc%mBtRH9*Zc-LIRdTbZY-8DTY3Y{d9cYfatqrL5V+TEirU^Td3fc2Wz}9W9+S
+ziRo1|OI-aXcM6tXjWE$#dM5V@6zQngI~55+A8|?qABr%SbQ~XPvWb_lHkWg_C1}d!
+zayN2kb3^%T)XMVni6V&s4B;!>z@PMNCYHZ+mQme+H{c0O^8`H2>X4mKN&AA%jz%N8
+zZS+GY2lP&Tk#=Rkw17LPA}VNvLepJtcSK#Ve_pd*O{!Pr8_&9Z?y|?~e;gjx7e^zy
+z*thWUsySDg!D1P!nX43&q;eH5_xoIKzx)P+9&b20uObu-`aO{Xr)Kr<uBrZbSLWWe
+zre*Q<+XvRg8k+a&Y(vYU_=Mso2dvk0*1q&yRb|CZ`$Wy+swJ#8%qghj6ijBlF2Aol
+z5}xmOxq?rJ=2b+ak#PAWcPOa*yWZ$q)jXrI^6;mx9O{^#cxGy2t=|2?J9`d3RaaJe
+z?z7HMHkA8nr%Trb^B^&ggNK7HI2ptrB2EXU9z1vAo9~aFZt35(%{p-4)G3`kd2H{V
+z(M$XH$(yFPx=ru#K*SU9k3E*!Z(mSBdsxlW+1L+txfpF_@@w+80mBG-jfmG9F}&*f
+zmuFgjzt%SNdCTyKirQI~QH}O3HQ7FH_e%~g9d!^wMGQ~SLr3+UHL`AGGtt;9?cbC~
+zow5&$Ay9&pOi)n?`6})_uP~KTp4WUon+kjpzrC&k?;?Msz?a|&Tq*Dq)fC(=@TI8J
+zr3Ky#m)?M-=td9vm~|`KIeQtHIL003^gfFP<km35R<zQt4GGMoW;r#jn2ptx)AU${
+z7#h$-IZ4YDHGSAZZadE#xZAM}9qe`LKY5t{!)MmNeB#WOCdMSGiE3uHu!BehfnZEi
+zTf>UFoO<KrwvgN5U`+5VZ_z>8O0O>3Cs@77I=Y-Lq{wF&No?cnM=fcLeH7aVBiB9@
+z!9*i1QjE6M$!)U3vz=`|fa~F`V^}P9)1sgBaWj7<^A5^_!lX{JE<wG+XHZEh?=nM7
+zm6*dvx*_klhq^Sg3Wg5SZfe_k9;1KleV=r}OJ*Zqe>ZDSIo<fj=V7Gj`%z{U>S`jQ
+zwfUQgxBp4b)T5S6y21ILh7hJ>2A=1n%Z-`;b`<GRZqYd3pithPa+Av0*m~W}U-Y7L
+zar1wXJpd;dtV-@+gI{p5^Jk#wDgPsKQ|BK!f!I57`Ae!6o6v<D+bB?GriTg2<Rqf&
+EZ@^A+m;e9(
+
+literal 0
+HcmV?d00001
+
+diff --git a/test/shape/data/in-house/tests/aat-morx.tests b/test/shape/data/in-house/tests/aat-morx.tests
+index b1b5079e05d75c6b97962a69c313d03c971d7078..9c53daaed18b67d7c44ace1e28d5641613af7907 100644
+--- a/test/shape/data/in-house/tests/aat-morx.tests
++++ b/test/shape/data/in-house/tests/aat-morx.tests
+@@ -1,2 +1,3 @@
+ ../fonts/MORXTwentyeight.ttf;;U+0041,U+0078,U+0045,U+0079,U+0044,U+0079,U+0079;[A_E_D=0+1394|x=0+529|y=0+510|y=5+510|y=6+510]
+ ../fonts/e6185e88b04432fbf373594d5971686bb7dd698d.ttf;;U+0B95,U+0BCD,U+0020,U+0B9A,U+0BCD;[ka-tamil=0+825|pulli-tamil=0@-392,0+0|space=2+260|ca-tamil=3+723|pulli-tamil=3@-320,0+0]
++../fonts/5f1d25b1f66fc4ef6d55b7c98f34b045b4adaa9d.ttf;;U+0041;[A=0+639|B=0+626|C=0+596|E=0+556]

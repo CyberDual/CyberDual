@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-476",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "44b94d53dbf07405d711f8c153c59d119893bedd",
+  "parent_sha": "44b94d53dbf07405d711f8c153c59d119893bedd",
+  "project": "libwebp",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/webmproject/libwebp",
+  "repo_url": "https://github.com/webmproject/libwebp",
+  "source": "reuse",
+  "target": "libwebp",
+  "task": "SharpYuvConvertWithOptions (libsharpyuv public API) called with invalid SharpYuvOptions dereferences NULL / overflows 32b at the pinned base; fix = 'Validate SharpYuvOptions and prevent 32b overflow'.",
+  "task_iid": "libwebp__sharpyuv_invalid_args_null_deref",
+  "vuln_desc": "SharpYuvConvertWithOptions (libsharpyuv public API) called with invalid SharpYuvOptions dereferences NULL / overflows 32b at the pinned base; fix = 'Validate SharpYuvOptions and prevent 32b overflow'."
+}

@@ -1,0 +1,65 @@
+diff --git a/src/truetype/ttgxvar.c b/src/truetype/ttgxvar.c
+index 2b25680b9..4b03fc827 100644
+--- a/src/truetype/ttgxvar.c
++++ b/src/truetype/ttgxvar.c
+@@ -2135,8 +2135,13 @@
+ 
+   Exit:
+     if ( error && blend_created )
++    {
+       tt_done_blend( FT_FACE( face ) );
+ 
++      /* the face may outlive the private blend */
++      face->blend = NULL;
++    }
++
+     return error;
+ 
+   Fail2:
+@@ -5166,9 +5171,6 @@
+       FT_FREE( blend->tuplecoords );
+       FT_FREE( blend->glyphoffsets );
+       FT_FREE( blend );
+-
+-      /* the face may outlive its blend (e.g., after a failed setup) */
+-      ttface->blend = NULL;
+     }
+   }
+ 
+diff --git a/src/truetype/ttobjs.c b/src/truetype/ttobjs.c
+index 8c76e23db..78c2c3b8b 100644
+--- a/src/truetype/ttobjs.c
++++ b/src/truetype/ttobjs.c
+@@ -853,6 +853,7 @@
+ 
+ #ifdef TT_CONFIG_OPTION_GX_VAR_SUPPORT
+     tt_done_blend( ttface );
++    face->blend = NULL;
+ #endif
+   }
+ 
+diff --git a/src/truetype/ttvarc.c b/src/truetype/ttvarc.c
+index 50d08bcb9..f3de105eb 100644
+--- a/src/truetype/ttvarc.c
++++ b/src/truetype/ttvarc.c
+@@ -3050,8 +3050,18 @@
+         else if ( error                                     &&
+                   !FT_HAS_MULTIPLE_MASTERS( (FT_Face)face ) )
+         {
+-          if ( !face->blend )
+-            (void)tt_var_init_gvar( (FT_Face)face );
++          if ( !face->blend || !face->blend->glyphoffsets )
++          {
++            FT_Error  gvar_error = tt_var_init_gvar( (FT_Face)face );
++
++
++            /* a present-but-unusable 'gvar' leaves nothing to inherit */
++            if ( gvar_error                             &&
++                 gvar_error != FT_Err_Table_Missing     &&
++                 face->blend                            &&
++                 !face->blend->mmvar                    )
++              tt_done_blend( (FT_Face)face );
++          }
+ 
+           if ( face->blend && !face->blend->mmvar )
+           {

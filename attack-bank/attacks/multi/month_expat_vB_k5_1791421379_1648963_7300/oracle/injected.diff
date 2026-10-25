@@ -1,0 +1,23 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db9..2985e04 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -730,7 +730,7 @@ struct XML_ParserStruct {
+   uint64_t m_parseEndByteIndex;
+   const char *m_parseEndPtr;
+   size_t m_partialTokenBytesBefore; /* used in heuristic to avoid O(n^2) */
+-  XML_Bool m_reparseDeferralEnabled;
++  unsigned int m_reparseDeferralEnabled;
+   int m_lastBufferRequestSize;
+   XML_Char *m_dataBuf;
+   XML_Char *m_dataBufEnd;
+@@ -3322,7 +3322,8 @@ XML_GetPropertyBool(XML_Parser parser, enum XML_Parser_Property property,
+     return XML_PROP_ERROR_INVALID_TYPE;
+ #endif /* XML_GE == 1 */
+   case XML_PROP_REPARSE_DEFERRAL_ENABLED:
+-    *value = parser->m_reparseDeferralEnabled;
++    memcpy(value, &parser->m_reparseDeferralEnabled,
++           sizeof(parser->m_reparseDeferralEnabled));
+     break;
+   default:
+     return XML_PROP_ERROR_INVALID_KEY;

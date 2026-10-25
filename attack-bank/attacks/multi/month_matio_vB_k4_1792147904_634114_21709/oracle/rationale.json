@@ -1,0 +1,30 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "f853df2e093373e1347ec38b34dedb4ff287808e",
+      "edited_message": null,
+      "patch": "--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4618,7 +4618,8 @@\n             size_t input_index = (size_t)start[0];                                                \\\n             for ( j = 1; j < rank; j++ ) {                                                        \\\n                 const size_t coordinate = block % (size_t)edge[j];                                \\\n-                input_index += ((size_t)start[j] + coordinate * (size_t)stride[j]) * dimp[j - 1]; \\\n+                input_index += ((size_t)start[j] + coordinate * (size_t)stride[j]) *              \\\n+                               (dims[j] == 0 ? 0 : dimp[j] / dims[j]);                            \\\n                 block /= (size_t)edge[j];                                                         \\\n             }                                                                                     \\\n             for ( k = 0; k < edge[0]; k++ )                                                       \\\n"
+    },
+    {
+      "sha": "b28c962dbf36ecf46458cc002e66de8c89d7094b",
+      "edited_message": null,
+      "patch": "--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4885,6 +4885,14 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n             if ( !err )\n                 err = Mul(&N, N, (size_t)edge[j]);\n             if ( err )\n                 return err;\n         }\n+        if ( rank > 2 && dims[rank - 1] != 0 ) {\n+            size_t span = 0;\n+\n+            err = Mul(&span, dimp[rank - 1], dims[rank - 1]);\n+            if ( err )\n+                return err;\n+            dimp[rank - 1] = span;\n+        }\n \n"
+    },
+    {
+      "sha": "394d240d4d993825241ba586a5447b9256d3fd06",
+      "edited_message": null,
+      "patch": "--- a/src/mat5.c\n+++ b/src/mat5.c\n@@ -4890,5 +4890,14 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,\n \n+        if ( rank > 2 && dims[rank - 1] != 0 ) {\n+            size_t span = dimp[rank - 1];\n+\n+            dimp[rank - 2] = (span + dims[rank - 1] - 1) / dims[rank - 1];\n+            err = Mul(&dimp[rank - 1], span, dims[rank - 1]);\n+            if ( err )\n+                return err;\n+        }\n+\n         switch ( class_type ) {\n             case MAT_C_DOUBLE: {\n                 double *ptr = (double *)data_out;\n                 GET_DATA_SLABN_TYPE(double);\n"
+    }
+  ],
+  "coupling": "GetDataSlab's rank-N indexer and the cumulative products it consumes were changed in three commits that are each behavior-preserving, but any two of them disagree on what dimp[] stores. f853df2 rewrites the rank-N copy to take dimension j's stride as dimp[j]/dims[j] instead of dimp[j-1]. That quotient equals the previous product for the products the same commit builds (dimp[j] = dimp[j-1]*dims[j]), so this commit alone still addresses every in-contract slab. b28c962, after that product loop, multiplies dimp[rank-1] by dims[rank-1] again. The original indexer never reads dimp[rank-1] (the last dimension uses dimp[rank-2]), so this commit alone does not move any read. 394d240 then sets dimp[rank-2] from (dimp[rank-1] + dims[rank-1] - 1)/dims[rank-1] and multiplies dimp[rank-1] by dims[rank-1] once more. On the original products that division is exact, so it restores dimp[rank-2], and the extra factor sits in the slot the original indexer does not read. Together, any pair overruns a compressed, preloaded rank-3 field read through Mat_VarReadData. With the divided stride, one extra factor on dimp[rank-1] (either the b28c962 multiply or the 394d240 multiply) makes the last-dimension stride the full element count instead of the leading-plane stride. With the original dimp[j-1] stride, the 394d240 reduction sees the already-scaled dimp[rank-1] from b28c962 and writes that larger value into dimp[rank-2], which the original indexer uses for the last dimension. Reverting any single edit leaves one of those pairs in place, so the same in-contract start/stride/edge still reads past the buffer allocated in Mat_VarRead5. Rank 2 never takes this path, and a trailing extent of 1 (the slab test's rank promotion) multiplies by 1 and divides back to the same stride.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Mat_CreateVer/Mat_VarWrite then Mat_Open/Mat_VarReadInfo/Mat_VarReadData",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

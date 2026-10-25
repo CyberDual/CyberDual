@@ -1,0 +1,31 @@
+diff --git a/expat/lib/internal.h b/expat/lib/internal.h
+index 8665537..833c722 100644
+--- a/expat/lib/internal.h
++++ b/expat/lib/internal.h
+@@ -116,11 +116,11 @@
+ #  define EXPAT_ALLOC_TRACKER_ACTIVATION_THRESHOLD_DEFAULT                     \
+     67108864 // 64 MiB, 2^26
+ 
+-// NOTE: If function expat_alloc was user facing, EXPAT_MALLOC_ALIGNMENT would
+-//       have to take sizeof(long double) into account
++// Keep allocations aligned for scalar and pointer types.
+ union expat_align {
+   long long l;
+   void *p;
++  long double ld;
+ };
+ #  define EXPAT_MALLOC_ALIGNMENT sizeof(union expat_align)
+ #  define EXPAT_MALLOC_PADDING ((EXPAT_MALLOC_ALIGNMENT) - sizeof(size_t))
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db9..b137467 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -1000,7 +1000,7 @@ expat_realloc(XML_Parser parser, void *ptr, size_t size, int sourceLine) {
+ 
+   // Extract original size (to the eyes of the caller) and the original
+   // pointer returned by malloc/realloc
+-  void *mallocedPtr = (char *)ptr - EXPAT_MALLOC_PADDING - sizeof(size_t);
++  void *mallocedPtr = (char *)ptr - sizeof(size_t);
+   const size_t prevSize = *(size_t *)mallocedPtr;
+ 
+   // Classify upcoming change

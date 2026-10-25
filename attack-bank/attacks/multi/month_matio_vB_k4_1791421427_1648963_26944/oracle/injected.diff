@@ -1,0 +1,20 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 5d3bbb2..d4a406e 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -4809,9 +4809,12 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+     }
+ 
+     if ( rank == 2 ) {
+-        if ( (stride[0] == 1 && (size_t)edge[0] == dims[0]) &&
+-             (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) )
+-            memcpy(data_out, data_in, nbytes);
++        if ( start[0] == 0 && start[1] >= 0 && edge[1] > 0 && dims[1] > 0 &&
++             stride[0] == 1 && (size_t)edge[0] == dims[0] && stride[1] == 1 &&
++             same_type == 1 && nbytes % dims[1] == 0 ) {
++            const size_t column_bytes = nbytes / dims[1];
++            memcpy(data_out, (const char *)data_in + (size_t)start[1] * column_bytes, nbytes);
++        }
+         else {
+             int i, j;
+ 

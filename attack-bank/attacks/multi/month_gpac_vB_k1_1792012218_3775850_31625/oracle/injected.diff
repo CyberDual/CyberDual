@@ -1,0 +1,47 @@
+diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c
+index 25f38b2..df0d78e 100644
+--- a/src/media_tools/crypt_tools.c
++++ b/src/media_tools/crypt_tools.c
+@@ -111,6 +111,21 @@ static char *crypt_xml_get_text(const GF_XMLNode *node)
+ 	return NULL;
+ }
+ 
++static char *crypt_xml_get_cdata(const GF_XMLNode *node)
++{
++	u32 i;
++	GF_XMLNode *child;
++	if (!node || !node->content) return NULL;
++	for (i=0; i<gf_list_count(node->content); i++) {
++		child = (GF_XMLNode *) gf_list_get(node->content, i);
++		if (child && (child->type == GF_XML_CDATA_TYPE)) {
++			if (strlen(child->name))
++				return child->name;
++		}
++	}
++	return NULL;
++}
++
+ static GF_Err crypt_cpix_decode_b64(const char *input, u8 **out_data, u32 *out_size)
+ {
+ 	u32 i, len = 0, decoded;
+@@ -551,6 +566,20 @@ static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)
+ 					continue;
+ 
+ 				playlist = crypt_xml_get_attr(hls_node, "playlist");
++
++				//we also accept a raw signaling line, typically authored as a CDATA section
++				//to avoid the base64 wrapping, in which case we use it as-is
++				{
++					char *raw = crypt_xml_get_cdata(hls_node);
++					if (raw && (!strncmp(raw, "#EXT-X-KEY:", 10) || !strncmp(raw, "#EXT-X-SESSION-KEY:", 19))) {
++						if (loaded_tci->keys[0].hls_info) gf_free(loaded_tci->keys[0].hls_info);
++						loaded_tci->keys[0].hls_info = raw;
++						raw = NULL;
++						hls_fairplay = is_fairplay;
++						continue;
++					}
++				}
++
+ 				text = crypt_xml_get_text(hls_node);
+ 				if (!text)
+ 					continue;

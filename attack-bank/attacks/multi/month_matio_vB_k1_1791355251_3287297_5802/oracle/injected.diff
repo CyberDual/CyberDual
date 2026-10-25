@@ -1,0 +1,75 @@
+diff --git a/src/mat.c b/src/mat.c
+index c46790a..fb82583 100644
+--- a/src/mat.c
++++ b/src/mat.c
+@@ -543,11 +543,18 @@ Add(size_t *res, size_t a, size_t b)
+     return MATIO_E_NO_ERROR;
+ }
+ 
++/* Fall back to the historical INT_MAX bound if nothing has already defined
++ * a (presumably more precise) bound for a validated element-count product.
++ */
++#if !defined(MATIO_MAX_EDGE_PRODUCT)
++#define MATIO_MAX_EDGE_PRODUCT ((size_t)INT_MAX)
++#endif
++
+ /** @brief Checks the product of the edge dimensions for overflow
+  *
+  * Validates that each edge is non-negative and that the product of the edge
+- * dimensions does not overflow and stays within @c INT_MAX, so that the result
+- * can be used as an @c int element count.
++ * dimensions does not overflow and stays within @c MATIO_MAX_EDGE_PRODUCT, the
++ * largest element count that could plausibly be allocated.
+  * @param rank Number of dimensions
+  * @param edge Number of elements to read per dimension
+  * @retval 0 on success
+@@ -562,12 +569,12 @@ CheckEdgeOverflow(int rank, const int *edge, size_t extra)
+             return MATIO_E_BAD_ARGUMENT;
+         }
+         err = Mul(&nElements, nElements, (size_t)edge[i]);
+-        if ( err || nElements > (size_t)INT_MAX ) {
++        if ( err || nElements > MATIO_MAX_EDGE_PRODUCT ) {
+             return MATIO_E_INDEX_TOO_BIG;
+         }
+     }
+     err = Mul(&nElements, nElements, extra);
+-    if ( err || nElements > (size_t)INT_MAX ) {
++    if ( err || nElements > MATIO_MAX_EDGE_PRODUCT ) {
+         return MATIO_E_INDEX_TOO_BIG;
+     }
+     return MATIO_E_NO_ERROR;
+diff --git a/src/matio_private.h b/src/matio_private.h
+index 36739ef..0234e88 100644
+--- a/src/matio_private.h
++++ b/src/matio_private.h
+@@ -267,6 +267,17 @@ EXTERN int InflateData(mat_t *mat, z_streamp z, void *buf, unsigned int nBytes);
+ #endif
+ 
+ /* mat.c */
++
++/** @brief Conservative upper bound on a validated element-count product
++ *
++ * The largest count of pointer-sized elements that could plausibly be
++ * allocated, used to bound products of user-supplied counts (e.g. object or
++ * edge counts) once they have already been checked not to overflow.
++ */
++#if !defined(MATIO_MAX_EDGE_PRODUCT)
++#define MATIO_MAX_EDGE_PRODUCT (((size_t)-1) / sizeof(matvar_t *))
++#endif
++
+ EXTERN mat_complex_split_t *ComplexCalloc(size_t nbytes);
+ EXTERN void ComplexFree(mat_complex_split_t *complex_data);
+ EXTERN enum matio_types ClassType2DataType(enum matio_classes class_type);
+diff --git a/src/mcos.c b/src/mcos.c
+index bc84298..a7f3b14 100644
+--- a/src/mcos.c
++++ b/src/mcos.c
+@@ -1541,6 +1541,8 @@ ResolveEncodedMCOS(mcos_subsystem_t *ss, matvar_t *matvar, int depth)
+         if ( Mul(&total_objs, total_objs, meta[dim_start + r]) )
+             return MATIO_E_INDEX_TOO_BIG;
+     }
++    if ( total_objs > MATIO_MAX_EDGE_PRODUCT )
++        return MATIO_E_INDEX_TOO_BIG;
+ 
+     obj_start = dim_start + ndims;
+     if ( obj_start + total_objs >= n )

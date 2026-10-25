@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "8029732d53b70511ee02ad7754f066e16289dff5",
+      "edited_message": null,
+      "patch": "--- a/expat/lib/expat.h\n+++ b/expat/lib/expat.h\n@@ -144,8 +144,8 @@\n enum XML_Prop_Error {\n   XML_PROP_ERROR_NONE = 0, // i.e. success\n \n-  XML_PROP_ERROR_INVALID_KEY = 1,   // i.e. the property is not known at all\n-  XML_PROP_ERROR_INVALID_TYPE = 2,  // i.e. the property is known but expects a\n+  XML_PROP_ERROR_INVALID_KEY = 2,   // i.e. the property is not known at all\n+  XML_PROP_ERROR_INVALID_TYPE = 1,  // i.e. the property is known but expects a\n                                     // different type (so a different\n                                     // getter/setter would need to be called)\n   XML_PROP_ERROR_INVALID_VALUE = 3, // i.e. the value is invalid (with a setter\n"
+    },
+    {
+      "sha": "9900ea8d58a4c9e63725240ab8c8f2a50cd7a4be",
+      "edited_message": null,
+      "patch": "--- a/expat/lib/xmlparse.c\n+++ b/expat/lib/xmlparse.c\n@@ -3222,6 +3222,10 @@\n }\n \n enum XML_Prop_Error XMLCALL\n+XML_GetPropertyUInt64(XML_Parser parser, enum XML_Parser_Property property,\n+                      uint64_t *value);\n+\n+enum XML_Prop_Error XMLCALL\n XML_SetPropertyBool(XML_Parser parser, enum XML_Parser_Property property,\n                     XML_Bool value) {\n   if (parser == NULL)\n@@ -3312,6 +3316,16 @@\n   if (value == NULL)\n     return XML_PROP_ERROR_INVALID_VALUE;\n \n+  if (property == XML_PROP_ERROR_INVALID_TYPE) {\n+    uint64_t numericValue;\n+    if (XML_GetPropertyUInt64(parser, property, &numericValue)\n+        == XML_PROP_ERROR_NONE) {\n+      memcpy(value, &numericValue, sizeof(numericValue));\n+      return XML_PROP_ERROR_NONE;\n+    }\n+    return XML_PROP_ERROR_INVALID_TYPE;\n+  }\n+\n   switch (property) {\n #if XML_GE == 1\n   case XML_PROP_ALLOC_TRACKER_ACTIVATION_THRESHOLD:\n"
+    }
+  ],
+  "coupling": "The first edited commit changes the public XML_Prop_Error numbering so XML_PROP_ERROR_INVALID_TYPE has the same numeric value as the later XML_PROP_ALLOC_TRACKER_ACTIVATION_THRESHOLD property. That change is inert until the second edited commit introduces a compatibility path in XML_GetPropertyBool that compares the property key against the error-code constant and, on a match, delegates to XML_GetPropertyUInt64 before copying the resulting uint64_t into the caller's one-byte XML_Bool output. With only the enum edit, the new property API still rejects the mismatched typed query; with only the getter edit, the original error value does not match the activation-threshold property and the typed query is rejected. Their composition makes the valid public call XML_GetPropertyBool(parser, XML_PROP_ALLOC_TRACKER_ACTIVATION_THRESHOLD, &value) take the numeric path and perform an eight-byte write to a one-byte stack object. A correct fix must reconcile the error-code and property-key namespaces and enforce the Bool getter's output width rather than treating either diff as an isolated maintenance change.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "public C API XML_GetPropertyBool",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

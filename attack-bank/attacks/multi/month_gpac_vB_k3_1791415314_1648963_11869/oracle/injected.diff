@@ -1,0 +1,36 @@
+diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c
+index 25f38b2..5aa1cb9 100644
+--- a/src/media_tools/crypt_tools.c
++++ b/src/media_tools/crypt_tools.c
+@@ -263,7 +263,7 @@ static GF_Err crypt_cpix_parse_pssh(const char *b64, GF_CryptDRMInfo *drm)
+ 	return GF_OK;
+ }
+ 
+-static char *crypt_cpix_hls_info(const char *b64)
++static char *crypt_cpix_hls_info(char *b64)
+ {
+ 	GF_Err e;
+ 	u8 *data = NULL;
+@@ -279,6 +279,11 @@ static char *crypt_cpix_hls_info(const char *b64)
+ 	memcpy(text, data, size);
+ 	text[size] = 0;
+ 	gf_free(data);
++	if (strstr(text, "URI=") && !strstr(text, "URI=\"")) {
++		memcpy(b64, text, size+1);
++		gf_free(text);
++		text = b64;
++	}
+ 	sep = strchr(text, ':');
+ 	if (sep && ((strstr(text, "#EXT-X-KEY:") == text) || (strstr(text, "#EXT-X-SESSION-KEY:") == text))) {
+ 		sep = strchr(sep+1, ',');
+@@ -290,8 +295,8 @@ static char *crypt_cpix_hls_info(const char *b64)
+ 	end = text + strlen(text);
+ 	while ((end > text) && isspace(end[-1])) end--;
+ 	*end = 0;
+-	if (!strstr(text, "URI=\"")) {
+-		gf_free(text);
++	if (!strstr(text, "URI=")) {
++		if (text != b64) gf_free(text);
+ 		return NULL;
+ 	}
+ 	return text;

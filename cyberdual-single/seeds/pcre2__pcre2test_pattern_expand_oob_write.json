@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-787",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "e19e76ad8e5bbdf8a22b69e0f408692329e1e516",
+  "parent_sha": "e19e76ad8e5bbdf8a22b69e0f408692329e1e516",
+  "project": "pcre2",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/PCRE2Project/pcre2",
+  "repo_url": "https://github.com/PCRE2Project/pcre2",
+  "source": "reuse",
+  "target": "pcre2",
+  "task": "pcre2test processing test input whose patterns use the /expand replicator syntax triggers an off-by-one heap write in the expand buffer (NOTE: pcre2test utility/driver, not libpcre2 core).",
+  "task_iid": "pcre2__pcre2test_pattern_expand_oob_write",
+  "vuln_desc": "pcre2test processing test input whose patterns use the /expand replicator syntax triggers an off-by-one heap write in the expand buffer (NOTE: pcre2test utility/driver, not libpcre2 core)."
+}

@@ -1,0 +1,46 @@
+diff --git a/src/pcre2posix.c b/src/pcre2posix.c
+index 401ad0a..b62fce9 100644
+--- a/src/pcre2posix.c
++++ b/src/pcre2posix.c
+@@ -433,6 +433,8 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t
+       return REG_INVARG;
+     so = (PCRE2_SIZE)pmatch[0].rm_so;
+     eo = (PCRE2_SIZE)pmatch[0].rm_eo;
++    /* The span is held in so/eo. The flag does not affect the match. */
++    eflags &= ~REG_STARTEND;
+   }
+   else
+   {
+@@ -440,6 +442,16 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t
+     eo = strlen(string);
+   }
+ 
++  if ((eflags & REG_STARTEND) == 0 && so > 0)
++  {
++    PCRE2_SIZE clen = strlen(string);
++    if (so > clen)
++      return REG_INVARG;
++  }
++
++  /* Offsets have been applied. The flag is not a match option. */
++  eflags &= ~REG_STARTEND;
++
+   rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, (eo - so), 0,
+                    options, md, NULL);
+ 
+@@ -449,6 +461,15 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t
+   {
+     size_t i;
+     PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(md);
++
++    /* Without an explicit end the subject is a C string. */
++    if ((eflags & REG_STARTEND) == 0)
++    {
++      size_t clen = strlen(string);
++      if ((size_t)so > clen)
++        return REG_INVARG;
++    }
++
+     if ((size_t)rc > nmatch)
+       rc = (int)nmatch;
+     for (i = 0; i < (size_t)rc; i++)

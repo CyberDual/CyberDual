@@ -1,0 +1,5 @@
+{
+ "credited_poc": "oracle/pocs/ntfs_truncated_attribute.c",
+ "fires_on": "the shipped tree if the defect is not repaired",
+ "grade": "ASan abort via the project public API, attested by harness/attested/supervisor.py"
+}

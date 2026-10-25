@@ -1,0 +1,45 @@
+diff --git a/src/isomedia/box_code_base.c b/src/isomedia/box_code_base.c
+index 05b5a02..8503d16 100644
+--- a/src/isomedia/box_code_base.c
++++ b/src/isomedia/box_code_base.c
+@@ -473,12 +473,15 @@ GF_Err prsl_box_read(GF_Box *s,GF_BitStream *bs)
+ 	if ((u64) ptr->entity_id_count > (u64) SIZE_MAX / sizeof(u32)) {
+ 		return GF_OUT_OF_MEM;
+ 	}
+-	if ((u64) ptr->entity_id_count > ptr->size / 4) {
++	if ((u64) ptr->entity_id_count > (ptr->size + 3) / 4) {
+ 		return GF_ISOM_INVALID_FILE;
+ 	}
+ 
+ 	if (ptr->entity_id_count) {
+-		ptr->entity_ids = (u32 *) gf_malloc(ptr->entity_id_count * sizeof(u32));
++		u32 id_bytes = ptr->entity_id_count * (u32) sizeof(u32);
++		if ((u64) id_bytes > ptr->size)
++			id_bytes = (u32) ptr->size;
++		ptr->entity_ids = (u32 *) gf_malloc(id_bytes ? id_bytes : sizeof(u32));
+ 		if (!ptr->entity_ids) return GF_OUT_OF_MEM;
+ 	}
+ 	for (i = 0; i < ptr->entity_id_count; i++) {
+diff --git a/src/isomedia/iff.c b/src/isomedia/iff.c
+index e1dd6e1..0eabb63 100644
+--- a/src/isomedia/iff.c
++++ b/src/isomedia/iff.c
+@@ -764,11 +764,17 @@ GF_Err grptype_box_read(GF_Box *s, GF_BitStream *bs)
+ 	ptr->group_id = gf_bs_read_u32(bs);
+ 	ptr->entity_id_count = gf_bs_read_u32(bs);
+ 
+-	if (ptr->entity_id_count > ptr->size / 4) return GF_ISOM_INVALID_FILE;
++	if (ptr->entity_id_count > (ptr->size + 3) / 4) return GF_ISOM_INVALID_FILE;
+ 
+ 	ptr->entity_ids = (u32 *) gf_malloc(ptr->entity_id_count * sizeof(u32));
+ 	if (!ptr->entity_ids) return GF_OUT_OF_MEM;
+ 
++	if ((u64) ptr->entity_id_count * sizeof(u32) > ptr->size) {
++		gf_free(ptr->entity_ids);
++		ptr->entity_ids = (u32 *) gf_malloc(ptr->size ? (u32) ptr->size : sizeof(u32));
++		if (!ptr->entity_ids) return GF_OUT_OF_MEM;
++	}
++
+ 	for (i = 0; i < ptr->entity_id_count; i++) {
+ 		ptr->entity_ids[i] = gf_bs_read_u32(bs);
+ 		ISOM_DECREASE_SIZE(ptr, 4)

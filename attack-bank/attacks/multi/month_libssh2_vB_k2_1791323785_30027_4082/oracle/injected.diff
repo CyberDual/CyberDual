@@ -1,0 +1,46 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..2dc06bf 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -419,6 +419,13 @@ static int knownhost_parse_ipv4(const char *src, const char *end,
+     return 1;
+ }
+ 
++/* Return non-zero while another 16-bit group still fits in the
++   fixed-size IPv6 accumulator below. */
++static int knownhost_ipv6_room(size_t count)
++{
++    return count < 8;
++}
++
+ static int knownhost_parse_ipv6(const char *src, size_t len,
+                                 unsigned char result[16])
+ {
+@@ -458,7 +465,8 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+         if(p < end && *p == '.') {
+             unsigned char ipv4[4];
+ 
+-            if(count > 6 || !knownhost_parse_ipv4(part, end, ipv4))
++            if(!knownhost_ipv6_room(count) ||
++               !knownhost_parse_ipv4(part, end, ipv4))
+                 return 0;
+ 
+             words[count++] =
+@@ -468,7 +476,7 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+             break;
+         }
+ 
+-        if(!digits || count >= 8)
++        if(!digits || !knownhost_ipv6_room(count))
+             return 0;
+ 
+         words[count++] = (unsigned short)value;
+@@ -495,7 +503,7 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+         size_t position = (size_t)compressed;
+         size_t zeros;
+ 
+-        if(count >= 8)
++        if(!knownhost_ipv6_room(count))
+             return 0;
+ 
+         zeros = 8 - count;

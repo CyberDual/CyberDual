@@ -1,0 +1,93 @@
+diff --git a/src/mat.c b/src/mat.c
+index c46790a..6812277 100644
+--- a/src/mat.c
++++ b/src/mat.c
+@@ -264,7 +264,7 @@ Mat_PrintData(int rank, const size_t *_dims, const void *data, enum matio_classe
+                     if ( nbytes == 0 ) {
+                         break;
+                     }
+-                    idxOffset = (size_t *)calloc(nelems, sizeof(size_t));
++                    idxOffset = (size_t *)calloc(dims[0] * dims[1], sizeof(size_t));
+                     if ( idxOffset == NULL ) {
+                         break;
+                     }
+@@ -2711,6 +2711,7 @@ Mat_VarReadData(mat_t *mat, matvar_t *matvar, void *data, const int *start, cons
+         case MAT_C_UINT16:
+         case MAT_C_INT8:
+         case MAT_C_UINT8:
++        case MAT_C_CHAR:
+             break;
+         default:
+             return MATIO_E_OPERATION_NOT_SUPPORTED;
+diff --git a/src/mat5.c b/src/mat5.c
+index 5d3bbb2..647653a 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -3519,7 +3519,7 @@ Mat_VarReadNumeric5(mat_t *mat, matvar_t *matvar, void *data, size_t N)
+  *
+  * Walks @c nbytes bytes of UTF-8 data, verifying that every multi-byte
+  * sequence is complete and that the total number of decoded characters
+- * equals @c expected. Used by the reader to reject malformed character data
++ * does not exceed @c expected. Used by the reader to reject malformed character data
+  * before it is handed back to the caller, which may re-wrap the buffer with
+  * Mat_VarCreate (which trusts the buffer bounds while recomputing @c nbytes).
+  *
+@@ -3543,7 +3543,7 @@ ValidateUtf8CharData(const mat_uint8_t *data, size_t nbytes, size_t expected)
+         nchars++;
+     }
+ 
+-    if ( nchars != expected )
++    if ( nchars > expected )
+         return MATIO_E_FILE_FORMAT_VIOLATION;
+ 
+     return MATIO_E_NO_ERROR;
+@@ -3728,7 +3728,8 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+             {
+                 size_t nbytes = 0;
+                 err = Mul(&nbytes, nelems, matvar->data_size);
+-                if ( err || nbytes > matvar->nbytes ) {
++                if ( err ||
++                     (nbytes > matvar->nbytes && matvar->data_type != MAT_T_UTF8) ) {
+                     free(matvar->data);
+                     matvar->data = NULL;
+                     matvar->nbytes = 0;
+@@ -4691,6 +4692,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                 GET_DATA_SLAB2(T);                              \
+                 break;                                          \
+             }                                                   \
++            case MAT_T_UTF8:                                 \
+             case MAT_T_UINT8: {                                 \
+                 mat_uint8_t *ptr_in = (mat_uint8_t *)data_in;   \
+                 GET_DATA_SLAB2(T);                              \
+@@ -4768,6 +4770,7 @@ Mat_VarRead5(mat_t *mat, matvar_t *matvar)
+                 GET_DATA_SLABN(T);                              \
+                 break;                                          \
+             }                                                   \
++            case MAT_T_UTF8:                                 \
+             case MAT_T_UINT8: {                                 \
+                 mat_uint8_t *ptr_in = (mat_uint8_t *)data_in;   \
+                 GET_DATA_SLABN(T);                              \
+@@ -4870,6 +4873,11 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+                     GET_DATA_SLAB2_TYPE(mat_uint8_t);
+                     break;
+                 }
++                case MAT_C_CHAR: {
++                    char *ptr = (char *)data_out;
++                    GET_DATA_SLAB2_TYPE(char);
++                    break;
++                }
+                 default:
+                     err = MATIO_E_OPERATION_NOT_SUPPORTED;
+                     break;
+@@ -4943,6 +4951,11 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+                 GET_DATA_SLABN_TYPE(mat_uint8_t);
+                 break;
+             }
++            case MAT_C_CHAR: {
++                char *ptr = (char *)data_out;
++                GET_DATA_SLABN_TYPE(char);
++                break;
++            }
+             default:
+                 err = MATIO_E_OPERATION_NOT_SUPPORTED;
+                 break;

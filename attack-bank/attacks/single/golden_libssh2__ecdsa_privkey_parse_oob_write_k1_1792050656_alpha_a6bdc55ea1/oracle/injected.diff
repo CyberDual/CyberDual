@@ -1,0 +1,23 @@
+diff --git a/src/openssl.c b/src/openssl.c
+index ad67f5cba9cb304771ced217d2ff8b2c46ea51b3..03c272e517edc3271ba507fa76cf5ac2bcd0a98e 100644
+--- a/src/openssl.c
++++ b/src/openssl.c
+@@ -183,10 +183,14 @@ static SSH2_INLINE void ossl_swap_bytes(unsigned char *buf, size_t len)
+ {
+ #if !defined(WORDS_BIGENDIAN) || !WORDS_BIGENDIAN
+     size_t i, j;
+-    for(i = 0, j = len - 1; i < j; i++, j--) {
+-        unsigned char temp = buf[i];
+-        buf[i] = buf[j];
+-        buf[j] = temp;
++
++    /* Skip the reversal when fewer than two bytes are present. */
++    if(len - 1 > 0) {
++        for(i = 0, j = len - 1; i < j; i++, j--) {
++            unsigned char temp = buf[i];
++            buf[i] = buf[j];
++            buf[j] = temp;
++        }
+     }
+ #endif
+ }

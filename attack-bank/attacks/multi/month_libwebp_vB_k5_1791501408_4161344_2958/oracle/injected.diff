@@ -1,0 +1,32 @@
+diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c
+index b3bdb73..38a40a0 100644
+--- a/src/dec/vp8l_dec.c
++++ b/src/dec/vp8l_dec.c
+@@ -439,11 +439,12 @@ WEBP_NODISCARD static int ReadHuffmanCodes(VP8LDecoder* const dec, int xsize,
+         if (*mapped_group == -1) *mapped_group = num_htree_groups++;
+         huffman_image[i] = *mapped_group;
+       }
+-      if (num_htree_groups == num_htree_groups_max) {
+-        // No remapping is needed.
++      if (num_htree_groups == num_htree_groups_max ||
++          num_htree_groups == huffman_pixs) {
++        // No remapping is needed: the used indices already form the dense
++        // range [0, num_htree_groups).
+         WebPSafeFree(mapping);
+         mapping = NULL;
+-        num_htree_groups = num_htree_groups_max;
+       }
+     } else {
+       num_htree_groups = num_htree_groups_max;
+@@ -491,8 +492,9 @@ int ReadHuffmanCodesHelper(int color_cache_bits, int num_htree_groups,
+   int* code_lengths = NULL;
+   int total_huffman_table_size;
+ 
+-  if ((mapping == NULL && num_htree_groups != num_htree_groups_max) ||
+-      num_htree_groups > num_htree_groups_max) {
++  // num_htree_groups never exceeds num_htree_groups_max, and equals it whenever
++  // the groups are used directly (no mapping); reject the remaining case.
++  if (num_htree_groups > num_htree_groups_max) {
+     goto Error;
+   }
+   // Each Huffman group has 5 trees, each requiring at least 4 bits in the

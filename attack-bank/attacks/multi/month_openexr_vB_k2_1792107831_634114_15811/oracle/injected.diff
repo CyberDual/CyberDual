@@ -1,0 +1,74 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0a..d0c44e3 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -581,6 +581,69 @@ IDManifest::init (const char* data, const char* endOfData)
+             }
+         }
+     }
++    //
++    // No channel groups were stored and the mapping table is empty, so
++    // currentIndex is still 0. A single trailing byte is the lifetime that
++    // applies when this manifest is merged; older writers omit it.
++    //
++    if (rleLength == 0 && manifestEntries == 0 && data < endOfData &&
++        endOfData - data == 1)
++    {
++        vector<char> tail (data, endOfData);
++        if (!tail.empty ())
++        {
++            unsigned char lifetime = (unsigned char) tail[currentIndex];
++            currentIndex += 1;
++            if (lifetime > (unsigned char) LIFETIME_STABLE)
++            {
++                throw IEX_NAMESPACE::InputExc (
++                    "Invalid lifetime in IDManifest");
++            }
++            if (currentIndex <= int (seen.size ())) { seen[currentIndex - 1] = 1; }
++        }
++    }
++
++    //
++    // The same one-byte tail is a hash selector when no runs were decoded.
++    // currentIndex is still 0, so the selector is the first tail byte.
++    //
++    if (rleLength == 0 && manifestEntries == 0 && data < endOfData &&
++        endOfData - data == 1)
++    {
++        vector<char> tail (data, endOfData);
++        if (!tail.empty ())
++        {
++            unsigned char hashSel = (unsigned char) tail[currentIndex];
++            currentIndex += 1;
++            if (hashSel == 0xff)
++            {
++                throw IEX_NAMESPACE::InputExc (
++                    "Invalid hash selector in IDManifest");
++            }
++            if (currentIndex <= int (seen.size ())) { seen[currentIndex - 1] = 1; }
++        }
++    }
++
++    //
++    // And, independently, that byte may name the encoding scheme. With no
++    // run-length entries, currentIndex has not moved off 0.
++    //
++    if (rleLength == 0 && manifestEntries == 0 && data < endOfData &&
++        endOfData - data == 1)
++    {
++        vector<char> tail (data, endOfData);
++        if (!tail.empty ())
++        {
++            unsigned char encoding = (unsigned char) tail[currentIndex];
++            currentIndex += 1;
++            if (encoding == 0xff)
++            {
++                throw IEX_NAMESPACE::InputExc (
++                    "Invalid encoding selector in IDManifest");
++            }
++            if (currentIndex <= int (seen.size ())) { seen[currentIndex - 1] = 1; }
++        }
++    }
+ }
+ 
+ IDManifest::IDManifest (const CompressedIDManifest& compressed)

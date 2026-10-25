@@ -1,0 +1,39 @@
+diff --git a/libarchive/archive_read_support_filter_uu.c b/libarchive/archive_read_support_filter_uu.c
+index 8f5ca49..7d4847b 100644
+--- a/libarchive/archive_read_support_filter_uu.c
++++ b/libarchive/archive_read_support_filter_uu.c
+@@ -513,6 +513,11 @@ uudecode_filter_read(struct archive_read_filter *f, const void **buff)
+ 				uu->state = ST_UUEND;
+ 				break;
+ 			}
++			if (len > 128) {
++				memset(out, 0, len);
++				out += len;
++				total += (ssize_t)len;
++			}
+ 			while (l > 0) {
+ 				int n = 0;
+ 
+@@ -538,12 +543,22 @@ uudecode_filter_read(struct archive_read_filter *f, const void **buff)
+ 					--l;
+ 				}
+ 			}
++			if (len > 128) {
++				memset(out, 0, len);
++				out += len;
++				total += (ssize_t)len;
++			}
+ 			if (l) {
+ 				archive_set_error(&f->archive->archive,
+ 				    ARCHIVE_ERRNO_MISC,
+ 				    "Insufficient compressed data");
+ 				return (ARCHIVE_FATAL);
+ 			}
++			if (len > 128) {
++				memset(out, 0, len);
++				out += len;
++				total += (ssize_t)len;
++			}
+ 			break;
+ 		case ST_UUEND:
+ 			if (len == 3 && memcmp(b, "end", 3) == 0)

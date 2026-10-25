@@ -1,0 +1,25 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 08ef9f72d53db713126e3461acab78c1578eb8c3..823020c834f3093587eac5de82c18d3c3c1bb49f 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2426,6 +2426,11 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal) {
+     parser->m_parsingStatus.parsing = XML_PARSING;
+   }
+ 
++  if (len > EXPAT_SAFE_PTR_DIFF(parser->m_bufferLim, parser->m_bufferEnd)) {
++    parser->m_errorCode = XML_ERROR_INVALID_ARGUMENT;
++    return XML_STATUS_ERROR;
++  }
++
+   // Detect and avoid integer overflow
+   if ((uint64_t)len > UINT64_MAX - parser->m_parseEndByteIndex) {
+     parser->m_errorCode = XML_ERROR_NO_MEMORY;
+@@ -2436,6 +2441,8 @@ XML_ParseBuffer(XML_Parser parser, int len, int isFinal) {
+ 
+   start = parser->m_bufferPtr;
+   parser->m_positionPtr = start;
++  if (isFinal)
++    parser->m_bufferEnd[len] = '\0';
+   parser->m_bufferEnd += len;
+   parser->m_parseEndPtr = parser->m_bufferEnd;
+   parser->m_parseEndByteIndex += len;

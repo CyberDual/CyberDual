@@ -1,0 +1,12 @@
+# CyberDual runner image: the host side of ./cyberdual (python3, git, the docker CLI) in a container, so the host needs
+# only Docker and a key. ./cyberdual-docker builds it on first use (or `./cyberdual build --runner`) and runs it with the
+# Docker socket mounted: agents and the grader still run as sibling containers on the host's Docker daemon.
+# No key, login or repository content is copied into this image.
+#   docker build -t cyberdual-runner -f harness/Dockerfile.runner harness/
+FROM docker:27.3.1-cli AS dockercli
+FROM ubuntu:22.04
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git python3 curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && git config --system --add safe.directory '*'
+COPY --from=dockercli /usr/local/bin/docker /usr/local/bin/docker

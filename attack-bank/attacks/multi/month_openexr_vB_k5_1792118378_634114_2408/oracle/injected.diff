@@ -1,0 +1,53 @@
+diff --git a/src/lib/OpenEXR/ImfIDManifest.cpp b/src/lib/OpenEXR/ImfIDManifest.cpp
+index 3c94e0a..f10f44a 100644
+--- a/src/lib/OpenEXR/ImfIDManifest.cpp
++++ b/src/lib/OpenEXR/ImfIDManifest.cpp
+@@ -396,13 +396,45 @@ IDManifest::init (const char* data, const char* endOfData)
+             stringStart = 2;
+         }
+         else { common = (unsigned char) stringList[i][0]; }
+-        if (common > stringList[i - 1].size ())
++        //
++        // Exclusive end, aligned with the width of the length field.
++        // stringStart is 1 for the single-byte prefix and 2 when the
++        // previous string needs a 16-bit length.
++        //
++        if (common >=
++            stringList[i - 1].size () + static_cast<size_t> (stringStart))
+         {
+             throw IEX_NAMESPACE::InputExc (
+                 "Bad common string length in IDmanifest string table");
+         }
+-        stringList[i] = stringList[i - 1].substr (0, common) +
+-                        stringList[i].substr (stringStart);
++
++        //
++        // Expand the common-prefix string in one buffer. Concatenating two
++        // substr() temporaries allocates twice; stage the previous string in
++        // an exact-sized buffer and copy only the prefix the check above
++        // allowed.
++        //
++        {
++            const size_t suffixLen =
++                stringList[i].size () - static_cast<size_t> (stringStart);
++            string expanded;
++            expanded.resize (common + suffixLen);
++            if (common > 0)
++            {
++                vector<char> prev (
++                    stringList[i - 1].data (),
++                    stringList[i - 1].data () + stringList[i - 1].size ());
++                memcpy (&expanded[0], prev.data (), common);
++            }
++            if (suffixLen > 0)
++            {
++                memcpy (
++                    &expanded[common],
++                    stringList[i].data () + stringStart,
++                    suffixLen);
++            }
++            stringList[i].swap (expanded);
++        }
+     }
+ 
+     //

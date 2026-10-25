@@ -1,0 +1,44 @@
+diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c
+index 6ddd55c..d26621f 100644
+--- a/src/dec/vp8l_dec.c
++++ b/src/dec/vp8l_dec.c
+@@ -781,7 +781,7 @@ static int EmitRowsYUVA(const uint8_t* const in, const VP8Io* const io,
+   const uint8_t* r_ptr = in + CHANNEL_OFFSET(1);
+   const uint8_t* g_ptr = in + CHANNEL_OFFSET(2);
+   const uint8_t* b_ptr = in + CHANNEL_OFFSET(3);
+-  const uint8_t* a_ptr = NULL;
++  const uint8_t* a_ptr = in + CHANNEL_OFFSET(0);
+   int has_alpha = 0;
+ 
+   // Make sure the lines are processed two by two from the start.
+@@ -790,10 +790,10 @@ static int EmitRowsYUVA(const uint8_t* const in, const VP8Io* const io,
+   // Make sure num_rows is even. y_pos_final will check if it not.
+   num_rows &= ~1;
+ 
++  // Detect the content's alpha independently of the output-plane gate.
++  has_alpha = CheckNonOpaque(a_ptr, width, num_rows, in_stride);
+   if (dst_a) {
+     dst_a += (ptrdiff_t)y_pos * a_stride;
+-    a_ptr = in + CHANNEL_OFFSET(0);
+-    has_alpha = CheckNonOpaque(a_ptr, width, num_rows, in_stride);
+   }
+   // Process pairs of lines.
+   WebPImportYUVAFromRGBA(r_ptr, g_ptr, b_ptr, a_ptr, /*step=*/4, in_stride,
+diff --git a/src/dsp/yuv.c b/src/dsp/yuv.c
+index 6306126..22bb9cf 100644
+--- a/src/dsp/yuv.c
++++ b/src/dsp/yuv.c
+@@ -525,13 +525,6 @@ static void ImportYUVAFromRGBA_C(const uint8_t* r_ptr, const uint8_t* g_ptr,
+   const int is_rgb = (r_ptr < b_ptr);  // otherwise it's bgr
+   const int uv_width = (width + 1) >> 1;
+ 
+-  has_alpha &= dst_a != NULL;
+-  if (has_alpha) {
+-#if defined(USE_GAMMA_COMPRESSION) && defined(USE_INVERSE_ALPHA_TABLE)
+-    assert(kAlphaFix + GAMMA_FIX <= 31);
+-#endif
+-  }
+-
+   WebPInitGammaTables();
+ 
+   // Downsample Y/U/V planes, two rows at a time

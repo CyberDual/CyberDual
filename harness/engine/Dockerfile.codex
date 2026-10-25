@@ -1,0 +1,5 @@
+ARG BASE_IMG
+FROM revbench-claude:latest AS codexcli
+FROM ${BASE_IMG}
+COPY --from=codexcli /usr/local/lib/node_modules/@openai/codex /usr/local/lib/node_modules/@openai/codex
+RUN ln -sf /usr/local/lib/node_modules/@openai/codex/bin/codex.js /usr/local/bin/codex

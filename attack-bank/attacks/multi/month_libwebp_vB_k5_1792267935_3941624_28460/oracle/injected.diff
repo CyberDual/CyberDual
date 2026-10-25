@@ -1,0 +1,78 @@
+diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c
+index b3bdb731..e7d229a6 100644
+--- a/src/dec/vp8l_dec.c
++++ b/src/dec/vp8l_dec.c
+@@ -79,7 +79,7 @@ static const uint8_t kCodeToPlane[CODE_TO_PLANE_CODES] = {
+ // distance) and lookup table sizes for them in worst case are 630 and 410
+ // respectively. Size of green alphabet depends on color cache size and is equal
+ // to 256 (green component values) + 24 (length prefix values)
+-// + color_cache_size (between 0 and 2048).
++// + color_cache_size (between 0 and 4096).
+ // All values computed for 8-bit first level lookup with Mark Adler's tool:
+ // https://github.com/madler/zlib/blob/v1.2.5/examples/enough.c
+ #define FIXED_TABLE_SIZE (630 * 3 + 410)
+@@ -89,6 +89,17 @@ static const uint16_t kTableSize[12] = {
+     FIXED_TABLE_SIZE + 718,  FIXED_TABLE_SIZE + 782,  FIXED_TABLE_SIZE + 912,
+     FIXED_TABLE_SIZE + 1168, FIXED_TABLE_SIZE + 1680, FIXED_TABLE_SIZE + 2704};
+ 
++static int GetHuffmanTableSize(int color_cache_bits) {
++  if (color_cache_bits <
++      (int)(sizeof(kTableSize) / sizeof(kTableSize[0]))) {
++    return kTableSize[color_cache_bits];
++  }
++  return FIXED_TABLE_SIZE + (1 << (color_cache_bits + 1));
++}
++
++static const uint8_t kGroupsPerChunk[13] = {
++    16, 16, 16, 16, 16, 16, 14, 12, 10, 8, 6, 4, 2};
++
+ static int VP8LSetError(VP8LDecoder* const dec, VP8StatusCode error) {
+   // The oldest error reported takes precedence over the new one.
+   if (dec->status == VP8_STATUS_OK || dec->status == VP8_STATUS_SUSPENDED) {
+@@ -487,7 +498,7 @@ int ReadHuffmanCodesHelper(int color_cache_bits, int num_htree_groups,
+   int i, j, ok = 0;
+   const int max_alphabet_size =
+       kAlphabetSize[0] + ((color_cache_bits > 0) ? 1 << color_cache_bits : 0);
+-  const int table_size = kTableSize[color_cache_bits];
++  const int table_size = GetHuffmanTableSize(color_cache_bits);
+   int* code_lengths = NULL;
+   int total_huffman_table_size;
+ 
+@@ -495,6 +506,10 @@ int ReadHuffmanCodesHelper(int color_cache_bits, int num_htree_groups,
+       num_htree_groups > num_htree_groups_max) {
+     goto Error;
+   }
++  if ((uint64_t)num_htree_groups * kTableSize[color_cache_bits] >
++      (uint64_t)MAX_HUFF_IMAGE_SIZE * kTableSize[MAX_CACHE_BITS - 1]) {
++    goto Error;
++  }
+   // Each Huffman group has 5 trees, each requiring at least 4 bits in the
+   // bitstream (20 bits per group).
+   if ((uint64_t)(dec->br.len - dec->br.pos) * 8 + VP8L_LBITS <
+@@ -506,10 +521,10 @@ int ReadHuffmanCodesHelper(int color_cache_bits, int num_htree_groups,
+       (int*)WebPSafeCalloc((uint64_t)max_alphabet_size, sizeof(*code_lengths));
+   *htree_groups = VP8LHtreeGroupsNew(num_htree_groups);
+ 
+-  // Cap the segment chunk size to ~320 KB (16 * table_size) for a small number
+-  // of groups, or ~1 MB (52 * table_size) when there are many groups.
++  // Cap the segment chunk size by the number of groups whose tables fit in
++  // the cache-size-dependent budget.
+   {
+-    const int max_groups_per_chunk = (num_htree_groups > 256) ? 52 : 16;
++    const int max_groups_per_chunk = kGroupsPerChunk[color_cache_bits];
+     total_huffman_table_size =
+         (num_htree_groups > max_groups_per_chunk ? max_groups_per_chunk
+                                                  : num_htree_groups) *
+diff --git a/src/webp/format_constants.h b/src/webp/format_constants.h
+index 6d97bf21..baba064d 100644
+--- a/src/webp/format_constants.h
++++ b/src/webp/format_constants.h
+@@ -33,7 +33,7 @@
+ #define VP8L_FRAME_HEADER_SIZE 5  // Size of the VP8L frame header.
+ 
+ #define MAX_PALETTE_SIZE 256
+-#define MAX_CACHE_BITS 11
++#define MAX_CACHE_BITS 12
+ #define HUFFMAN_CODES_PER_META_CODE 5
+ #define ARGB_BLACK 0xff000000
+ 

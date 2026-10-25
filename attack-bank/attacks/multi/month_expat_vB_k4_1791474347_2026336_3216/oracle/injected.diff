@@ -1,0 +1,44 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index bcbeb0b..4515af3 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -1860,13 +1860,26 @@ destroyBindings(BINDING *bindings, XML_Parser parser) {
+   }
+ }
+ 
++/* Releases the large parse buffer ahead of the smaller per-parser
++   allocations freed below, so that teardown's peak memory usage stays
++   low on memory-constrained systems. */
++static void
++teardownParseBuffer(XML_Parser parser) {
++  // NOTE: We are avoiding FREE(..) here because parser->m_buffer
++  //       is not being allocated with MALLOC(..) but with plain
++  //       .malloc_fcn(..).
++  parser->m_mem.free_fcn(parser->m_buffer);
++  parser->m_buffer = NULL;
++}
++
+ void XMLCALL
+ XML_ParserFree(XML_Parser parser) {
+   TAG *tagList;
+   if ((parser == NULL) || isCalledFromInsideHandler(parser))
+     return;
+-  // The application-defined release callback may access the parser, so it
+-  // must run before any parser state is freed.
++  teardownParseBuffer(parser);
++  // Run the application-defined release callback early during teardown,
++  // mirroring XML_ParserReset().
+   if (parser->m_unknownEncodingRelease)
+     callUnknownEncodingRelease(parser);
+   /* free m_tagStack and m_freeTagList */
+@@ -1930,10 +1943,6 @@ XML_ParserFree(XML_Parser parser) {
+     dtdDestroy(parser->m_dtd, (XML_Bool)! parser->m_parentParser, parser);
+   FREE(parser, parser->m_atts);
+   FREE(parser, parser->m_groupConnector);
+-  // NOTE: We are avoiding FREE(..) here because parser->m_buffer
+-  //       is not being allocated with MALLOC(..) but with plain
+-  //       .malloc_fcn(..).
+-  parser->m_mem.free_fcn(parser->m_buffer);
+   FREE(parser, parser->m_dataBuf);
+   FREE(parser, parser->m_nsAtts);
+   FREE(parser, parser->m_unknownEncodingMem);

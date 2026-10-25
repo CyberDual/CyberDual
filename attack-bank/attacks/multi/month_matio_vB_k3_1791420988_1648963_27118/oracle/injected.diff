@@ -1,0 +1,24 @@
+diff --git a/src/mat5.c b/src/mat5.c
+index 5d3bbb2..348f8ed 100644
+--- a/src/mat5.c
++++ b/src/mat5.c
+@@ -4798,7 +4798,7 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+          (class_type == MAT_C_UINT32 && data_type == MAT_T_UINT32) ||
+          (class_type == MAT_C_UINT64 && data_type == MAT_T_UINT64) ||
+          (class_type == MAT_C_UINT8 && data_type == MAT_T_UINT8) )
+-        same_type = 1;
++        same_type = class_type;
+ 
+     if ( rank < 1 || rank > 10 )
+         return MATIO_E_BAD_ARGUMENT;
+@@ -4810,7 +4810,9 @@ GetDataSlab(void *data_in, void *data_out, enum matio_classes class_type,
+ 
+     if ( rank == 2 ) {
+         if ( (stride[0] == 1 && (size_t)edge[0] == dims[0]) &&
+-             (stride[1] == 1 && (size_t)edge[1] == dims[1]) && (same_type == 1) )
++             (stride[1] == 1 && ((size_t)edge[1] == dims[1] ||
++                                 (same_type == MAT_C_UINT8 && start[1] == 0))) &&
++             (same_type != 0) )
+             memcpy(data_out, data_in, nbytes);
+         else {
+             int i, j;

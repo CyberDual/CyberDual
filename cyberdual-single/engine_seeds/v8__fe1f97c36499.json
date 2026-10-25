@@ -1,0 +1,28 @@
+{
+ "task_iid": "v8__fe1f97c36499",
+ "project": "v8",
+ "engine": "v8",
+ "repo": "https://github.com/v8/v8",
+ "repo_url": "https://github.com/v8/v8",
+ "regime": "A",
+ "regime_full": "A_vuln_patch",
+ "family": "collect_seeds",
+ "source": "mined",
+ "parent_commit": "a21a57575ede5f36b097b23bf6820f7802f25f51",
+ "parent_sha": "a21a57575ede5f36b097b23bf6820f7802f25f51",
+ "fix_sha": "fe1f97c36499b91adba54e0b9767d53f423b7c27",
+ "date": "2026-09-08T04:56:10+00:00",
+ "cwe": "",
+ "vuln_type": "Integer overflow (parseInt radix-32 exponent)",
+ "vuln_desc": "Fix parseInt radix-32 exponent overflow returning 0 instead of Infinity",
+ "task": "Fix parseInt radix-32 exponent overflow returning 0 instead of Infinity",
+ "grading": "engine",
+ "selection_criteria": [
+  "in the three-month single-task period [2026-07-01, 2026-10-01); the shorter multi-commit replay window is separate",
+  "mined from v8/v8 with our collect_seeds policy (regime-A security signal), NOT SEC-bench",
+  "contamination-clean: earliest-public-date post-cutoff, not AI-authored",
+  "genuine memory-safety class (bounds/stack/overflow/corruption)",
+  "5 per engine, diverse classes"
+ ],
+ "selection_reason": "Mined from v8/v8 in-window (before 2026-10-01) via collect_seeds; Integer overflow (parseInt radix-32 exponent); fix fe1f97c364 dated 2026-09-08."
+}

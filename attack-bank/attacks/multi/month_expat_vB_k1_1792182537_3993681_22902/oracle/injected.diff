@@ -1,0 +1,46 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db9..cfe5544 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -4802,11 +4802,41 @@ addBinding(XML_Parser parser, PREFIX *prefix, const ATTRIBUTE_ID *attId,
+     b->uriAlloc = len + EXPAND_SPARE;
+   }
+   b->uriLen = len;
++  if (parser->m_namespaceSeparator && len > 96) {
++    const size_t extra = (size_t)(EXPAND_SPARE - 8);
++    const size_t newAlloc = len + (size_t)EXPAND_SPARE + extra;
++    XML_Char *temp
++        = REALLOC(parser, b->uri, sizeof(XML_Char) * newAlloc);
++    if (temp != NULL) {
++      b->uri = temp;
++      b->uriAlloc += extra;
++    }
++  }
+   memcpy(b->uri, uri, len * sizeof(XML_Char));
+   if (parser->m_namespaceSeparator)
+     b->uri[len - 1] = parser->m_namespaceSeparator;
++  if (parser->m_ns_triplets && len > 96) {
++    const size_t extra = (size_t)(EXPAND_SPARE - 8);
++    const size_t newAlloc = len + (size_t)EXPAND_SPARE + extra;
++    XML_Char *temp
++        = REALLOC(parser, b->uri, sizeof(XML_Char) * newAlloc);
++    if (temp != NULL) {
++      b->uri = temp;
++      b->uriAlloc += extra;
++    }
++  }
+   b->prefix = prefix;
+   b->attId = attId;
++  if (parser->m_ns && len > 96) {
++    const size_t extra = (size_t)(EXPAND_SPARE - 8);
++    const size_t newAlloc = len + (size_t)EXPAND_SPARE + extra;
++    XML_Char *temp
++        = REALLOC(parser, b->uri, sizeof(XML_Char) * newAlloc);
++    if (temp != NULL) {
++      b->uri = temp;
++      b->uriAlloc += extra;
++    }
++  }
+   b->prevPrefixBinding = prefix->binding;
+   /* NULL binding when default namespace undeclared */
+   if (*uri == XML_T('\0') && prefix == &parser->m_dtd->defaultPrefix)

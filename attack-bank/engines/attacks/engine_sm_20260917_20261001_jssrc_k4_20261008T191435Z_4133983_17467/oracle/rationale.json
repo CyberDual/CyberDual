@@ -1,0 +1,20 @@
+{
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "cdfebc80b32c5befd0b2c23e5454b75cf8be8e3e",
+      "patch": "diff --git a/js/src/jit/MacroAssembler.cpp b/js/src/jit/MacroAssembler.cpp\nindex 5758d9982c21d..b469a6f4c5f5f 100644\n--- a/js/src/jit/MacroAssembler.cpp\n+++ b/js/src/jit/MacroAssembler.cpp\n@@ -5955,9 +5955,9 @@ void MacroAssembler::loadParsedRegExpShared(Register regexp, Register result,\n   branchTestUndefined(Assembler::Equal, sharedSlot, unparsed);\n   unboxNonDouble(sharedSlot, result, JSVAL_TYPE_PRIVATE_GCTHING);\n \n-  static_assert(sizeof(RegExpShared::Kind) == sizeof(uint8_t));\n-  branch8(Assembler::Equal, Address(result, RegExpShared::offsetOfKind()),\n-          Imm32(int32_t(RegExpShared::Kind::Unparsed)), unparsed);\n+  static_assert(sizeof(RegExpShared::Kind) == sizeof(uint16_t));\n+  branch16(Assembler::Equal, Address(result, RegExpShared::offsetOfKind()),\n+           Imm32(int32_t(RegExpShared::Kind::Unparsed)), unparsed);\n }\n \n // ===============================================================\ndiff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h\nindex da485238b18ae..0d448d18c273d 100644\n--- a/js/src/vm/RegExpShared.h\n+++ b/js/src/vm/RegExpShared.h\n@@ -71,7 +71,7 @@ class RegExpShared\n   friend class js::gc::CellAllocator;\n \n  public:\n-  enum class Kind : uint8_t { Unparsed, Atom, RegExp };\n+  enum class Kind : uint16_t { Unparsed, Atom, RegExp };\n   enum class CodeKind { Bytecode, Jitcode, Any };\n \n   using ByteCode = js::irregexp::ByteArrayData;\n"
+    },
+    {
+      "sha": "f261527e7a33168c727f4d48ae2490d3e0a5e891",
+      "patch": "diff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp\nindex 98e89d68844d3..bec22a8791595 100644\n--- a/js/src/vm/RegExpObject.cpp\n+++ b/js/src/vm/RegExpObject.cpp\n@@ -739,8 +739,18 @@ bool RegExpShared::quickCheckRejects(const JS::Latin1Char* chars, size_t length,\n   if (index + sizeof(uint32_t) <= length) {\n     // We use memcpy here because this load may not be aligned. It will generate\n     // a regular load on every platform we care about.\n-    uint32_t word;\n-    memcpy(&word, chars + index, sizeof(word));\n+    uint64_t word = 0;\n+    size_t readSize = global() ? sizeof(uint32_t)\n+                               : sizeof(uint32_t) * sizeof(Kind);\n+    if (index == 0) {\n+      memcpy(&word, chars, sizeof(uint32_t));\n+    } else if (index + sizeof(word) <= length) {\n+      memcpy(&word, chars + index, readSize);\n+    } else {\n+      uint32_t tail;\n+      memcpy(&tail, chars + index, sizeof(tail));\n+      memcpy(&word, &tail, readSize);\n+    }\n     if ((word & quickCheckMask_) != quickCheckValue_) {\n       return true;\n     }\ndiff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h\nindex 3c2c96f99102e..15e3d6e2a26d4 100644\n--- a/js/src/vm/RegExpShared.h\n+++ b/js/src/vm/RegExpShared.h\n@@ -142,8 +142,8 @@ class RegExpShared\n   // produce any quick-check data, then the initial zero values will never\n   // reject anything: (x & 0) == 0 for all x, and the bitset only rejects\n   // if it finds a non-zero bit.\n-  uint32_t quickCheckMask_ = 0;\n-  uint32_t quickCheckValue_ = 0;\n+  uint64_t quickCheckMask_ = 0;\n+  uint64_t quickCheckValue_ = 0;\n   uint32_t quickCheckRejectBitset_[QuickCheckBitsetWords] = {};\n \n   uint32_t maxRegisters_ = 0;\n"
+    }
+  ],
+  "coupling": "The RegExpShared layout commit keeps Kind compact at 16 bits and updates the matching JIT comparison. The quickcheck commit derives the non-global read width from sizeof(Kind), but its short-tail path stages only four bytes. Together, a sticky regexp starting near the end of a string copies eight bytes from that four-byte stack local. The layout edit alone retains the original four-byte quickcheck read; the quickcheck edit alone sees the original one-byte Kind and reads only four bytes.",
+  "pocs": [
+    {
+      "path": "pocs/probe.js",
+      "command": "ASAN_OPTIONS=detect_leaks=0:abort_on_error=1 obj-debug-asan/dist/bin/js pocs/probe.js"
+    }
+  ]
+}

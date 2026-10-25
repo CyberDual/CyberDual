@@ -1,0 +1,17 @@
+{
+  "cwe": "",
+  "family": "secb",
+  "information_state": "spec_only",
+  "parent_commit": "e3bdad4f21f0018f3e359695eca44bcedbe1093f",
+  "parent_sha": "e3bdad4f21f0018f3e359695eca44bcedbe1093f",
+  "project": "expat",
+  "regime": "B",
+  "regime_full": "B_functional_impl",
+  "repo": "https://github.com/libexpat/libexpat",
+  "repo_url": "https://github.com/libexpat/libexpat",
+  "source": "reuse",
+  "target": "expat",
+  "task": "Feature-impl: new public 64-bit location accessors (XML_GetCurrentByteIndex64 / ByteCount64 / LineNumber64 / ColumnNumber64 / XML_GetInputContext64) for >2 GiB inputs; PR #1323 (merge 3cf4f928, first-parent==parent e3bdad4f).",
+  "task_iid": "expat__64bit_location_accessors",
+  "vuln_desc": "Feature-impl: new public 64-bit location accessors (XML_GetCurrentByteIndex64 / ByteCount64 / LineNumber64 / ColumnNumber64 / XML_GetInputContext64) for >2 GiB inputs; PR #1323 (merge 3cf4f928, first-parent==parent e3bdad4f)."
+}

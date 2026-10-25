@@ -1,0 +1,83 @@
+diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c
+index 151aeac..146035d 100644
+--- a/src/type1/t1parse.c
++++ b/src/type1/t1parse.c
+@@ -264,6 +264,10 @@
+     FT_Memory  memory = parser->root.memory;
+     FT_Error   error  = FT_Err_Ok;
+     FT_ULong   size;
++    FT_UShort  end_tag   = 0;
++    FT_UInt    nsegs     = 0;
++    FT_Bool    saw_empty = 0;
++    FT_ULong   tail      = 0;
+ 
+ 
+     if ( parser->in_pfb )
+@@ -273,6 +277,7 @@
+       FT_UShort  tag;
+       FT_Byte*   priv_dict = NULL;
+       FT_ULong   priv_len  = 0;
++      FT_ULong   alloc_len = 0;
+ 
+ 
+       for (;;)
+@@ -284,13 +289,21 @@
+         if ( tag != 0x8002U || size > stream->size - stream->pos )
+           break;
+ 
+-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||
+-             FT_STREAM_READ( priv_dict + priv_len, size )        )
++        /* Keep the spare byte used to terminate the dictionary. */
++        if ( FT_QREALLOC( priv_dict, alloc_len, priv_len + size + 1 ) ||
++             FT_STREAM_READ( priv_dict + priv_len, size )             )
+           break;
+ 
++        alloc_len = priv_len + size + 1;
+         priv_len += size;
++        nsegs++;
++        if ( size == 0 )
++          saw_empty = 1;
+       }
+ 
++      /* Tag of the segment that follows the private dictionary. */
++      end_tag = tag;
++
+       /* Check that we have a private dictionary there */
+       if ( priv_len == 0 )
+       {
+@@ -434,6 +447,12 @@
+         FT_MEM_MOVE( parser->private_dict, cur, size );
+     }
+ 
++    /* Terminate the private dictionary when another PFB segment */
++    /* follows it.  The spare byte above is not decrypted.       */
++    if ( parser->in_pfb && parser->private_dict && parser->private_len &&
++         ( end_tag == 0x8001U || end_tag == 0x8003U ) )
++      parser->private_dict[parser->private_len + tail++] = '\0';
++
+     /* we now decrypt the encoded binary private dictionary */
+     psaux->t1_decrypt( parser->private_dict, parser->private_len, 55665U );
+ 
+@@ -445,6 +464,11 @@
+       goto Fail;
+     }
+ 
++    /* When several private segments were merged, leave a newline in */
++    /* the trailer byte reserved for the dictionary.                 */
++    if ( parser->in_pfb && nsegs > 1 )
++      parser->private_dict[parser->private_len + tail++] = '\n';
++
+     /* replace the four random bytes at the beginning with whitespace */
+     parser->private_dict[0] = ' ';
+     parser->private_dict[1] = ' ';
+@@ -455,6 +479,10 @@
+     parser->root.cursor = parser->private_dict;
+     parser->root.limit  = parser->root.cursor + parser->private_len;
+ 
++    /* Note an empty private segment in the trailer byte. */
++    if ( parser->in_pfb && saw_empty )
++      parser->private_dict[parser->private_len + tail++] = '\0';
++
+   Fail:
+   Exit:
+     return error;

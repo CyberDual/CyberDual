@@ -1,0 +1,14 @@
+{
+ "project": "libheif",
+ "window_id": "35453fd185812265bdb96ebd15b098f36dfdca7a0e097c9ef9951edff3b10bda",
+ "base": "1b2a9a8c78dbbb39579703864177c69900f53868",
+ "maint_batch_tip": "847183c84c966fa6376ddb00bd39b9849f6adab2",
+ "tree": "67a94f8ec9b841cc9d09e1e08c6ad726f190c851",
+ "n_commits": 108,
+ "n_editable": 108,
+ "list_sha1": "48721829eac644844137bab1790a7bab704b5a1e",
+ "tar_sha256": "88749a4fb4728a39518b41d8681cebe5f3ac4fba26ffdcf3e2e227847dddb795",
+ "tar_bytes": 24258560,
+ "built_utc": "2026-10-17T20:12:25Z",
+ "cyberdual": "f685a97c"
+}

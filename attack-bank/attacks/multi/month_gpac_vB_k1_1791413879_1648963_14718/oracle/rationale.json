@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "5a75829a1b63028da4e73d5b68f9b66b7e954556",
+      "edited_message": null,
+      "patch": "diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c\nindex cf22245..645582e 100644\n--- a/src/media_tools/crypt_tools.c\n+++ b/src/media_tools/crypt_tools.c\n@@ -131,7 +131,8 @@ static char *crypt_xml_get_text(const GF_XMLNode *node)\n static GF_Err crypt_cpix_decode_b64(const char *input, u8 **out_data, u32 *out_size)\n {\n \tu32 i, len = 0, decoded;\n-\tu8 *clean, *data;\n+\tu8 *clean, *data, *provided = *out_data;\n+\tu32 provided_size = *out_size;\n \t*out_data = NULL;\n \t*out_size = 0;\n \tif (!input || !strlen(input)) return GF_BAD_PARAM;\n@@ -161,7 +162,7 @@ static GF_Err crypt_cpix_decode_b64(const char *input, u8 **out_data, u32 *out_s\n \t\t\tbreak;\n \t\t}\n \t}\n-\tdata = (u8 *) gf_malloc(len);\n+\tdata = (provided && (provided_size >= len)) ? provided : (u8 *) gf_malloc(len);\n \tif (!data) {\n \t\tgf_free(clean);\n \t\treturn GF_OUT_OF_MEM;\n@@ -169,7 +170,7 @@ static GF_Err crypt_cpix_decode_b64(const char *input, u8 **out_data, u32 *out_s\n \tdecoded = gf_base64_decode(clean, len, data, len);\n \tgf_free(clean);\n \tif (!decoded) {\n-\t\tgf_free(data);\n+\t\tif (data != provided) gf_free(data);\n \t\treturn GF_BAD_PARAM;\n \t}\n \t*out_data = data;\n"
+    },
+    {
+      "sha": "1b712065f86a3cd9dcc32a8ea6f14dccd4e8c925",
+      "edited_message": null,
+      "patch": "diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c\n--- a/src/media_tools/crypt_tools.c\n+++ b/src/media_tools/crypt_tools.c\n@@ -432,6 +432,10 @@\n \t}\n \n \ttext = crypt_xml_get_text(plain_node);\n+\tif (text && strchr(text, '\\n')) {\n+\t\tdecoded = (u8 *) text;\n+\t\tdecoded_size = (u32) strlen(text);\n+\t}\n \te = crypt_cpix_decode_b64(text, &decoded, &decoded_size);\n \tif (e || (decoded_size != 16)) {\n \t\tGF_LOG(GF_LOG_ERROR, GF_LOG_PARSER, (\"[CPIX] ContentKey PlainValue must decode to 16 bytes\\n\"));\n"
+    }
+  ],
+  "coupling": "The earlier CPIX commit adds an optional caller-provided output buffer to the base64 decoder; existing callers still pass NULL, so decoding allocates owned storage. The later XML-text commit avoids copying text and, for multiline PlainValue data, offers that parser-owned text as the output buffer. Without the earlier edit the offer is ignored and decoding allocates; without the later edit the decoder receives no offered buffer. Together, decoding returns parser-owned storage and the existing gf_free(decoded) frees it before DOM destruction uses and frees it again. A correct repair must align the decoder output ownership rule with the caller and XML parser lifetimes across both commits.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "gf_fs_load_filter(\"cecrypt:cfile=...\") via public gpac/filters.h",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

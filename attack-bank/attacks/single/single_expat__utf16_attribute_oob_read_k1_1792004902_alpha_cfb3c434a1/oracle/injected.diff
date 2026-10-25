@@ -1,0 +1,13 @@
+diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c
+index 96857da2027f6018f84729554759fb927f8672a9..79cec552168ca10babb48664dacbc2384981b6f4 100644
+--- a/expat/lib/xmltok.c
++++ b/expat/lib/xmltok.c
+@@ -709,7 +709,7 @@ unicode_byte_type(char hi, char lo) {
+     fromLim = *fromP + (((fromLim - *fromP) >> 1) << 1); /* shrink to even */  \
+     /* Avoid copying first half only of surrogate */                           \
+     if (fromLim - *fromP > ((toLim - *toP) << 1)                               \
+-        && (GET_HI(fromLim - 2) & 0xF8) == 0xD8) {                             \
++        && (GET_HI(fromLim) & 0xFC) == 0xD8) {                                 \
+       fromLim -= 2;                                                            \
+       res = XML_CONVERT_INPUT_INCOMPLETE;                                      \
+     }                                                                          \

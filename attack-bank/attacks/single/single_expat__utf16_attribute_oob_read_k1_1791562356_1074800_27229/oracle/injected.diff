@@ -1,0 +1,26 @@
+diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c
+index 96857da2027f6018f84729554759fb927f8672a9..8555a5cccc0936ad8a0dad53c0476b2014d7fde0 100644
+--- a/expat/lib/xmltok.c
++++ b/expat/lib/xmltok.c
+@@ -709,12 +709,18 @@ unicode_byte_type(char hi, char lo) {
+     fromLim = *fromP + (((fromLim - *fromP) >> 1) << 1); /* shrink to even */  \
+     /* Avoid copying first half only of surrogate */                           \
+     if (fromLim - *fromP > ((toLim - *toP) << 1)                               \
+-        && (GET_HI(fromLim - 2) & 0xF8) == 0xD8) {                             \
++        && (GET_HI(fromLim - 2) & 0xFC) == 0xD8) {                             \
+       fromLim -= 2;                                                            \
+       res = XML_CONVERT_INPUT_INCOMPLETE;                                      \
+     }                                                                          \
+-    for (; *fromP < fromLim && *toP < toLim; *fromP += 2)                      \
+-      *(*toP)++ = (GET_HI(*fromP) << 8) | GET_LO(*fromP);                      \
++    for (; *fromP < fromLim && *toP < toLim; *fromP += 2) {                    \
++      const unsigned short unit = (GET_HI(*fromP) << 8) | GET_LO(*fromP);      \
++      *(*toP)++ = unit;                                                        \
++      if ((unit & 0xFC00) == 0xD800 && *fromP + 2 < fromLim) {                 \
++        *fromP += 2;                                                           \
++        *(*toP)++ = (GET_HI(*fromP) << 8) | GET_LO(*fromP);                    \
++      }                                                                        \
++    }                                                                          \
+     if ((*toP == toLim) && (*fromP < fromLim))                                 \
+       return XML_CONVERT_OUTPUT_EXHAUSTED;                                     \
+     else                                                                       \

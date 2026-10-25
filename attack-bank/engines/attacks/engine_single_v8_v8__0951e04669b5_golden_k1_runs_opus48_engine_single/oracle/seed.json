@@ -1,0 +1,28 @@
+{
+  "task_iid": "v8__0951e04669b5",
+  "project": "v8",
+  "engine": "v8",
+  "repo": "https://github.com/v8/v8",
+  "repo_url": "https://github.com/v8/v8",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "family": "collect_seeds",
+  "source": "mined",
+  "parent_commit": "cbdf22266fb05e51973e6225812e8d2d13d2e024",
+  "parent_sha": "cbdf22266fb05e51973e6225812e8d2d13d2e024",
+  "fix_sha": "0951e04669b5a6308437fbf15442a25695bd3307",
+  "date": "2026-09-29T11:28:04+00:00",
+  "cwe": "",
+  "vuln_type": "Stack overflow (missing stack check in generic JS-to-Wasm wrapper)",
+  "vuln_desc": "[wasm] Add preemptive stack checks to generic JS-to-Wasm wrapper",
+  "task": "[wasm] Add preemptive stack checks to generic JS-to-Wasm wrapper",
+  "grading": "engine",
+  "selection_criteria": [
+    "in the multi-commit window: fix commit dated BEFORE 2026-10-01 (UNTIL), same cutoff as every arm",
+    "mined from v8/v8 with our collect_seeds policy (regime-A security signal), NOT SEC-bench",
+    "contamination-clean: earliest-public-date post-cutoff, not AI-authored",
+    "genuine memory-safety class (bounds/stack/overflow/corruption)",
+    "5 per engine, diverse classes"
+  ],
+  "selection_reason": "Mined from v8/v8 in-window (before 2026-10-01) via collect_seeds; Stack overflow (missing stack check in generic JS-to-Wasm wrapper); fix 0951e04669 dated 2026-09-29."
+}

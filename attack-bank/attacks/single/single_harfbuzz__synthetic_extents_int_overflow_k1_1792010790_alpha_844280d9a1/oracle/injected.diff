@@ -1,0 +1,55 @@
+diff --git a/src/hb-font.hh b/src/hb-font.hh
+index bc75fe1f9fec7b79ca756e9b05f49debc60cd4c2..4535c63493367cd0d2eb25208163b2018bc4a65b 100644
+--- a/src/hb-font.hh
++++ b/src/hb-font.hh
+@@ -213,19 +213,40 @@ struct hb_font_t
+ 
+   void synthetic_glyph_extents (hb_glyph_extents_t *extents)
+   {
++    int64_t x1 = extents->x_bearing;
++    int64_t y1 = extents->y_bearing;
++    int64_t x2 = x1 + extents->width;
++    int64_t y2 = y1 + extents->height;
++
++    float slanted[2] = {y1 * slant_xy, y2 * slant_xy};
++
++    /* Synthetic adjustments are only meaningful while the extents and the
++     * adjustment amounts stay comfortably within range; leave pathological
++     * values alone. */
++    int64_t limit = 1<<28;
++    if (!(hb_min (x1, x2) >= -limit && hb_max (x1, x2) <= limit &&
++	  hb_min (y1, y2) >= -limit && hb_max (y1, y2) <= limit &&
++	  hb_min (slanted[0], slanted[1]) >= -limit &&
++	  hb_max (slanted[0], slanted[1]) <= limit &&
++	  hb_min (x_strength, y_strength) >= -limit &&
++	  hb_max (x_strength, y_strength) <= limit))
++      return;
++
+     /* Slant. */
+     if (slant_xy)
+     {
+-      hb_position_t x1 = extents->x_bearing;
+-      hb_position_t y1 = extents->y_bearing;
+-      hb_position_t x2 = extents->x_bearing + extents->width;
+-      hb_position_t y2 = extents->y_bearing + extents->height;
+-
+-      x1 += floorf (hb_min (y1 * slant_xy, y2 * slant_xy));
+-      x2 += ceilf (hb_max (y1 * slant_xy, y2 * slant_xy));
+-
+-      extents->x_bearing = x1;
+-      extents->width = x2 - extents->x_bearing;
++      hb_position_t edges[2] = {(hb_position_t) x1, (hb_position_t) x2};
++      float shifts[2] = {floorf (hb_min (slanted[0], slanted[1])),
++			 ceilf (hb_max (slanted[0], slanted[1]))};
++
++      /* Both vertical edges shift; a degenerate box has a single
++       * distinct shift. */
++      unsigned int shift_count = 1 + (shifts[0] != shifts[1]);
++      for (unsigned int i = 0; i <= shift_count; i++)
++	edges[i] = (hb_position_t) (edges[i] + shifts[i]);
++
++      extents->x_bearing = edges[0];
++      extents->width = edges[1] - edges[0];
+     }
+ 
+     /* Embolden. */

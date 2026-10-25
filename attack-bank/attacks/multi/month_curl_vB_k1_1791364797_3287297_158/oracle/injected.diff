@@ -1,0 +1,34 @@
+diff --git a/lib/parsedate.c b/lib/parsedate.c
+index 3c11d76..9c6feae 100644
+--- a/lib/parsedate.c
++++ b/lib/parsedate.c
+@@ -110,6 +110,10 @@ struct tzinfo {
+ 
+ #define DST (-60)     /* offset for daylight savings time */
+ 
++/* last single-letter zone name, used to bound the direct array index
++   lookup below */
++#define TZONE_LAST 'Z'
++
+ /* alpha-sorted list of single-letter time zones, A - Z */
+ static const int16_t tzone[] = {
+   -1 * 60,            /* Alpha */
+@@ -136,8 +140,7 @@ static const int16_t tzone[] = {
+    9 * 60,            /* Victor */
+   10 * 60,            /* Whiskey */
+   11 * 60,            /* X-ray */
+-  12 * 60,            /* Yankee */
+-  0                   /* Zulu, zero meridian, a.k.a. UTC */
++  12 * 60             /* Yankee */
+ };
+ 
+ /* two-letter time zones
+@@ -344,7 +347,7 @@ UNITTEST int checktz(const char *check, size_t len)
+     return -1;
+   if(len == 1) {
+     /* short-cut single letter names */
+-    if((first > 'Z') || (first == 'J'))
++    if((first > TZONE_LAST) || (first == 'J'))
+       return -1; /* no such tz */
+     return tzone[first - 'A'] * 60;
+   }

@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-125",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "e8c8c6477c78c6fb22d0022ce9e1febee9860051",
+  "parent_sha": "e8c8c6477c78c6fb22d0022ce9e1febee9860051",
+  "project": "freetype",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/freetype/freetype",
+  "repo_url": "https://github.com/freetype/freetype",
+  "source": "reselect",
+  "target": "freetype",
+  "task": "FT_New_Face on a crafted PFR font then FT_Get_Kerning; pfr_face_get_kerning (src/pfr/pfrobjs.c) mis-adjusts the binary-search base to the next kerning item instead of the current one, over-reading the kerning-pair heap buffer. Single file; fixes upstream #1461.",
+  "task_iid": "freetype__pfr_kerning_heap_overread",
+  "vuln_desc": "FT_New_Face on a crafted PFR font then FT_Get_Kerning; pfr_face_get_kerning (src/pfr/pfrobjs.c) mis-adjusts the binary-search base to the next kerning item instead of the current one, over-reading the kerning-pair heap buffer. Single file; fixes upstream #1461."
+}

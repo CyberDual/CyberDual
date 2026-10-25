@@ -1,0 +1,439 @@
+diff --git a/expat/doc/reference.html b/expat/doc/reference.html
+index 5bd9150ea78a95be485879379a6fa9e475cbea87..ec514b1623a6153773f8fa107115bf77509ce285 100644
+--- a/expat/doc/reference.html
++++ b/expat/doc/reference.html
+@@ -326,6 +326,26 @@
+                 <li>
+                   <a href="#XML_GetInputContext">XML_GetInputContext</a>
+                 </li>
++
++                <li>
++                  <a href="#XML_GetCurrentByteIndex64">XML_GetCurrentByteIndex64</a>
++                </li>
++
++                <li>
++                  <a href="#XML_GetCurrentLineNumber64">XML_GetCurrentLineNumber64</a>
++                </li>
++
++                <li>
++                  <a href="#XML_GetCurrentColumnNumber64">XML_GetCurrentColumnNumber64</a>
++                </li>
++
++                <li>
++                  <a href="#XML_GetCurrentByteCount64">XML_GetCurrentByteCount64</a>
++                </li>
++
++                <li>
++                  <a href="#XML_GetInputContext64">XML_GetInputContext64</a>
++                </li>
+               </ul>
+             </li>
+ 
+@@ -3019,6 +3039,134 @@ XML_GetInputContext(XML_Parser p,
+         </p>
+       </div>
+ 
++      <h4 id="XML_GetCurrentByteIndex64">
++        XML_GetCurrentByteIndex64
++      </h4>
++
++      <pre class="fcndec">
++long long XMLCALL
++XML_GetCurrentByteIndex64(XML_Parser p);
++</pre>
++      <div class="fcndef">
++        Return the byte offset of the position. This always corresponds to the values
++        returned by <code><a href=
++        "#XML_GetCurrentLineNumber64">XML_GetCurrentLineNumber64</a></code> and
++        <code><a href=
++        "#XML_GetCurrentColumnNumber64">XML_GetCurrentColumnNumber64</a></code>.
++      </div>
++
++      <p>
++        <strong>Note:</strong> Unlike <code><a href=
++        "#XML_GetCurrentByteIndex">XML_GetCurrentByteIndex</a></code>, this function is
++        not subject to wrapping around on 32bit platforms and 64bit Windows. It has
++        been added in Expat 2.9.0.
++      </p>
++
++      <h4 id="XML_GetCurrentLineNumber64">
++        XML_GetCurrentLineNumber64
++      </h4>
++
++      <pre class="fcndec">
++unsigned long long XMLCALL
++XML_GetCurrentLineNumber64(XML_Parser p);
++</pre>
++      <div class="fcndef">
++        Return the line number of the position. The first line is reported as
++        <code>1</code>.
++      </div>
++
++      <p>
++        <strong>Note:</strong> Unlike <code><a href=
++        "#XML_GetCurrentLineNumber">XML_GetCurrentLineNumber</a></code>, this function
++        is not subject to wrapping around on 32bit platforms and 64bit Windows. It has
++        been added in Expat 2.9.0.
++      </p>
++
++      <h4 id="XML_GetCurrentColumnNumber64">
++        XML_GetCurrentColumnNumber64
++      </h4>
++
++      <pre class="fcndec">
++unsigned long long XMLCALL
++XML_GetCurrentColumnNumber64(XML_Parser p);
++</pre>
++      <div class="fcndef">
++        Return the <em>offset</em>, from the beginning of the current line, of the
++        position. The first column is reported as <code>0</code>.
++      </div>
++
++      <p>
++        <strong>Note:</strong> Unlike <code><a href=
++        "#XML_GetCurrentColumnNumber">XML_GetCurrentColumnNumber</a></code>, this
++        function is not subject to wrapping around on 32bit platforms and 64bit
++        Windows. It has been added in Expat 2.9.0.
++      </p>
++
++      <h4 id="XML_GetCurrentByteCount64">
++        XML_GetCurrentByteCount64
++      </h4>
++
++      <pre class="fcndec">
++long long XMLCALL
++XML_GetCurrentByteCount64(XML_Parser p);
++</pre>
++      <div class="fcndef">
++        Return the number of bytes in the current event. Returns <code>0</code> if the
++        event is inside a reference to an internal entity and for the end-tag event for
++        empty element tags (the later can be used to distinguish empty-element tags from
++        empty elements using separate start and end tags).
++      </div>
++
++      <p>
++        <strong>Note:</strong> Unlike <code><a href=
++        "#XML_GetCurrentByteCount">XML_GetCurrentByteCount</a></code>, this function is
++        not subject to wrapping around for events larger than 2 GiB. It has been added
++        in Expat 2.9.0.
++      </p>
++
++      <h4 id="XML_GetInputContext64">
++        XML_GetInputContext64
++      </h4>
++
++      <pre class="fcndec">
++const char * XMLCALL
++XML_GetInputContext64(XML_Parser p,
++                      long long *offset,
++                      long long *size);
++</pre>
++      <div class="fcndef">
++        <p>
++          Returns the parser's input buffer, sets the integer pointed at by
++          <code>offset</code> to the offset within this buffer of the current parse
++          position, and set the integer pointed at by <code>size</code> to the size of
++          the returned buffer.
++        </p>
++
++        <p>
++          This should only be called from within a handler during an active parse and the
++          returned buffer should only be referred to from within the handler that made
++          the call. This input buffer contains the untranslated bytes of the input.
++        </p>
++
++        <p>
++          Only a limited amount of context is kept, so if the event triggering a call
++          spans over a very large amount of input, the actual parse position may be
++          before the beginning of the buffer.
++        </p>
++
++        <p>
++          If <code>XML_CONTEXT_BYTES</code> is zero, this will always return
++          <code>NULL</code>.
++        </p>
++      </div>
++
++      <p>
++        <strong>Note:</strong> Unlike <code><a href=
++        "#XML_GetInputContext">XML_GetInputContext</a></code>, this function is not
++        subject to wrapping around for buffers larger than 2 GiB. It has been added in
++        Expat 2.9.0.
++      </p>
++
+       <h3>
+         <a id="attack-protection" name="attack-protection">Attack Protection</a><a id=
+         "billion-laughs" name="billion-laughs"></a>
+diff --git a/expat/lib/expat.h b/expat/lib/expat.h
+index 4c3851d50a5fdf3c86854d5805d54ab429a124a1..0a38edfe3a11da13518b568befd0f57f120bcc83 100644
+--- a/expat/lib/expat.h
++++ b/expat/lib/expat.h
+@@ -987,6 +987,40 @@ XML_GetCurrentByteCount(XML_Parser parser);
+ XMLPARSEAPI(const char *)
+ XML_GetInputContext(XML_Parser parser, int *offset, int *size);
+ 
++/* These functions are variants of the location accessors above that
++   rely on fixed 64bit types rather than XML_Index and XML_Size.  They
++   report correct locations for inputs larger than 2 GiB also on
++   32bit machines and 64bit Windows, i.e. where the types above wrap
++   around unless (non-default and uncommon) XML_LARGE_SIZE is defined.
++
++   Note: XML_GetCurrentLineNumber64 and XML_GetCurrentColumnNumber64
++   return 0 to indicate an error.
++   Note: XML_GetCurrentByteIndex64 returns -1 to indicate an error.
++   Added in Expat 2.9.0.
++*/
++XMLPARSEAPI(long long)
++XML_GetCurrentByteIndex64(XML_Parser parser);
++XMLPARSEAPI(long long)
++XML_GetCurrentByteCount64(XML_Parser parser);
++XMLPARSEAPI(unsigned long long)
++XML_GetCurrentLineNumber64(XML_Parser parser);
++XMLPARSEAPI(unsigned long long)
++XML_GetCurrentColumnNumber64(XML_Parser parser);
++
++/* If XML_CONTEXT_BYTES is >=1, returns the input buffer, sets the
++   integer pointed to by offset to the offset within this buffer of the
++   current parse position, and sets the integer pointed to by size to
++   the size of this buffer (the number of input bytes). Otherwise
++   returns a NULL pointer. Also returns a NULL pointer if a parse isn't
++   active.
++
++   NOTE: The character pointer returned should not be used outside
++   the handler that makes the call.
++   Added in Expat 2.9.0.
++*/
++XMLPARSEAPI(const char *)
++XML_GetInputContext64(XML_Parser parser, long long *offset, long long *size);
++
+ /* For backwards compatibility with previous versions. */
+ #  define XML_GetErrorLineNumber XML_GetCurrentLineNumber
+ #  define XML_GetErrorColumnNumber XML_GetCurrentColumnNumber
+diff --git a/expat/lib/libexpat.def.cmake b/expat/lib/libexpat.def.cmake
+index 948135a56800df343774f67a0b3758ae3e7f1f7b..a6d1c89987c16ec7b5bc4de6dd00c7ea730043bd 100644
+--- a/expat/lib/libexpat.def.cmake
++++ b/expat/lib/libexpat.def.cmake
+@@ -85,3 +85,9 @@ EXPORTS
+ @_EXPAT_COMMENT_DTD_OR_GE@ XML_SetAllocTrackerActivationThreshold @73
+ ; added with version 2.8.0
+   XML_SetHashSalt16Bytes @74
++; added with version 2.9.0
++  XML_GetCurrentByteCount64 @75
++  XML_GetCurrentByteIndex64 @76
++  XML_GetCurrentColumnNumber64 @77
++  XML_GetCurrentLineNumber64 @78
++  XML_GetInputContext64 @79
+diff --git a/expat/lib/libexpat.map.in b/expat/lib/libexpat.map.in
+index 71a6758fd746568f6fe99f47386cf05b377b5a81..cf7c170974843268ef1e72515d48835ac919607c 100644
+--- a/expat/lib/libexpat.map.in
++++ b/expat/lib/libexpat.map.in
+@@ -122,3 +122,12 @@ LIBEXPAT_2.8.0 {
+  global:
+   XML_SetHashSalt16Bytes;
+ } LIBEXPAT_2.7.2;
++
++LIBEXPAT_2.9.0 {
++ global:
++  XML_GetCurrentByteCount64;
++  XML_GetCurrentByteIndex64;
++  XML_GetCurrentColumnNumber64;
++  XML_GetCurrentLineNumber64;
++  XML_GetInputContext64;
++} LIBEXPAT_2.8.0;
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 07730f6902888eaaccfef52b61cf22cffa10cca9..5fa4223c3e38aee61ff971bf5c2e187bee841d02 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2711,15 +2711,20 @@ XML_GetErrorCode(XML_Parser parser) {
+ 
+ XML_Index XMLCALL
+ XML_GetCurrentByteIndex(XML_Parser parser) {
++  // NOTE: XML_Index is known to wrap around for >2 GiB content
++  //       on 32bit machines and 64bit Windows, unless (non-default and
++  //       uncommon) XML_LARGE_SIZE is defined.
++  //       That's a bug and it only lives on because we cannot break
++  //       ABI compatibility of public API.
++  return (XML_Index)XML_GetCurrentByteIndex64(parser);
++}
++
++long long XMLCALL
++XML_GetCurrentByteIndex64(XML_Parser parser) {
+   if (parser == NULL)
+     return -1;
+   if (parser->m_eventPtr) {
+-    // NOTE: XML_Index is known to wrap around for >2 GiB content
+-    //       on 32bit machines and 64bit Windows, unless (non-default and
+-    //       uncommon) XML_LARGE_SIZE is defined.
+-    //       That's a bug and it only lives on because we cannot break
+-    //       ABI compatibility of public API.
+-    return (XML_Index)(parser->m_parseEndByteIndex
++    return (long long)(parser->m_parseEndByteIndex
+                        - (parser->m_parseEndPtr - parser->m_eventPtr));
+   }
+   return -1;
+@@ -2727,10 +2732,18 @@ XML_GetCurrentByteIndex(XML_Parser parser) {
+ 
+ int XMLCALL
+ XML_GetCurrentByteCount(XML_Parser parser) {
++  // NOTE: The int return type is known to wrap around for events
++  //       larger than 2 GiB.  That's a bug and it only lives on
++  //       because we cannot break ABI compatibility of public API.
++  return (int)XML_GetCurrentByteCount64(parser);
++}
++
++long long XMLCALL
++XML_GetCurrentByteCount64(XML_Parser parser) {
+   if (parser == NULL)
+     return 0;
+   if (parser->m_eventEndPtr && parser->m_eventPtr)
+-    return (int)(parser->m_eventEndPtr - parser->m_eventPtr);
++    return (long long)(parser->m_eventEndPtr - parser->m_eventPtr);
+   return 0;
+ }
+ 
+@@ -2754,8 +2767,36 @@ XML_GetInputContext(XML_Parser parser, int *offset, int *size) {
+   return NULL;
+ }
+ 
++const char *XMLCALL
++XML_GetInputContext64(XML_Parser parser, long long *offset, long long *size) {
++#if XML_CONTEXT_BYTES > 0
++  if (parser->m_eventPtr && parser->m_buffer) {
++    if (offset != NULL)
++      *offset = (long long)(parser->m_eventPtr - parser->m_buffer);
++    if (size != NULL)
++      *size = (long long)(parser->m_bufferEnd - parser->m_buffer);
++    return parser->m_buffer;
++  }
++#else
++  (void)parser;
++  (void)offset;
++  (void)size;
++#endif /* XML_CONTEXT_BYTES > 0 */
++  return NULL;
++}
++
+ XML_Size XMLCALL
+ XML_GetCurrentLineNumber(XML_Parser parser) {
++  // NOTE: XML_Size is known to wrap around for >4 GiB content
++  //       on 32bit machines and 64bit Windows, unless (non-default and
++  //       uncommon) XML_LARGE_SIZE is defined.
++  //       That's a bug and it only lives on because we cannot break
++  //       ABI compatibility of public API.
++  return (XML_Size)XML_GetCurrentLineNumber64(parser);
++}
++
++unsigned long long XMLCALL
++XML_GetCurrentLineNumber64(XML_Parser parser) {
+   if (parser == NULL)
+     return 0;
+   if (parser->m_eventPtr && parser->m_eventPtr >= parser->m_positionPtr) {
+@@ -2763,16 +2804,21 @@ XML_GetCurrentLineNumber(XML_Parser parser) {
+                       parser->m_eventPtr, &parser->m_position);
+     parser->m_positionPtr = parser->m_eventPtr;
+   }
++  return (unsigned long long)(parser->m_position.lineNumber + 1);
++}
++
++XML_Size XMLCALL
++XML_GetCurrentColumnNumber(XML_Parser parser) {
+   // NOTE: XML_Size is known to wrap around for >4 GiB content
+   //       on 32bit machines and 64bit Windows, unless (non-default and
+   //       uncommon) XML_LARGE_SIZE is defined.
+   //       That's a bug and it only lives on because we cannot break
+   //       ABI compatibility of public API.
+-  return (XML_Size)(parser->m_position.lineNumber + 1);
++  return (XML_Size)XML_GetCurrentColumnNumber64(parser);
+ }
+ 
+-XML_Size XMLCALL
+-XML_GetCurrentColumnNumber(XML_Parser parser) {
++unsigned long long XMLCALL
++XML_GetCurrentColumnNumber64(XML_Parser parser) {
+   if (parser == NULL)
+     return 0;
+   if (parser->m_eventPtr && parser->m_eventPtr >= parser->m_positionPtr) {
+@@ -2780,12 +2826,7 @@ XML_GetCurrentColumnNumber(XML_Parser parser) {
+                       parser->m_eventPtr, &parser->m_position);
+     parser->m_positionPtr = parser->m_eventPtr;
+   }
+-  // NOTE: XML_Size is known to wrap around for >4 GiB content
+-  //       on 32bit machines and 64bit Windows, unless (non-default and
+-  //       uncommon) XML_LARGE_SIZE is defined.
+-  //       That's a bug and it only lives on because we cannot break
+-  //       ABI compatibility of public API.
+-  return (XML_Size)parser->m_position.columnNumber;
++  return (unsigned long long)parser->m_position.columnNumber;
+ }
+ 
+ void XMLCALL
+diff --git a/expat/tests/basic_tests.c b/expat/tests/basic_tests.c
+index 8f4f0902d5c78f6cf4b49389cc2184d13e61374d..1cefbac539b6552fc354a14446d20c3f40e3391e 100644
+--- a/expat/tests/basic_tests.c
++++ b/expat/tests/basic_tests.c
+@@ -3965,6 +3965,57 @@ END_TEST
+ #undef CDATA_TEXT
+ #undef END_ELEMENT
+ 
++/* Test 64bit position information in handler */
++#define START_ELEMENT_64 "<e>"
++#define CDATA_TEXT_64 "Hello"
++#define END_ELEMENT_64 "</e>"
++static void XMLCALL
++byte_character_handler_64(void *userData, const XML_Char *s, int len) {
++#if XML_CONTEXT_BYTES > 0
++  long long offset, size;
++  const char *buffer;
++  ByteTestData *data = (ByteTestData *)userData;
++
++  UNUSED_P(s);
++  buffer = XML_GetInputContext64(g_parser, &offset, &size);
++  if (buffer == NULL)
++    fail("Failed to get context buffer from 64bit API");
++  if (offset != data->start_element_len)
++    fail("64bit context offset in unexpected position");
++  if (size != data->total_string_len)
++    fail("64bit context size is not full buffer");
++  if (XML_GetCurrentByteIndex64(g_parser) != offset)
++    fail("64bit character byte index incorrect");
++  if (XML_GetCurrentByteCount64(g_parser) != len)
++    fail("64bit character byte count incorrect");
++  if (XML_GetCurrentLineNumber64(g_parser) != 1)
++    fail("64bit character line number incorrect");
++  if (XML_GetCurrentColumnNumber64(g_parser) != data->start_element_len)
++    fail("64bit character column number incorrect");
++#else
++  UNUSED_P(s);
++  UNUSED_P(userData);
++  UNUSED_P(len);
++#endif
++}
++
++START_TEST(test_byte_info_at_cdata_64bit) {
++  const char *text = START_ELEMENT_64 CDATA_TEXT_64 END_ELEMENT_64;
++  ByteTestData data;
++
++  data.start_element_len = (int)strlen(START_ELEMENT_64);
++  data.cdata_len = (int)strlen(CDATA_TEXT_64);
++  data.total_string_len = (int)strlen(text);
++  XML_SetCharacterDataHandler(g_parser, byte_character_handler_64);
++  XML_SetUserData(g_parser, &data);
++  if (XML_Parse(g_parser, text, (int)strlen(text), XML_TRUE) != XML_STATUS_OK)
++    xml_failure(g_parser);
++}
++END_TEST
++#undef START_ELEMENT_64
++#undef CDATA_TEXT_64
++#undef END_ELEMENT_64
++
+ /* Test predefined entities are correctly recognised */
+ START_TEST(test_predefined_entities) {
+   const char *text = "<doc>&lt;&gt;&amp;&quot;&apos;</doc>";
+@@ -7191,6 +7242,7 @@ make_basic_test_case(Suite *s) {
+   tcase_add_test(tc_basic, test_byte_info_at_end);
+   tcase_add_test(tc_basic, test_byte_info_at_error);
+   tcase_add_test(tc_basic, test_byte_info_at_cdata);
++  tcase_add_test(tc_basic, test_byte_info_at_cdata_64bit);
+   tcase_add_test(tc_basic, test_predefined_entities);
+   tcase_add_test__ifdef_xml_dtd(tc_basic, test_invalid_tag_in_dtd);
+   tcase_add_test(tc_basic, test_not_predefined_entities);

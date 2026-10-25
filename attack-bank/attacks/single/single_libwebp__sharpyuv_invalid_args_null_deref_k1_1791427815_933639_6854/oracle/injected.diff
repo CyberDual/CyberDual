@@ -1,0 +1,530 @@
+diff --git a/build.gradle b/build.gradle
+deleted file mode 100644
+index 14ceebf78c752c573c0d0fc827261bc02a8db50a..0000000000000000000000000000000000000000
+--- a/build.gradle
++++ /dev/null
+@@ -1,444 +0,0 @@
+-// Define dependencies.
+-buildscript {
+-  repositories {
+-    maven {
+-      url "https://jcenter.bintray.com"
+-    }
+-  }
+-  dependencies {
+-    classpath "com.android.tools.build:gradle:${ANDROID_GRADLE_PLUGIN_VERSION}"
+-  }
+-}
+-
+-// Define versions in the project.
+-project.ext {
+-  buildToolsVersion = "${BUILD_TOOLS_VERSION}"
+-  compileSdkVersion = COMPILE_SDK_VERSION.toInteger()
+-}
+-
+-// Core libraries and executables.
+-apply plugin: "c"
+-def NEON
+-model {
+-  buildTypes {
+-    debug
+-    release
+-  }
+-  platforms {
+-    arm {
+-      architecture "arm"
+-    }
+-    arm64 {
+-      architecture "arm64"
+-    }
+-    x86 {
+-      architecture "x86"
+-    }
+-    x64 {
+-      architecture "x86_64"
+-    }
+-    mips32r2
+-    mips32r5
+-    mips64r6
+-  }
+-  toolChains {
+-    gcc(Gcc) {
+-      target("mips32r2") {
+-        cCompiler.args "-mips32r2"
+-      }
+-      target("mips32r5") {
+-        cCompiler.args "-mips32r5"
+-      }
+-      target("mips64r6") {
+-        cCompiler.args "-mips64r6"
+-      }
+-    }
+-  }
+-  binaries {
+-    all {
+-      if (toolChain in Gcc) {
+-        cCompiler.args "-fPIC"
+-        cCompiler.args "-Wall"
+-        cCompiler.define "ANDROID"
+-        cCompiler.define "HAVE_MALLOC_H"
+-      }
+-      // Optimizations.
+-      if (buildType == buildTypes.release) {
+-        if (toolChain in Gcc) {
+-          cCompiler.args "-finline-functions"
+-          cCompiler.args "-ffast-math"
+-          cCompiler.args "-ffunction-sections"
+-          cCompiler.args "-fdata-sections"
+-        }
+-        if (toolChain in Clang) {
+-          cCompiler.args "-frename-registers -s"
+-        }
+-      }
+-      // mips32 fails to build with clang from r14b
+-      // https://bugs.chromium.org/p/webp/issues/detail?id=343
+-      if (toolChain in Clang) {
+-        if (getTargetPlatform() == "mips") {
+-          cCompiler.args "-no-integrated-as"
+-        }
+-      }
+-      // Check for NEON usage.
+-      if (getTargetPlatform() == "arm") {
+-        NEON = "c.neon"
+-        cCompiler.define "HAVE_CPU_FEATURES_H"
+-      } else {
+-        NEON = "c"
+-      }
+-
+-      cCompiler.args "-I" + file(".").absolutePath
+-    }
+-    // Link to pthread for shared libraries.
+-    withType(SharedLibraryBinarySpec) {
+-      if (toolChain in Gcc) {
+-        cCompiler.define "HAVE_PTHREAD"
+-        cCompiler.define "WEBP_USE_THREAD"
+-        linker.args "-pthread"
+-      }
+-    }
+-  }
+-  components {
+-    webp(NativeLibrarySpec) {
+-      sources {
+-        c {
+-          source {
+-            srcDir "sharpyuv"
+-            include "sharpyuv.c"
+-            include "sharpyuv_cpu.c"
+-            include "sharpyuv_csp.c"
+-            include "sharpyuv_dsp.c"
+-            include "sharpyuv_gamma.c"
+-            include "sharpyuv_neon.c"
+-            include "sharpyuv_sse2.c"
+-            srcDir "src/dec"
+-            include "alpha_dec.c"
+-            include "buffer_dec.c"
+-            include "frame_dec.c"
+-            include "idec_dec.c"
+-            include "io_dec.c"
+-            include "quant_dec.c"
+-            include "tree_dec.c"
+-            include "vp8_dec.c"
+-            include "vp8l_dec.c"
+-            include "webp_dec.c"
+-            srcDir "src/dsp"
+-            include "alpha_processing.c"
+-            include "alpha_processing_mips_dsp_r2.c"
+-            include "alpha_processing_neon.$NEON"
+-            include "alpha_processing_sse2.c"
+-            include "alpha_processing_sse41.c"
+-            include "cpu.c"
+-            include "dec.c"
+-            include "dec_clip_tables.c"
+-            include "dec_mips32.c"
+-            include "dec_mips_dsp_r2.c"
+-            include "dec_msa.c"
+-            include "dec_neon.$NEON"
+-            include "dec_sse2.c"
+-            include "dec_sse41.c"
+-            include "filters.c"
+-            include "filters_mips_dsp_r2.c"
+-            include "filters_msa.c"
+-            include "filters_neon.$NEON"
+-            include "filters_sse2.c"
+-            include "lossless.c"
+-            include "lossless_mips_dsp_r2.c"
+-            include "lossless_msa.c"
+-            include "lossless_neon.$NEON"
+-            include "lossless_sse2.c"
+-            include "lossless_sse41.c"
+-            include "rescaler.c"
+-            include "rescaler_mips32.c"
+-            include "rescaler_mips_dsp_r2.c"
+-            include "rescaler_msa.c"
+-            include "rescaler_neon.$NEON"
+-            include "rescaler_sse2.c"
+-            include "upsampling.c"
+-            include "upsampling_mips_dsp_r2.c"
+-            include "upsampling_msa.c"
+-            include "upsampling_neon.$NEON"
+-            include "upsampling_sse2.c"
+-            include "upsampling_sse41.c"
+-            include "yuv.c"
+-            include "yuv_mips32.c"
+-            include "yuv_mips_dsp_r2.c"
+-            include "yuv_neon.$NEON"
+-            include "yuv_sse2.c"
+-            include "yuv_sse41.c"
+-            srcDir "src/utils"
+-            include "bit_reader_utils.c"
+-            include "color_cache_utils.c"
+-            include "filters_utils.c"
+-            include "huffman_utils.c"
+-            include "palette.c"
+-            include "quant_levels_dec_utils.c"
+-            include "random_utils.c"
+-            include "rescaler_utils.c"
+-            include "thread_utils.c"
+-            include "utils.c"
+-            srcDir "src/dsp"
+-            include "cost.c"
+-            include "cost_mips32.c"
+-            include "cost_mips_dsp_r2.c"
+-            include "cost_neon.$NEON"
+-            include "cost_sse2.c"
+-            include "enc.c"
+-            include "enc_mips32.c"
+-            include "enc_mips_dsp_r2.c"
+-            include "enc_msa.c"
+-            include "enc_neon.$NEON"
+-            include "enc_sse2.c"
+-            include "enc_sse41.c"
+-            include "lossless_enc.c"
+-            include "lossless_enc_mips32.c"
+-            include "lossless_enc_mips_dsp_r2.c"
+-            include "lossless_enc_msa.c"
+-            include "lossless_enc_neon.$NEON"
+-            include "lossless_enc_sse2.c"
+-            include "lossless_enc_sse41.c"
+-            include "ssim.c"
+-            include "ssim_sse2.c"
+-            srcDir "src/enc"
+-            include "alpha_enc.c"
+-            include "analysis_enc.c"
+-            include "backward_references_cost_enc.c"
+-            include "backward_references_enc.c"
+-            include "config_enc.c"
+-            include "cost_enc.c"
+-            include "filter_enc.c"
+-            include "frame_enc.c"
+-            include "histogram_enc.c"
+-            include "iterator_enc.c"
+-            include "near_lossless_enc.c"
+-            include "picture_enc.c"
+-            include "picture_csp_enc.c"
+-            include "picture_psnr_enc.c"
+-            include "picture_rescale_enc.c"
+-            include "picture_tools_enc.c"
+-            include "predictor_enc.c"
+-            include "quant_enc.c"
+-            include "syntax_enc.c"
+-            include "token_enc.c"
+-            include "tree_enc.c"
+-            include "vp8l_enc.c"
+-            include "webp_enc.c"
+-            srcDir "src/utils"
+-            include "bit_writer_utils.c"
+-            include "huffman_encode_utils.c"
+-            include "quant_levels_utils.c"
+-          }
+-          exportedHeaders {
+-            srcDir "src"
+-          }
+-        }
+-      }
+-    }
+-
+-    webpdemux(NativeLibrarySpec) {
+-      sources {
+-        c {
+-          source {
+-            srcDir "src/demux"
+-            include "anim_decode.c"
+-            include "demux.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    webpmux(NativeLibrarySpec) {
+-      sources {
+-        c {
+-          source {
+-            srcDir "src/mux/"
+-            include "anim_encode.c"
+-            include "muxedit.c"
+-            include "muxinternal.c"
+-            include "muxread.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    // Executables from examples.
+-    example_util(NativeLibrarySpec) {
+-      binaries {
+-        all {
+-          lib library: "webp", linkage: "static"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./examples"
+-            include "example_util.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    imageio_util(NativeLibrarySpec) {
+-      binaries {
+-        all {
+-          lib library: "webp", linkage: "static"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./imageio"
+-            include "imageio_util.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    imagedec(NativeLibrarySpec) {
+-      binaries {
+-        all {
+-          lib library: "webpdemux", linkage: "static"
+-          lib library: "webp", linkage: "static"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./imageio"
+-            include "image_dec.c"
+-            include "jpegdec.c"
+-            include "metadata.c"
+-            include "pngdec.c"
+-            include "pnmdec.c"
+-            include "tiffdec.c"
+-            include "webpdec.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    imageenc(NativeLibrarySpec) {
+-      binaries {
+-        all {
+-          lib library: "webp", linkage: "static"
+-          lib library: "imageio_util", linkage: "static"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./imageio"
+-            include "image_enc.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    cwebp(NativeExecutableSpec) {
+-      binaries {
+-        all {
+-          lib library: "example_util", linkage: "static"
+-          lib library: "imagedec", linkage: "static"
+-          lib library: "imageio_util", linkage: "static"
+-          lib library: "webpdemux", linkage: "static"
+-          lib library: "webp", linkage: "static"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./examples"
+-            include "cwebp.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    dwebp(NativeExecutableSpec) {
+-      binaries {
+-        all {
+-          lib library: "example_util", linkage: "static"
+-          lib library: "imagedec", linkage: "static"
+-          lib library: "imageenc", linkage: "static"
+-          lib library: "imageio_util", linkage: "static"
+-          lib library: "webpdemux", linkage: "static"
+-          lib library: "webp"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-              srcDir "./examples"
+-              include "dwebp.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    webpmux_example(NativeExecutableSpec) {
+-      binaries {
+-        all {
+-          lib library: "example_util", linkage: "static"
+-          lib library: "imageio_util", linkage: "static"
+-          lib library: "webpmux", linkage: "static"
+-          lib library: "webp"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./examples"
+-            include "webpmux.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    img2webp_example(NativeExecutableSpec) {
+-      binaries {
+-        all {
+-          lib library: "example_util", linkage: "static"
+-          lib library: "imagedec", linkage: "static"
+-          lib library: "imageio_util", linkage: "static"
+-          lib library: "webpmux", linkage: "static"
+-          lib library: "webpdemux", linkage: "static"
+-          lib library: "webp"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./examples"
+-            include "img2webp.c"
+-          }
+-        }
+-      }
+-    }
+-
+-    webpinfo_example(NativeExecutableSpec) {
+-      binaries {
+-        all {
+-          lib library: "example_util", linkage: "static"
+-          lib library: "imageio_util", linkage: "static"
+-          lib library: "webp"
+-        }
+-      }
+-      sources {
+-        c {
+-          source {
+-            srcDir "./examples"
+-            include "webpinfo.c"
+-          }
+-        }
+-      }
+-    }
+-  }
+-  tasks {
+-    // Task to test all possible configurations.
+-    buildAllExecutables(Task) {
+-      dependsOn $.binaries.findAll { it.buildable }
+-    }
+-  }
+-}
+diff --git a/sharpyuv/sharpyuv.c b/sharpyuv/sharpyuv.c
+index 5a00967fcba8074c709161cb8269eff1ac14677e..dbad4b7314535eb6e2ddeee3ecc39f202b85a96b 100644
+--- a/sharpyuv/sharpyuv.c
++++ b/sharpyuv/sharpyuv.c
+@@ -479,15 +479,21 @@ int SharpYuvConvertWithOptions(const void* r_ptr, const void* g_ptr,
+                                void* u_ptr, int u_stride, void* v_ptr,
+                                int v_stride, int yuv_bit_depth, int width,
+                                int height, const SharpYuvOptions* options) {
+-  const SharpYuvConversionMatrix* yuv_matrix = options->yuv_matrix;
+-  SharpYuvTransferFunctionType transfer_type = options->transfer_type;
++  const SharpYuvConversionMatrix* yuv_matrix;
++  SharpYuvTransferFunctionType transfer_type;
+   SharpYuvConversionMatrix scaled_matrix;
+-  const int rgb_max = (1 << rgb_bit_depth) - 1;
+-  const int rgb_round = 1 << (rgb_bit_depth - 1);
+-  const int yuv_max = (1 << yuv_bit_depth) - 1;
+-  const int sfix = GetPrecisionShift(rgb_bit_depth);
++  int rgb_max, rgb_round, yuv_max, sfix;
+ 
+-  if (width < 1 || height < 1 || width == INT_MAX || height == INT_MAX ||
++  if (options == NULL || options->yuv_matrix == NULL ||
++      (options->transfer_type != kSharpYuvTransferFunctionBt709 &&
++       (options->transfer_type < kSharpYuvTransferFunctionBt470M ||
++        options->transfer_type >= kSharpYuvTransferFunctionNum))) {
++    return 0;
++  }
++  yuv_matrix = options->yuv_matrix;
++  transfer_type = options->transfer_type;
++  if (width < 1 || height < 1 || width > (INT_MAX - 1) / 3 ||
++      height == INT_MAX ||
+       r_ptr == NULL || g_ptr == NULL || b_ptr == NULL || y_ptr == NULL ||
+       u_ptr == NULL || v_ptr == NULL) {
+     return 0;
+@@ -522,7 +528,9 @@ int SharpYuvConvertWithOptions(const void* r_ptr, const void* g_ptr,
+         v_stride < 0 || (uint64_t)v_stride < uv_width * yuv_bytes) {
+       return 0;
+     }
+-    if (abs_step == 0 || abs_stride < (uint64_t)width * abs_step) {
++    if (abs_step == 0 || (uint64_t)width * abs_step > INT_MAX ||
++        abs_stride < (uint64_t)width * abs_step ||
++        abs_stride > INT_MAX / 2) {
+       return 0;
+     }
+     if (total_rgb_size != (size_t)total_rgb_size ||
+@@ -537,6 +545,35 @@ int SharpYuvConvertWithOptions(const void* r_ptr, const void* g_ptr,
+     // Stride should be even for uint16_t buffers.
+     return 0;
+   }
++  rgb_max = (1 << rgb_bit_depth) - 1;
++  rgb_round = 1 << (rgb_bit_depth - 1);
++  yuv_max = (1 << yuv_bit_depth) - 1;
++  sfix = GetPrecisionShift(rgb_bit_depth);
++  if (sfix > 0) {
++    const int limit = INT_MAX >> sfix;
++    const int min_limit = INT_MIN / (1 << sfix);
++    if (yuv_matrix->rgb_to_y[3] < min_limit ||
++        yuv_matrix->rgb_to_y[3] > limit ||
++        yuv_matrix->rgb_to_u[3] < min_limit ||
++        yuv_matrix->rgb_to_u[3] > limit ||
++        yuv_matrix->rgb_to_v[3] < min_limit ||
++        yuv_matrix->rgb_to_v[3] > limit) {
++      return 0;
++    }
++  }
++  if (rgb_bit_depth != yuv_bit_depth) {
++    const int* const rows[] = {yuv_matrix->rgb_to_y, yuv_matrix->rgb_to_u,
++                               yuv_matrix->rgb_to_v};
++    const int num_rows =
++        sizeof(*yuv_matrix) / (3 * sizeof(yuv_matrix->rgb_to_y[0]));
++    int i, j;
++    for (i = 0; i < num_rows; ++i) {
++      for (j = 0; j < 3; ++j) {
++        const int64_t scaled = (int64_t)rows[i][j] * yuv_max + rgb_round;
++        if (scaled < INT_MIN || scaled > INT_MAX) return 0;
++      }
++    }
++  }
+   // The address of the function pointer is used to avoid a read race.
+   SharpYuvInit((VP8CPUInfo)&SharpYuvGetCPUInfo);
+ 

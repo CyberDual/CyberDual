@@ -1,0 +1,57 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index 3fbb5b1..efec158 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -26,7 +26,7 @@
+ ///
+ /// This should be big enough to avoid making lots of tiny allocations
+ /// but small enough to avoid too much unused memory at once.
+-#define INDEX_GROUP_SIZE 512
++#define INDEX_GROUP_SIZE 1024
+ 
+ 
+ /// \brief      How many Records can be allocated at once at maximum
+@@ -188,7 +188,7 @@ struct lzma_index_s {
+ 	/// How many Records to allocate at once in lzma_index_append().
+ 	/// This defaults to INDEX_GROUP_SIZE but can be overridden with
+ 	/// lzma_index_prealloc().
+-	size_t prealloc;
++	unsigned int prealloc : 10;
+ 
+ 	/// Bitmask indicating what integrity check types have been used
+ 	/// as set by lzma_index_stream_flags(). The bit of the last Stream
+@@ -448,7 +448,7 @@ index_init_plain(const lzma_allocator *allocator)
+ 		i->total_size = 0;
+ 		i->record_count = 0;
+ 		i->index_list_size = 0;
+-		i->prealloc = INDEX_GROUP_SIZE;
++		lzma_index_prealloc(i, INDEX_GROUP_SIZE);
+ 		i->checks = 0;
+ 	}
+ 
+@@ -517,7 +517,7 @@ lzma_index_prealloc(lzma_index *i, lzma_vli records)
+ 	if (records == 0)
+ 		records = INDEX_GROUP_SIZE;
+ 
+-	i->prealloc = (size_t)(records);
++	i->prealloc = (unsigned int)(my_min(records, INDEX_GROUP_SIZE));
+ 	return false;
+ }
+ 
+@@ -767,7 +767,6 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,
+ 		++g->last;
+ 	} else {
+ 		// We need to allocate a new group.
+-		assert(i->prealloc > 0);
+ 		g = lzma_alloc(sizeof(index_group)
+ 				+ i->prealloc * sizeof(index_record),
+ 				allocator);
+@@ -779,7 +778,7 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,
+ 
+ 		// Reset prealloc so that if the application happens to
+ 		// add new Records, the allocation size will be sane.
+-		i->prealloc = INDEX_GROUP_SIZE;
++		lzma_index_prealloc(i, INDEX_GROUP_SIZE);
+ 
+ 		// Set the start offsets of this group.
+ 		g->node.uncompressed_base = uncompressed_base;

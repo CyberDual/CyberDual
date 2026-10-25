@@ -1,0 +1,27 @@
+diff --git a/src/media_tools/av_parsers.c b/src/media_tools/av_parsers.c
+index a000002e6..88def34df 100644
+--- a/src/media_tools/av_parsers.c
++++ b/src/media_tools/av_parsers.c
+@@ -15501,19 +15501,9 @@ static Bool gf_ac4_substream_info_obj(GF_BitStream *bs,
+ 
+ 	substream->n_objects_code = gf_bs_read_int_log(bs, 3, "n_objects_code");
+ 
+-	if (substream->n_objects_code == 0) {
+-		n_signals = 0;
+-	} else if (substream->n_objects_code == 1) {
+-		n_signals = 1;
+-	} else if (substream->n_objects_code == 2) {
+-		n_signals = 2;
+-	} else if (substream->n_objects_code == 3) {
+-		n_signals = 3;
+-	} else if (substream->n_objects_code == 4) {
+-		n_signals = 5;
+-	} else {
+-		n_signals = 0;
+-	}
++	// ETSI TS 103 190-2 V1.3.1 (2025-07) Table 60: one signal per object for the
++	// defined codes, the LFE signal is added below; reserved codes carry no signal
++	n_signals = N_OBJECTS_CODE_TO_NUM_OBJECTS[substream->n_objects_code];
+ 
+ 	// ETSI TS 103 190-2 V1.3.1 (2025-07) Table 60
+ 	// use the default presentation as the default for channel count

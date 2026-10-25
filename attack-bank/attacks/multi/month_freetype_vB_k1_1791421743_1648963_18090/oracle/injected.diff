@@ -1,0 +1,17 @@
+diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c
+index 151aeac..aab5a20 100644
+--- a/src/type1/t1parse.c
++++ b/src/type1/t1parse.c
+@@ -279,7 +279,12 @@
+       {
+         error = read_pfb_tag( stream, &tag, &size );
+         if ( error )
++        {
++          FT_FREE( priv_dict );
++          if ( !priv_len )
++            goto Fail;
+           break;
++        }
+ 
+         if ( tag != 0x8002U || size > stream->size - stream->pos )
+           break;

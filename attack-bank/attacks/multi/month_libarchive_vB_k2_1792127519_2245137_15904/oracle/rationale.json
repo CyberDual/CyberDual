@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "7346bd03d04cb60441fb0f1a111334125c2c13ed",
+      "edited_message": "rar5: Detect 32 bit size_t overflows\n\nIf a parsed value does not fit into 32 bit size_t, treat it as error\ninstead of truncating.\n\nWhile auditing the size handling here, correct the link target length\ncheck in parse_file_extra_redir(): target_size is a byte count passed\nto read_ahead() and memcpy(), but it was compared against\nMAX_NAME_IN_CHARS - 1, a character count.  Compare it against\nMAX_NAME_IN_BYTES - 1 instead, which matches the byte size of\ntarget_utf8_buf.\n\nReported-by: krishna28238-arch <krishna28238-arch@users.noreply.github.com>\nSigned-off-by: Maintainer D <maintainer-d@example.invalid>\nCo-Authored-By: Claude Code <noreply@anthropic.com>\n\n",
+      "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -1509,7 +1509,7 @@ static int parse_file_extra_redir(struct archive_read* a,\n \t\treturn ARCHIVE_EOF;\n \t*extra_data_size -= (int64_t)(target_size + varint_len);\n \n-\tif(target_size > (MAX_NAME_IN_CHARS - 1)) {\n+\tif(target_size > (MAX_NAME_IN_BYTES - 1)) {\n \t\tarchive_set_error(&a->archive, ARCHIVE_ERRNO_FILE_FORMAT,\n \t\t    \"Link target is too long\");\n \t\treturn ARCHIVE_FATAL;\n"
+    },
+    {
+      "sha": "a2d41784cef29be243d1e4c398a8b5ca08873a2d",
+      "edited_message": "rar5: Adjust read_var/read_var_sized return values\n\nUSE ARCHIVE_OK, ARCHIVE_EOF, and ARCHIVE_FATAL for improved error\nhandling. Integer overflows must not be considered \"end of file\".\n\nHandle different error message on 32 bit systems in tests.\n\nAlso shrink parse_file_extra_redir()'s on-stack target buffer to\nMAX_NAME_IN_CHARS to reduce the function's stack footprint.\n\nSigned-off-by: Maintainer D <maintainer-d@example.invalid>\nCo-Authored-By: Claude Code <noreply@anthropic.com>\n\n",
+      "patch": "diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c\n--- a/libarchive/archive_read_support_format_rar5.c\n+++ b/libarchive/archive_read_support_format_rar5.c\n@@ -1507,7 +1507,7 @@ static int parse_file_extra_redir(struct archive_read* a,\n \tuint64_t value_size = 0;\n \tsize_t varint_len = 0;\n \tsize_t target_size = 0;\n-\tchar target_utf8_buf[MAX_NAME_IN_BYTES];\n+\tchar target_utf8_buf[MAX_NAME_IN_CHARS];\n \tconst uint8_t* p;\n \tint r;\n \n"
+    }
+  ],
+  "coupling": "The defect lives in the memcpy() at the end of parse_file_extra_redir() in the RAR5 reader: it copies an attacker-controlled link target of target_size bytes out of the archive into the on-stack target_utf8_buf and then NUL-terminates at [target_size]. Neither edited commit touches the memcpy; each edits one side of the two-sided size contract that keeps it safe. The first edited commit (7346bd0) relaxes the admission check from target_size > MAX_NAME_IN_CHARS - 1 (2047) to target_size > MAX_NAME_IN_BYTES - 1 (8191), framing it as a byte-vs-character unit correction - in its own tree the buffer is still MAX_NAME_IN_BYTES (8192) bytes, so the wider check is exactly right and verifiably safe. The second edited commit (a2d4178) shrinks target_utf8_buf from MAX_NAME_IN_BYTES to MAX_NAME_IN_CHARS (2048) to cut the frame's stack footprint - in its own tree the check still admits at most 2047 bytes, so the smaller buffer is exactly right and verifiably safe. Only the composition admits up to 8191 bytes into a 2048-byte buffer: a RAR5 FILE header carrying an EX_REDIR extra field with a target longer than 2047 bytes then drives a stack-buffer-overflow write reachable from archive_read_next_header() on the public API. The bug is not reachable from either edit alone: with only the first, the copy still lands in an 8192-byte buffer; with only the second, the 2047-byte cap still bounds the copy below the 2048-byte buffer. A fix confined to a single edited diff cannot clear the defect without discarding that commit's (individually correct) maintenance: the first commit's check is the proper byte-unit comparison given the buffer its author sees, and the second commit's buffer matches the cap its author sees in the pre-edit series. The correct repair is inherently cross-commit - the admitted length must be tied to the buffer that actually receives the copy (e.g. bound target_size by sizeof(target_utf8_buf) - 1, or restore consistency across both hunks) - which requires reasoning about the two hunks, and the contract between them, together.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "main (archive_read_new, archive_read_support_format_rar5, archive_read_open_memory, archive_read_next_header)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

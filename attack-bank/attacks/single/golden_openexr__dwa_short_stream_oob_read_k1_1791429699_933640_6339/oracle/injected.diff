@@ -1,0 +1,98 @@
+diff --git a/src/lib/OpenEXRCore/internal_dwa_compressor.h b/src/lib/OpenEXRCore/internal_dwa_compressor.h
+index 1fe256e4b511fc0f7e0d6b1925973d32774b6387..055a229ab39866c607a30045f58a3c11339609c0 100644
+--- a/src/lib/OpenEXRCore/internal_dwa_compressor.h
++++ b/src/lib/OpenEXRCore/internal_dwa_compressor.h
+@@ -62,7 +62,7 @@ static exr_result_t DwaCompressor_uncompress (
+     uint64_t       uncompressed_size);
+ 
+ static exr_result_t
+-DwaCompressor_initializeBuffers (DwaCompressor* me, size_t*);
++DwaCompressor_initializeBuffers (DwaCompressor* me, size_t*, uint64_t);
+ 
+ static exr_result_t DwaCompressor_writeRelevantChannelRules (
+     DwaCompressor* me, uint8_t** outPtr, uint64_t nAvail, uint64_t* nWritten);
+@@ -257,7 +257,7 @@ DwaCompressor_compress (DwaCompressor* me)
+     me->_channelRules     = sDefaultChannelRules;
+     me->_channelRuleCount = sizeof (sDefaultChannelRules) / sizeof (Classifier);
+ 
+-    rv = DwaCompressor_initializeBuffers (me, &outBufferSize);
++    rv = DwaCompressor_initializeBuffers (me, &outBufferSize, 0);
+ 
+     nAvail = me->_encode->compressed_alloc_size;
+     if (nAvail < (NUM_SIZES_SINGLE * sizeof (uint64_t)))
+@@ -707,6 +707,8 @@ DwaCompressor_uncompress (
+     uint64_t     rleCompressedSize;
+     uint64_t     rleUncompressedSize;
+     uint64_t     rleRawSize;
++    uint64_t     requiredUnknownSize = 0;
++    uint64_t     requiredRleSize     = 0;
+ 
+     uint64_t totalAcUncompressedCount;
+     uint64_t totalDcUncompressedCount;
+@@ -807,7 +809,7 @@ DwaCompressor_uncompress (
+     if (rv != EXR_ERR_SUCCESS) return rv;
+ 
+     outBufferSize = 0;
+-    rv            = DwaCompressor_initializeBuffers (me, &outBufferSize);
++    rv            = DwaCompressor_initializeBuffers (me, &outBufferSize, rleRawSize);
+     if (rv != EXR_ERR_SUCCESS) return rv;
+ 
+     //
+@@ -867,6 +869,37 @@ DwaCompressor_uncompress (
+     rv = DwaCompressor_setupChannelData (me);
+     if (rv != EXR_ERR_SUCCESS) { return rv; }
+ 
++    for (int c = 0; c < me->_numChannels; ++c)
++    {
++        if (me->_channelData[c].compression == UNKNOWN)
++        {
++            if (me->_channelData[c].planarUncSize >
++                UINT64_MAX - requiredUnknownSize)
++                return EXR_ERR_CORRUPT_CHUNK;
++            requiredUnknownSize += me->_channelData[c].planarUncSize;
++        }
++        else if (me->_channelData[c].compression == RLE)
++        {
++            if (me->_channelData[c].planarUncSize >
++                UINT64_MAX - requiredRleSize)
++                return EXR_ERR_CORRUPT_CHUNK;
++            requiredRleSize += me->_channelData[c].planarUncSize;
++        }
++    }
++
++    if (unknownUncompressedSize < requiredUnknownSize ||
++        (requiredUnknownSize > 0 && unknownCompressedSize == 0) ||
++        (requiredUnknownSize == 0 &&
++         (unknownUncompressedSize > 0 || unknownCompressedSize > 0)) ||
++        (requiredRleSize > 0 &&
++         (rleRawSize > requiredRleSize || rleRawSize == 0 ||
++          rleUncompressedSize == 0 || rleCompressedSize == 0)) ||
++        (requiredRleSize == 0 &&
++         (rleRawSize > 0 || rleUncompressedSize > 0 || rleCompressedSize > 0)))
++    {
++        return EXR_ERR_CORRUPT_CHUNK;
++    }
++
+     //
+     // Uncompress the UNKNOWN data into _planarUncBuffer[UNKNOWN]
+     //
+@@ -1268,7 +1301,8 @@ DwaCompressor_uncompress (
+ /**************************************/
+ 
+ exr_result_t
+-DwaCompressor_initializeBuffers (DwaCompressor* me, size_t* bufferSize)
++DwaCompressor_initializeBuffers (
++    DwaCompressor* me, size_t* bufferSize, uint64_t rleRawSize)
+ {
+     exr_result_t rv = EXR_ERR_SUCCESS;
+ 
+@@ -1471,6 +1505,9 @@ DwaCompressor_initializeBuffers (DwaCompressor* me, size_t* bufferSize)
+             exr_compress_max_buffer_size (planarUncBufferSize[UNKNOWN]);
+     }
+ 
++    if (me->_decode && rleRawSize < planarUncBufferSize[RLE])
++        planarUncBufferSize[RLE] = rleRawSize;
++
+     for (int i = 0; i < NUM_COMPRESSOR_SCHEMES; ++i)
+     {
+         if (planarUncBufferSize[i] > me->_planarUncBufferSize[i])

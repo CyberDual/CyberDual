@@ -1,0 +1,13 @@
+diff --git a/src/crwimage_int.cpp b/src/crwimage_int.cpp
+index 9c20d7d2d4d8ecbea92ed5f1d4f8667fe83eaee5..aba46e7b0b0283a83c158a213be7d5caaa33df32 100644
+--- a/src/crwimage_int.cpp
++++ b/src/crwimage_int.cpp
+@@ -990,6 +990,8 @@ DataBuf packIfdId(const ExifData& exifData, IfdId ifdId, ByteOrder byteOrder) {
+   for (auto&& exif : exifData) {
+     if (exif.ifdId() != ifdId)
+       continue;
++    enforce(exif.size() <= static_cast<size_t>(std::numeric_limits<uint16_t>::max()),
++            ErrorCode::kerCorruptedMetadata);
+     const uint16_t s = (exif.tag() * 2) + static_cast<uint16_t>(exif.size());
+     if (s <= size) {
+       len = std::max(len, s);

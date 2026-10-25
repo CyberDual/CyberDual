@@ -1,0 +1,142 @@
+diff --git a/expat/lib/expat.h b/expat/lib/expat.h
+index 4c3851d50a5fdf3c86854d5805d54ab429a124a1..2ed2ce4c601738a9dbb95954fc86103694c49b20 100644
+--- a/expat/lib/expat.h
++++ b/expat/lib/expat.h
+@@ -965,14 +965,19 @@ XML_GetErrorCode(XML_Parser parser);
+    Note: XML_GetCurrentByteIndex returns -1 to indicate an error.
+ */
+ XMLPARSEAPI(XML_Size) XML_GetCurrentLineNumber(XML_Parser parser);
++XMLPARSEAPI(uint64_t) XML_GetCurrentLineNumber64(XML_Parser parser);
+ XMLPARSEAPI(XML_Size) XML_GetCurrentColumnNumber(XML_Parser parser);
++XMLPARSEAPI(uint64_t) XML_GetCurrentColumnNumber64(XML_Parser parser);
+ XMLPARSEAPI(XML_Index) XML_GetCurrentByteIndex(XML_Parser parser);
++XMLPARSEAPI(int64_t) XML_GetCurrentByteIndex64(XML_Parser parser);
+ 
+ /* Return the number of bytes in the current event.
+    Returns 0 if the event is in an internal entity.
+ */
+ XMLPARSEAPI(int)
+ XML_GetCurrentByteCount(XML_Parser parser);
++XMLPARSEAPI(uint64_t)
++XML_GetCurrentByteCount64(XML_Parser parser);
+ 
+ /* If XML_CONTEXT_BYTES is >=1, returns the input buffer, sets
+    the integer pointed to by offset to the offset within this buffer
+@@ -986,6 +991,8 @@ XML_GetCurrentByteCount(XML_Parser parser);
+ */
+ XMLPARSEAPI(const char *)
+ XML_GetInputContext(XML_Parser parser, int *offset, int *size);
++XMLPARSEAPI(const char *)
++XML_GetInputContext64(XML_Parser parser, int64_t *offset, uint64_t *size);
+ 
+ /* For backwards compatibility with previous versions. */
+ #  define XML_GetErrorLineNumber XML_GetCurrentLineNumber
+diff --git a/expat/lib/libexpat.def.cmake b/expat/lib/libexpat.def.cmake
+index 948135a56800df343774f67a0b3758ae3e7f1f7b..a6d1c89987c16ec7b5bc4de6dd00c7ea730043bd 100644
+--- a/expat/lib/libexpat.def.cmake
++++ b/expat/lib/libexpat.def.cmake
+@@ -85,3 +85,9 @@ EXPORTS
+ @_EXPAT_COMMENT_DTD_OR_GE@ XML_SetAllocTrackerActivationThreshold @73
+ ; added with version 2.8.0
+   XML_SetHashSalt16Bytes @74
++; added with version 2.9.0
++  XML_GetCurrentByteCount64 @75
++  XML_GetCurrentByteIndex64 @76
++  XML_GetCurrentColumnNumber64 @77
++  XML_GetCurrentLineNumber64 @78
++  XML_GetInputContext64 @79
+diff --git a/expat/lib/libexpat.map.in b/expat/lib/libexpat.map.in
+index 71a6758fd746568f6fe99f47386cf05b377b5a81..cf7c170974843268ef1e72515d48835ac919607c 100644
+--- a/expat/lib/libexpat.map.in
++++ b/expat/lib/libexpat.map.in
+@@ -122,3 +122,12 @@ LIBEXPAT_2.8.0 {
+  global:
+   XML_SetHashSalt16Bytes;
+ } LIBEXPAT_2.7.2;
++
++LIBEXPAT_2.9.0 {
++ global:
++  XML_GetCurrentByteCount64;
++  XML_GetCurrentByteIndex64;
++  XML_GetCurrentColumnNumber64;
++  XML_GetCurrentLineNumber64;
++  XML_GetInputContext64;
++} LIBEXPAT_2.8.0;
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 07730f6902888eaaccfef52b61cf22cffa10cca9..61ca80d5f2cf6b9c9eea2021d7c3794b4e40510b 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -2788,6 +2788,73 @@ XML_GetCurrentColumnNumber(XML_Parser parser) {
+   return (XML_Size)parser->m_position.columnNumber;
+ }
+ 
++int64_t XMLCALL
++XML_GetCurrentByteIndex64(XML_Parser parser) {
++  if (parser == NULL)
++    return -1;
++  if (parser->m_eventPtr) {
++    return (int64_t)(parser->m_parseEndByteIndex
++                     - (parser->m_parseEndPtr - parser->m_eventPtr));
++  }
++  return -1;
++}
++
++uint64_t XMLCALL
++XML_GetCurrentByteCount64(XML_Parser parser) {
++  if (parser == NULL)
++    return 0;
++  if (parser->m_openInternalEntities)
++    return (uint64_t)(parser->m_openInternalEntities->internalEventEndPtr
++                      - parser->m_openInternalEntities->internalEventPtr);
++  if (parser->m_eventEndPtr && parser->m_eventPtr)
++    return (uint64_t)(parser->m_eventEndPtr - parser->m_eventPtr);
++  return 0;
++}
++
++const char *XMLCALL
++XML_GetInputContext64(XML_Parser parser, int64_t *offset, uint64_t *size) {
++#if XML_CONTEXT_BYTES > 0
++  if (parser == NULL)
++    return NULL;
++  if (parser->m_eventPtr && parser->m_buffer) {
++    if (offset != NULL)
++      *offset = parser->m_eventPtr - parser->m_buffer;
++    if (size != NULL)
++      *size = parser->m_bufferEnd - parser->m_buffer;
++    return parser->m_buffer;
++  }
++#else
++  (void)parser;
++  (void)offset;
++  (void)size;
++#endif /* XML_CONTEXT_BYTES > 0 */
++  return NULL;
++}
++
++uint64_t XMLCALL
++XML_GetCurrentLineNumber64(XML_Parser parser) {
++  if (parser == NULL)
++    return 0;
++  if (parser->m_eventPtr && parser->m_eventPtr >= parser->m_positionPtr) {
++    XmlUpdatePosition(parser->m_encoding, parser->m_positionPtr,
++                      parser->m_eventPtr, &parser->m_position);
++    parser->m_positionPtr = parser->m_eventPtr;
++  }
++  return parser->m_position.lineNumber + 1;
++}
++
++uint64_t XMLCALL
++XML_GetCurrentColumnNumber64(XML_Parser parser) {
++  if (parser == NULL)
++    return 0;
++  if (parser->m_eventPtr && parser->m_eventPtr >= parser->m_positionPtr) {
++    XmlUpdatePosition(parser->m_encoding, parser->m_positionPtr,
++                      parser->m_eventPtr, &parser->m_position);
++    parser->m_positionPtr = parser->m_eventPtr;
++  }
++  return parser->m_position.columnNumber;
++}
++
+ void XMLCALL
+ XML_FreeContentModel(XML_Parser parser, XML_Content *model) {
+   if (parser == NULL)

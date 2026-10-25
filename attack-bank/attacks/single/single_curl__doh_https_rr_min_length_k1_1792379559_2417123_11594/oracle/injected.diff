@@ -1,0 +1,31 @@
+diff --git a/lib/mprintf.c b/lib/mprintf.c
+index d4725c905fe1a2e9ddc19516e45f0cb4432325ac..419b4d6887852084a1b1d5e04978162b87e16ea7 100644
+--- a/lib/mprintf.c
++++ b/lib/mprintf.c
+@@ -505,7 +505,7 @@ static int parsefmt(const char *format,
+           if(is_arg_used(usedinput, width))
+             return PFMT_WIDTHARG;
+         }
+-        if(width >= MAX_PARAMETERS)
++        if(width > MAX_PARAMETERS)
+           return PFMT_MANYARGS;
+         if(width >= max_param)
+           max_param = width;
+diff --git a/lib/vdns/doh.c b/lib/vdns/doh.c
+index 3b52ed92f3621dd7c33aae26f66c2ab4b168641c..337377506d41e699dbe2f0b28e2befb545cd727d 100644
+--- a/lib/vdns/doh.c
++++ b/lib/vdns/doh.c
+@@ -601,7 +601,12 @@ static DOHcode doh_rdata(const unsigned char *doh,
+     break;
+ #ifdef USE_HTTPSRR
+   case CURL_DNS_TYPE_HTTPS: {
+-    DOHcode rc = doh_store_https(doh, index, d, rdlength);
++    DOHcode rc;
++    /* the RDATA must at least hold the 2-byte SvcPriority plus the
++       shortest possible TargetName, a single byte for the root name */
++    if(rdlength < 3)
++      return DOH_DNS_RDATA_LEN;
++    rc = doh_store_https(doh, index, d, rdlength);
+     if(rc)
+       return rc;
+     break;

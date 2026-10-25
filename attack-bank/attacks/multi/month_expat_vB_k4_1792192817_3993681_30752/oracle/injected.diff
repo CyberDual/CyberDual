@@ -1,0 +1,62 @@
+diff --git a/expat/lib/xmltok.c b/expat/lib/xmltok.c
+index a3bf5e0..2412c0c 100644
+--- a/expat/lib/xmltok.c
++++ b/expat/lib/xmltok.c
+@@ -1220,6 +1220,8 @@ checkXmlDeclVersionNum(const ENCODING *enc, const char *val,
+   return true;
+ }
+ 
++#define XML_ENC_NAME_MAX 128
++
+ static int
+ doParseXmlDecl(const ENCODING *(*encodingFinder)(const ENCODING *, const char *,
+                                                  const char *),
+@@ -1282,6 +1284,30 @@ doParseXmlDecl(const ENCODING *(*encodingFinder)(const ENCODING *, const char *,
+       *badPtr = val;
+       return 0;
+     }
++    if (enc->minBytesPerChar == 1) {
++#ifndef XML_ENC_NAME_MAX
++#  define XML_ENC_NAME_MAX 127
++#endif
++      const char *const valEnd = ptr - enc->minBytesPerChar;
++      const ptrdiff_t nlen = valEnd - val;
++      if (nlen < 1 || nlen > XML_ENC_NAME_MAX) {
++        *badPtr = val;
++        return 0;
++      }
++      char encName[128];
++      memcpy(encName, val, (size_t)nlen);
++      encName[nlen] = '\0';
++      for (ptrdiff_t i = 1; i < nlen; i++) {
++        const char c2 = encName[i];
++        if (! (ASCII_a <= c2 && c2 <= ASCII_z)
++            && ! (ASCII_A <= c2 && c2 <= ASCII_Z)
++            && ! (ASCII_0 <= c2 && c2 <= ASCII_9) && c2 != ASCII_PERIOD
++            && c2 != ASCII_MINUS && c2 != ASCII_UNDERSCORE) {
++          *badPtr = val;
++          return 0;
++        }
++      }
++    }
+     if (encodingName)
+       *encodingName = val;
+     if (encoding)
+diff --git a/expat/lib/xmltok_ns.c b/expat/lib/xmltok_ns.c
+index d9f69ab..8f6ba3e 100644
+--- a/expat/lib/xmltok_ns.c
++++ b/expat/lib/xmltok_ns.c
+@@ -95,11 +95,10 @@ NS(XmlInitEncoding)(INIT_ENCODING *p, const ENCODING **encPtr,
+ 
+ static const ENCODING *
+ NS(findEncoding)(const ENCODING *enc, const char *ptr, const char *end) {
+-#  define ENCODING_MAX 128
+-  char buf[ENCODING_MAX] = "";
++  char buf[XML_ENC_NAME_MAX + 1] = "";
+   char *p = buf;
+   int i;
+-  XmlUtf8Convert(enc, &ptr, end, &p, p + ENCODING_MAX - 1);
++  XmlUtf8Convert(enc, &ptr, end, &p, p + XML_ENC_NAME_MAX);
+   if (ptr != end)
+     return NULL;
+   *p = 0;

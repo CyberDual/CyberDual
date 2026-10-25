@@ -1,0 +1,92 @@
+diff --git a/extras/extras.c b/extras/extras.c
+index bc5518cdeb6e628cce6546844307972083c9b635..575833a2b4106397f94af6a5a903587bec9bbbf4 100644
+--- a/extras/extras.c
++++ b/extras/extras.c
+@@ -444,7 +444,7 @@ static int SharpYuvEstimate420RiskImpl(const void* r_ptr, const void* g_ptr,
+                                        int full_scan, float* score) {
+   if (width < 1 || height < 1 || width == INT_MAX || height == INT_MAX ||
+       r_ptr == NULL || g_ptr == NULL || b_ptr == NULL || options == NULL ||
+-      score == NULL) {
++      options->yuv_matrix == NULL || score == NULL) {
+     return 0;
+   }
+   if (rgb_bit_depth != 8) {
+diff --git a/sharpyuv/sharpyuv.c b/sharpyuv/sharpyuv.c
+index 5a00967fcba8074c709161cb8269eff1ac14677e..12c09f9a2cf592d28fe74e4ec2851ff708643f70 100644
+--- a/sharpyuv/sharpyuv.c
++++ b/sharpyuv/sharpyuv.c
+@@ -343,9 +343,9 @@ static int DoSharpArgbToYuv(const uint8_t* r_ptr, const uint8_t* g_ptr,
+     best_uv += 3 * uv_w;
+     target_y += 2 * w;
+     target_uv += 3 * uv_w;
+-    r_ptr += 2 * rgb_stride;
+-    g_ptr += 2 * rgb_stride;
+-    b_ptr += 2 * rgb_stride;
++    r_ptr += 2 * (ptrdiff_t)rgb_stride;
++    g_ptr += 2 * (ptrdiff_t)rgb_stride;
++    b_ptr += 2 * (ptrdiff_t)rgb_stride;
+   }
+ 
+   // Iterate and resolve clipping conflicts.
+@@ -479,17 +479,19 @@ int SharpYuvConvertWithOptions(const void* r_ptr, const void* g_ptr,
+                                void* u_ptr, int u_stride, void* v_ptr,
+                                int v_stride, int yuv_bit_depth, int width,
+                                int height, const SharpYuvOptions* options) {
+-  const SharpYuvConversionMatrix* yuv_matrix = options->yuv_matrix;
+-  SharpYuvTransferFunctionType transfer_type = options->transfer_type;
++  const SharpYuvConversionMatrix* yuv_matrix;
++  SharpYuvTransferFunctionType transfer_type;
+   SharpYuvConversionMatrix scaled_matrix;
+-  const int rgb_max = (1 << rgb_bit_depth) - 1;
+-  const int rgb_round = 1 << (rgb_bit_depth - 1);
+-  const int yuv_max = (1 << yuv_bit_depth) - 1;
+-  const int sfix = GetPrecisionShift(rgb_bit_depth);
++  int rgb_max;
++  int rgb_round;
++  int yuv_max;
++  int sfix;
+ 
+   if (width < 1 || height < 1 || width == INT_MAX || height == INT_MAX ||
+       r_ptr == NULL || g_ptr == NULL || b_ptr == NULL || y_ptr == NULL ||
+-      u_ptr == NULL || v_ptr == NULL) {
++      u_ptr == NULL || v_ptr == NULL || options == NULL ||
++      options->yuv_matrix == NULL || (int)options->transfer_type < 0 ||
++      options->transfer_type >= kSharpYuvTransferFunctionNum) {
+     return 0;
+   }
+   if (rgb_bit_depth != 8 && rgb_bit_depth != 10 && rgb_bit_depth != 12 &&
+@@ -499,6 +501,12 @@ int SharpYuvConvertWithOptions(const void* r_ptr, const void* g_ptr,
+   if (yuv_bit_depth != 8 && yuv_bit_depth != 10 && yuv_bit_depth != 12) {
+     return 0;
+   }
++  yuv_matrix = options->yuv_matrix;
++  transfer_type = options->transfer_type;
++  rgb_max = (1 << rgb_bit_depth) - 1;
++  rgb_round = 1 << (rgb_bit_depth - 1);
++  yuv_max = (1 << yuv_bit_depth) - 1;
++  sfix = GetPrecisionShift(rgb_bit_depth);
+   if (rgb_bit_depth > 8 && (rgb_step % 2 != 0 || rgb_stride % 2 != 0)) {
+     // Step/stride should be even for uint16_t buffers.
+     return 0;
+@@ -543,7 +551,7 @@ int SharpYuvConvertWithOptions(const void* r_ptr, const void* g_ptr,
+   // Add scaling factor to go from rgb_bit_depth to yuv_bit_depth, to the
+   // rgb->yuv conversion matrix.
+   if (rgb_bit_depth == yuv_bit_depth) {
+-    memcpy(&scaled_matrix, yuv_matrix, sizeof(scaled_matrix));
++    memcpy(&scaled_matrix, options, sizeof(scaled_matrix));
+   } else {
+     int i;
+     for (i = 0; i < 3; ++i) {
+diff --git a/sharpyuv/sharpyuv_sse2.c b/sharpyuv/sharpyuv_sse2.c
+index 0154ae5dbba97b163d2271aa9ef5fd92330ba7c0..9bd557605f2aee52a57b6c4916eeda556898b050 100644
+--- a/sharpyuv/sharpyuv_sse2.c
++++ b/sharpyuv/sharpyuv_sse2.c
+@@ -49,7 +49,7 @@ static uint64_t SharpYuvUpdateY_SSE2(const uint16_t* ref, const uint16_t* src,
+     sum = _mm_add_epi32(sum, I);
+   }
+   _mm_storeu_si128((__m128i*)tmp, sum);
+-  diff = tmp[3] + tmp[2] + tmp[1] + tmp[0];
++  diff = (uint64_t)tmp[3] + tmp[2] + tmp[1] + tmp[0];
+   for (; i < len; ++i) {
+     const int diff_y = ref[i] - src[i];
+     const int new_y = (int)dst[i] + diff_y;

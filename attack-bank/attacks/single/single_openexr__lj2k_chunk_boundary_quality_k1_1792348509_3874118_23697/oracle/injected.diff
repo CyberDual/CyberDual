@@ -1,0 +1,541 @@
+diff --git a/src/lib/OpenEXRCore/internal_ht.cpp b/src/lib/OpenEXRCore/internal_ht.cpp
+index 6e3cf25d94f257c63157605ef3ccec744efa9dc3..1a11108fa3001bad1a7034b2b3f03034af752167 100644
+--- a/src/lib/OpenEXRCore/internal_ht.cpp
++++ b/src/lib/OpenEXRCore/internal_ht.cpp
+@@ -286,19 +286,42 @@ ht_undo_impl (
+     ojph::ui32 image_width =
+         siz.get_image_extent ().x - siz.get_image_offset ().x;
+ 
+-    if (decode->chunk.width != image_width
+-        || decode->chunk.height != image_height
+-        || decode->channel_count != siz.get_num_components())
++    if (decode->channel_count != (int) siz.get_num_components ())
++        return EXR_ERR_CORRUPT_CHUNK;
++
++    /* The lossy coder codes the chunk inside an image grown by up to
++       LJ2K_BOUNDARY_PAD samples on each side, so that no image sample sits
++       on the boundary of the wavelet transform.  Codestreams that code the
++       chunk exactly, as produced by the lossless coders and by earlier
++       writers, are still accepted. */
++    if (image_width < (ojph::ui32) decode->chunk.width ||
++        image_height < (ojph::ui32) decode->chunk.height)
++        return EXR_ERR_CORRUPT_CHUNK;
++
++    const ojph::ui32 pad_cols =
++        (image_width - (ojph::ui32) decode->chunk.width) / 2;
++    const ojph::ui32 pad_rows =
++        (image_height - (ojph::ui32) decode->chunk.height) / 2;
++
++    if (pad_cols > (ojph::ui32) LJ2K_BOUNDARY_PAD ||
++        pad_rows > (ojph::ui32) LJ2K_BOUNDARY_PAD)
+         return EXR_ERR_CORRUPT_CHUNK;
+ 
+     for (int cs_i = 0; cs_i < decode->channel_count; cs_i++)
+     {
+         int file_i = cs_to_file_ch[cs_i].file_index;
+ 
+-        if (decode->channels[file_i].height != siz.get_recon_height (cs_i) ||
+-            decode->channels[file_i].width != siz.get_recon_width (cs_i) ||
+-            decode->channels[file_i].height != image_height / siz.get_downsampling (cs_i).y ||
+-            decode->channels[file_i].width != image_width / siz.get_downsampling (cs_i).x)
++        const ojph::ui32 recon_width  = siz.get_recon_width (cs_i);
++        const ojph::ui32 recon_height = siz.get_recon_height (cs_i);
++
++        if (recon_width < (ojph::ui32) decode->channels[file_i].width ||
++            recon_height < (ojph::ui32) decode->channels[file_i].height)
++            return EXR_ERR_CORRUPT_CHUNK;
++
++        if ((recon_width - (ojph::ui32) decode->channels[file_i].width) / 2 >
++                (ojph::ui32) LJ2K_BOUNDARY_PAD ||
++            (recon_height - (ojph::ui32) decode->channels[file_i].height) / 2 >
++                (ojph::ui32) LJ2K_BOUNDARY_PAD)
+             return EXR_ERR_CORRUPT_CHUNK;
+     }
+ 
+@@ -331,6 +354,18 @@ ht_undo_impl (
+ 
+             if (decode->channels[file_c].height == 0) continue;
+ 
++            const ojph::ui32 left =
++                (siz.get_recon_width (c) -
++                 (ojph::ui32) decode->channels[file_c].width) / 2;
++            const ojph::ui32 top =
++                (siz.get_recon_height (c) -
++                 (ojph::ui32) decode->channels[file_c].height) / 2;
++
++            /* the codestream codes the chunk between padded rows; pull the
++               leading ones to keep the line source in step with the chunk */
++            for (ojph::ui32 i = 0; i < top; i++)
++                cur_line = cs.pull (next_comp);
++
+             uint8_t* line_pixels = static_cast<uint8_t*> (uncompressed_data);
+ 
+             /* image_height is an unsigned OpenJPH type; compute the loop
+@@ -340,7 +375,8 @@ ht_undo_impl (
+              * positive value, which would cause the loop to run far past
+              * the declared image data (CWE-190 / CWE-835). */
+             const int64_t start_y = static_cast<int64_t> (decode->chunk.start_y);
+-            const int64_t end_y   = start_y + static_cast<int64_t> (image_height);
++            const int64_t end_y =
++                start_y + static_cast<int64_t> (decode->chunk.height);
+ 
+             for (int64_t y = start_y; y < end_y; y++)
+             {
+@@ -363,9 +399,9 @@ ht_undo_impl (
+                                  p++)
+                             {
+                                 if (!cod.is_reversible(c))
+-                                    *channel_pixels++ = (int16_t) int16_to_half(cur_line->i32[p]).bits();
++                                    *channel_pixels++ = (int16_t) int16_to_half(cur_line->i32[left + p]).bits();
+                                 else
+-                                    *channel_pixels++ = cur_line->i32[p];
++                                    *channel_pixels++ = cur_line->i32[left + p];
+                             }
+                         }
+                         else
+@@ -376,9 +412,9 @@ ht_undo_impl (
+                                  p++)
+                             {
+                                 if (!cod.is_reversible(c))
+-                                    *((float*) channel_pixels++) = int32_to_float(cur_line->i32[p]);
++                                    *((float*) channel_pixels++) = int32_to_float(cur_line->i32[left + p]);
+                                 else
+-                                    *channel_pixels++ = (uint32_t) cur_line->i32[p];
++                                    *channel_pixels++ = (uint32_t) cur_line->i32[left + p];
+                             }
+                         }
+                     }
+@@ -387,20 +423,32 @@ ht_undo_impl (
+                                    (size_t) decode->channels[line_c].width;
+                 }
+             }
++
++            for (ojph::ui32 i =
++                     top + (ojph::ui32) decode->channels[file_c].height;
++                 i < siz.get_recon_height (c);
++                 i++)
++                cur_line = cs.pull (next_comp);
+         }
+     }
+     else
+     {
+         uint8_t* line_pixels = static_cast<uint8_t*> (uncompressed_data);
+ 
+-        assert (bpl * image_height == uncompressed_size);
++        assert (bpl * decode->chunk.height == uncompressed_size);
+ 
+         for (uint32_t y = 0; y < image_height; ++y)
+         {
++            /* the codestream codes the chunk inside a padded image; pull
++               the padded rows to keep the line source in step with the
++               chunk, but do not store them */
++            bool padded_row = y < pad_rows || y + pad_rows >= image_height;
++
+             for (int16_t c = 0; c < decode->channel_count; c++)
+             {
+                 int file_c = cs_to_file_ch[c].file_index;
+                 cur_line   = cs.pull (next_comp);
++                if (padded_row) continue;
+                 assert (next_comp == c);
+                 if (decode->channels[file_c].data_type == EXR_PIXEL_HALF)
+                 {
+@@ -410,9 +458,9 @@ ht_undo_impl (
+                          p++)
+                     {
+                         if (!cod.is_reversible(c))
+-                            *channel_pixels++ = (int16_t) int16_to_half(cur_line->i32[p]).bits();
++                            *channel_pixels++ = (int16_t) int16_to_half(cur_line->i32[pad_cols + p]).bits();
+                         else
+-                            *channel_pixels++ = cur_line->i32[p];
++                            *channel_pixels++ = cur_line->i32[pad_cols + p];
+                     }
+                 }
+                 else
+@@ -423,13 +471,13 @@ ht_undo_impl (
+                          p++)
+                     {
+                         if (!cod.is_reversible(c))
+-                            *((float*) channel_pixels++) = int32_to_float(cur_line->i32[p]);
++                            *((float*) channel_pixels++) = int32_to_float(cur_line->i32[pad_cols + p]);
+                         else
+-                            *channel_pixels++ = (uint32_t) cur_line->i32[p];
++                            *channel_pixels++ = (uint32_t) cur_line->i32[pad_cols + p];
+                     }
+                 }
+             }
+-            line_pixels += bpl;
++            if (!padded_row) line_pixels += bpl;
+         }
+     }
+ 
+@@ -462,6 +510,42 @@ internal_exr_undo_ht (
+ ////////////////////////////////////////
+ 
+ 
++/* Locate row @p row_index of channel @p file_c in the packed buffer of a
++   chunk coded as separate planes, following the same layout the packing
++   stage writes.  @p row_index is clamped to the rows the chunk holds for
++   the channel. */
++static const uint8_t*
++planar_channel_row (
++    const exr_encode_pipeline_t* encode, int16_t file_c, int32_t row_index)
++{
++    const uint8_t* row     = static_cast<const uint8_t*> (
++        encode->packed_buffer);
++    const uint8_t* matched = row;
++    int32_t        found   = 0;
++
++    for (int64_t y = encode->chunk.start_y;
++         y < (int64_t) encode->chunk.height + encode->chunk.start_y;
++         y++)
++    {
++        for (int16_t line_c = 0; line_c < encode->channel_count; line_c++)
++        {
++            if (y % encode->channels[line_c].y_samples != 0) continue;
++
++            if (line_c == file_c)
++            {
++                if (found == row_index) return row;
++                matched = row;
++                found++;
++            }
++
++            row += (size_t) encode->channels[line_c].bytes_per_element *
++                   (size_t) encode->channels[line_c].width;
++        }
++    }
++
++    return matched;
++}
++
+ static exr_result_t
+ ht_apply_impl (exr_encode_pipeline_t* encode)
+ {
+@@ -493,9 +577,6 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+     siz.set_num_components (encode->channel_count);
+     cs.set_planar (isPlanar);
+ 
+-    siz.set_image_offset (ojph::point (0, 0));
+-    siz.set_image_extent (ojph::point (image_width, image_height));
+-
+     exr_compression_t comp = EXR_COMPRESSION_HTJ2K256;
+     exr_get_compression (encode->context, encode->part_index, &comp);
+ 
+@@ -572,6 +653,107 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+         cod.set_reversible (true);
+     }
+ 
++    /* When coding lossily, grow the coded image by LJ2K_BOUNDARY_PAD
++       samples on each side of the chunk, so that the rows and columns on
++       the edge of the chunk are not sitting on the boundary of the wavelet
++       transform, where they would be coded with more distortion than
++       interior samples.  The added samples continue the chunk outward
++       along the direction of its edge samples; the decoder throws them
++       away. */
++    const int32_t boundary_pad = lossy ? LJ2K_BOUNDARY_PAD : 0;
++
++    const int32_t coded_width  = image_width + 2 * boundary_pad;
++    const int32_t coded_height = image_height + 2 * boundary_pad;
++
++    siz.set_image_offset (ojph::point (0, 0));
++    siz.set_image_extent (
++        ojph::point ((ojph::ui32) coded_width, (ojph::ui32) coded_height));
++
++    ojph::ui32      next_comp = 0;
++    ojph::line_buf* cur_line  = NULL;
++
++    /* Copy one row of channel @p c into the next line of the codestream.
++       Samples of the codestream that fall outside the chunk are
++       extrapolated from the two nearest samples of the channel:
++       @p near_row and @p far_row are the two chunk rows closest to the
++       line being written, and @p row_step is the distance of the line
++       from @p near_row.  The same continuation is applied along the line
++       from the two nearest samples of the row. */
++    auto fill_coded_line = [&] (
++        int16_t c, const uint8_t* near_row, const uint8_t* far_row,
++        int32_t row_step)
++    {
++        const int16_t file_c = cs_channel_info[c].file_index;
++        const int32_t width  = encode->channels[file_c].width;
++        const int32_t dsx    = encode->channels[file_c].x_samples;
++        const int32_t comp_width = (coded_width + dsx - 1) / dsx;
++        const int32_t left       = (comp_width - width) / 2;
++
++        if (width <= 0)
++        {
++            memset (cur_line->i32, 0, sizeof (int32_t) * (size_t) comp_width);
++            return;
++        }
++
++        const bool is_half =
++            encode->channels[file_c].data_type == EXR_PIXEL_HALF;
++
++        /* coded sample of one chunk row at column @p k of the channel */
++        auto row_sample = [&] (const uint8_t* channel_row, int32_t k) -> int64_t
++        {
++            if (is_half)
++            {
++                const int16_t v =
++                    ((const int16_t*) channel_row)[k];
++                if (! cod.is_reversible (c))
++                    return half_to_int16 (half (half::FromBits, (uint16_t) v));
++                return v;
++            }
++            const int32_t v = ((const int32_t*) channel_row)[k];
++            if (! cod.is_reversible (c))
++                return float_to_int32 (*((const float*) &v));
++            return v;
++        };
++
++        const int64_t limit = is_half ? 32767 : (int64_t) INT32_MAX;
++
++        /* continuation of one chunk row at coded column @p p */
++        auto col_value = [&] (const uint8_t* channel_row, int32_t p) -> int64_t
++        {
++            int32_t near_k = p - left, far_k, col_step = 0;
++            if (near_k < 0)
++            {
++                far_k = width > 1 ? 1 : 0;
++                col_step = -near_k;
++                near_k = 0;
++            }
++            else if (near_k >= width)
++            {
++                col_step = near_k - (width - 1);
++                near_k = width - 1;
++                far_k = width > 1 ? width - 2 : width - 1;
++            }
++            else far_k = near_k;
++
++            return row_sample (channel_row, near_k) +
++                   (int64_t) col_step *
++                       (row_sample (channel_row, near_k) -
++                        row_sample (channel_row, far_k));
++        };
++
++        for (int32_t p = 0; p < comp_width; p++)
++        {
++            int64_t v = col_value (near_row, p);
++            if (row_step > 0)
++                v += (int64_t) row_step *
++                     (v - col_value (far_row, p));
++
++            if (v > limit) v = limit;
++            else if (v < -limit) v = -limit;
++            cur_line->i32[p] = (int32_t) v;
++        }
++    };
++
+     int64_t bpl = 0;
+     for (int16_t c = 0; c < encode->channel_count; c++)
+     {
+@@ -610,18 +792,49 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+ 
+         cs.write_headers (&output);
+ 
+-        ojph::ui32      next_comp = 0;
+-        ojph::line_buf* cur_line  = cs.exchange (NULL, next_comp);
++        cur_line = cs.exchange (NULL, next_comp);
+ 
+         if (cs.is_planar ())
+         {
+             for (int16_t c = 0; c < encode->channel_count; c++)
+             {
+-                if (encode->channels[c].height == 0) continue;
++                int16_t file_c = cs_channel_info[c].file_index;
++
++                if (encode->channels[file_c].height == 0) continue;
++
++                const int32_t dsy        = encode->channels[file_c].y_samples;
++                const int32_t comp_height = (coded_height + dsy - 1) / dsy;
++
++                /* the codestream codes this component over comp_height
++                   lines; count the lines that carry chunk data so the
++                   remaining ones can be filled from the edge rows */
++                int32_t chunk_lines = 0;
++                for (int64_t y = encode->chunk.start_y;
++                     y < image_height + encode->chunk.start_y;
++                     y++)
++                {
++                    if (y % dsy == 0) chunk_lines++;
++                }
++
++                const int32_t  top      = (comp_height - chunk_lines) / 2;
++                const uint8_t* first_row =
++                    planar_channel_row (encode, file_c, 0);
++                const uint8_t* second_row =
++                    planar_channel_row (encode, file_c, 1);
++                const uint8_t* last_row =
++                    planar_channel_row (encode, file_c, chunk_lines - 1);
++                const uint8_t* penult_row =
++                    planar_channel_row (encode, file_c, chunk_lines - 2);
++
++                for (int32_t i = 0; i < top; i++)
++                {
++                    fill_coded_line (c, first_row, second_row, top - i);
++                    assert (next_comp == c);
++                    cur_line = cs.exchange (cur_line, next_comp);
++                }
+ 
+                 const uint8_t* line_pixels =
+                     static_cast<const uint8_t*> (encode->packed_buffer);
+-                int16_t file_c = cs_channel_info[c].file_index;
+ 
+                 for (int64_t y = encode->chunk.start_y;
+                     y < image_height + encode->chunk.start_y;
+@@ -635,33 +848,7 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+ 
+                         if (line_c == file_c)
+                         {
+-                            if (encode->channels[file_c].data_type ==
+-                                EXR_PIXEL_HALF)
+-                            {
+-                                int16_t* channel_pixels = (int16_t*) (line_pixels);
+-                                for (int32_t p = 0;
+-                                     p < encode->channels[file_c].width;
+-                                    p++)
+-                                {
+-                                    if (! cod.is_reversible(c))
+-                                        cur_line->i32[p] = half_to_int16(half (half::FromBits, (uint16_t) (*channel_pixels++)));
+-                                    else
+-                                        cur_line->i32[p] = *channel_pixels++;
+-                                }
+-                            }
+-                            else
+-                            {
+-                                int32_t* channel_pixels = (int32_t*) (line_pixels);
+-                                for (int32_t p = 0;
+-                                     p < encode->channels[file_c].width;
+-                                    p++)
+-                                {
+-                                    if (! cod.is_reversible(c))
+-                                        cur_line->i32[p] = float_to_int32(*((float *)channel_pixels++));
+-                                    else
+-                                        cur_line->i32[p] = *channel_pixels++;
+-                                }
+-                            }
++                            fill_coded_line (c, line_pixels, line_pixels, 0);
+ 
+                             assert (next_comp == c);
+                             cur_line = cs.exchange (cur_line, next_comp);
+@@ -671,51 +858,64 @@ ht_apply_impl (exr_encode_pipeline_t* encode)
+                                     encode->channels[line_c].width;
+                     }
+                 }
++
++                for (int32_t i = top + chunk_lines; i < comp_height; i++)
++                {
++                    fill_coded_line (
++                        c, last_row, penult_row, i - (top + chunk_lines) + 1);
++                    assert (next_comp == c);
++                    cur_line = cs.exchange (cur_line, next_comp);
++                }
+             }
+         }
+         else
+         {
+-            const uint8_t* line_pixels =
++            const uint8_t* chunk_pixels =
+                 static_cast<const uint8_t*> (encode->packed_buffer);
+ 
+             assert (bpl * image_height == encode->packed_bytes);
+ 
+-            for (int y = 0; y < image_height; y++)
++            for (int32_t y = 0; y < coded_height; y++)
+             {
++                /* rows of the codestream outside the chunk continue the
++                   nearest rows of the chunk */
++                int64_t        src_y = y - boundary_pad;
++                const uint8_t* near_row;
++                const uint8_t* far_row;
++                int32_t        row_step = 0;
++
++                if (src_y < 0)
++                {
++                    near_row = chunk_pixels;
++                    far_row = image_height > 1 ? chunk_pixels + (size_t) bpl
++                                               : near_row;
++                    row_step = (int32_t) -src_y;
++                }
++                else if (src_y >= image_height)
++                {
++                    near_row = chunk_pixels +
++                        (size_t) (image_height - 1) * (size_t) bpl;
++                    far_row  = image_height > 1 ? near_row - (size_t) bpl
++                                                : near_row;
++                    row_step = (int32_t) (src_y - image_height + 1);
++                }
++                else
++                {
++                    near_row = chunk_pixels + (size_t) src_y * (size_t) bpl;
++                    far_row  = near_row;
++                }
++
+                 for (int16_t c = 0; c < encode->channel_count; c++)
+                 {
+-                    int file_c = cs_channel_info[c].file_index;
++                    fill_coded_line (
++                        c,
++                        near_row + cs_channel_info[c].raster_line_offset,
++                        far_row + cs_channel_info[c].raster_line_offset,
++                        row_step);
+ 
+-                    if (encode->channels[file_c].data_type == EXR_PIXEL_HALF)
+-                    {
+-                        int16_t* channel_pixels =
+-                            (int16_t*) (line_pixels + cs_channel_info[c].raster_line_offset);
+-                        for (int32_t p = 0; p < encode->channels[file_c].width;
+-                            p++)
+-                        {
+-                            if (! cod.is_reversible(c))
+-                                cur_line->i32[p] = half_to_int16(half (half::FromBits, (uint16_t) (*channel_pixels++)));
+-                            else
+-                                cur_line->i32[p] = *channel_pixels++;
+-                        }
+-                    }
+-                    else
+-                    {
+-                        int32_t* channel_pixels =
+-                            (int32_t*) (line_pixels + cs_channel_info[c].raster_line_offset);
+-                        for (int32_t p = 0; p < encode->channels[file_c].width;
+-                            p++)
+-                        {
+-                            if (! cod.is_reversible(c))
+-                                cur_line->i32[p] = float_to_int32(*((float *)channel_pixels++));
+-                            else
+-                                cur_line->i32[p] = *channel_pixels++;
+-                        }
+-                    }
+                     assert (next_comp == c);
+                     cur_line = cs.exchange (cur_line, next_comp);
+                 }
+-                line_pixels += bpl;
+             }
+         }
+ 
+diff --git a/src/lib/OpenEXRCore/internal_ht_common.h b/src/lib/OpenEXRCore/internal_ht_common.h
+index 2c370c2bcc4e09c03dcb9f9b0ae55ffcbb378808..e453d05fdb2c34107816788012ec341ecd90a94a 100644
+--- a/src/lib/OpenEXRCore/internal_ht_common.h
++++ b/src/lib/OpenEXRCore/internal_ht_common.h
+@@ -54,6 +54,21 @@
+  * compression otherwise.
+  */
+ 
++/** Number of samples the lossy coder adds to each side of a chunk before
++ *  coding it.
++ *
++ *  The chunk is coded as an independent JPEG 2000 image, so the first and
++ *  last row and column of the chunk sit on the boundary of the wavelet
++ *  transform and are reconstructed with noticeably more distortion than
++ *  interior samples.  The coded image is therefore grown by this many
++ *  samples on all four sides, filled by continuing the chunk outward from
++ *  its edge samples, which keeps every image sample away from the transform
++ *  boundary.  The decoder discards the added samples.
++ *
++ *  Codestreams that code the chunk exactly, as written for lossless coding
++ *  and by earlier writers, remain readable. */
++static const int32_t LJ2K_BOUNDARY_PAD = 16;
++
+ /** Indicates the kind of samples carried by a channel */
+ enum J2KChannelKind {
+     visual,

@@ -1,0 +1,53 @@
+diff --git a/src/liblzma/common/index.c b/src/liblzma/common/index.c
+index 3fbb5b1..8cce877 100644
+--- a/src/liblzma/common/index.c
++++ b/src/liblzma/common/index.c
+@@ -514,8 +514,22 @@ lzma_index_prealloc(lzma_index *i, lzma_vli records)
+ 	// lzma_index_append() after decoding an empty Index. Appending
+ 	// Records after decoding an Index is a rare thing to do, but
+ 	// it is supposed to work.
+-	if (records == 0)
++	//
++	// A non-empty Index with fewer Records than a full group gets
++	// INDEX_GROUP_SIZE extra slots. The decoder itself appends only
++	// the Records the header claimed; the spare keeps one later
++	// lzma_index_append() from having to allocate a new group.
++	// An empty Index stays at the default so that case is unchanged.
++	if (records == 0) {
+ 		records = INDEX_GROUP_SIZE;
++	} else if (records < INDEX_GROUP_SIZE) {
++		records += INDEX_GROUP_SIZE;
++
++		// Check IDs use bits 0..15. Remember the spare slots in bit 31
++		// until lzma_index_append() clears it, so lzma_index_checks()
++		// does not observe the marker.
++		i->checks |= UINT32_C(1) << 31;
++	}
+ 
+ 	i->prealloc = (size_t)(records);
+ 	return false;
+@@ -768,8 +782,13 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,
+ 	} else {
+ 		// We need to allocate a new group.
+ 		assert(i->prealloc > 0);
++		size_t slots = i->prealloc;
++		if ((i->checks & (UINT32_C(1) << 31)) != 0
++				&& slots > INDEX_GROUP_SIZE)
++			slots -= INDEX_GROUP_SIZE;
++
+ 		g = lzma_alloc(sizeof(index_group)
+-				+ i->prealloc * sizeof(index_record),
++				+ slots * sizeof(index_record),
+ 				allocator);
+ 		if (g == NULL)
+ 			return LZMA_MEM_ERROR;
+@@ -805,6 +824,9 @@ lzma_index_append(lzma_index *i, const lzma_allocator *allocator,
+ 	++i->record_count;
+ 	i->index_list_size += index_list_size_add;
+ 
++	// Drop the spare-slots marker. See lzma_index_prealloc().
++	i->checks &= ~(UINT32_C(1) << 31);
++
+ 	return LZMA_OK;
+ }
+ 

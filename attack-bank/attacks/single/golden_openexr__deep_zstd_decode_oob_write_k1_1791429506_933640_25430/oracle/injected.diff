@@ -1,0 +1,47 @@
+diff --git a/src/lib/OpenEXRCore/internal_zstd.c b/src/lib/OpenEXRCore/internal_zstd.c
+index 670b92a73c768ebf3b5cc4cec26d92c90fe23b79..2868d991a4186483eedb179accc433fd08995df1 100644
+--- a/src/lib/OpenEXRCore/internal_zstd.c
++++ b/src/lib/OpenEXRCore/internal_zstd.c
+@@ -644,12 +644,13 @@ zstd_inner_append_shuffled_segment (
+     return 0;
+ }
+ 
+-/** Read one inner segment: u64 LE length (must equal \a expected_len), then unshuffle. */
++/** Read one inner segment: u64 LE length, then unshuffle. */
+ static exr_result_t
+ zstd_inner_read_shuffled_segment (
+     const uint8_t** q,
+     const uint8_t*  qend,
+     uint8_t*        tgt,
++    uint64_t        tgt_cap,
+     uint64_t        expected_len,
+     uint64_t        el_bytes)
+ {
+@@ -657,7 +658,8 @@ zstd_inner_read_shuffled_segment (
+     uint64_t ilen = read_u64_le (*q);
+     *q += 8;
+     if (ilen > (uint64_t) (qend - *q)) return EXR_ERR_CORRUPT_CHUNK;
+-    if (ilen != expected_len) return EXR_ERR_CORRUPT_CHUNK;
++    if (ilen != expected_len && ilen > tgt_cap)
++        return EXR_ERR_CORRUPT_CHUNK;
+     exr_zstd_shuffle_decode_bytes (tgt, *q, (size_t) ilen, el_bytes);
+     *q += ilen;
+     return EXR_ERR_SUCCESS;
+@@ -1308,6 +1310,8 @@ exr_undo_zstd_v1 (
+         pack_channel_count,
+         sorting_lookup);
+ 
++    if (split > uncompressed_size) return EXR_ERR_CORRUPT_CHUNK;
++
+     uint64_t  inner_lens[2];
+     uint64_t  inner_els[2];
+     int const n_inner =
+@@ -1330,7 +1334,7 @@ exr_undo_zstd_v1 (
+     for (int seg = 0; seg < n_inner; ++seg)
+     {
+         exr_result_t seg_rv = zstd_inner_read_shuffled_segment (
+-            &q, qend, tgt, inner_lens[seg], inner_els[seg]);
++            &q, qend, tgt, dst_cap, inner_lens[seg], inner_els[seg]);
+         if (seg_rv != EXR_ERR_SUCCESS) return seg_rv;
+         tgt += inner_lens[seg];
+     }

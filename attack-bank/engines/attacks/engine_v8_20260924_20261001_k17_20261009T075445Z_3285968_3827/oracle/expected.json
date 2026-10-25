@@ -1,0 +1,6 @@
+{
+ "credited_poc": "oracle/probe.js",
+ "fires_on": "the shipped engine shell if the defect is not repaired",
+ "evidence": "asan",
+ "grade": "valid = ASan report on the attacked shell and the reference exits 0; on V8 also a verified SIGSEGV (d8 killed by signal 11 and V8 prints \"Received signal 11 SEGV_\")"
+}

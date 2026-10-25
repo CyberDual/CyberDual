@@ -1,0 +1,123 @@
+diff --git a/docs/libcurl/curl_url_set.md b/docs/libcurl/curl_url_set.md
+index 35ed109fcd534c4ff9d140d627a9ff557283edec..04245012c01a73d83312858c893e410f26b69ce9 100644
+--- a/docs/libcurl/curl_url_set.md
++++ b/docs/libcurl/curl_url_set.md
+@@ -126,6 +126,10 @@ encoded as your locale says or UTF-8 (when WinIDN is used). If it is a
+ bracketed IPv6 numeric address it may contain a zone id (or you can use
+ *CURLUPART_ZONEID*).
+ 
++A legacy numeric IPv4 address, like `2130706433`, `0177.1` or `0x7f.1`, is
++stored normalized as a dotted-decimal address, the same way as when it is
++provided as part of a URL.
++
+ Note that if you set an IPv6 address, it gets ruined and causes an error if
+ you also set the CURLU_URLENCODE flag.
+ 
+diff --git a/lib/urlapi.c b/lib/urlapi.c
+index 1c4db04e46388df390e037b5147724b62e40d809..0509d68123b995bee3d04a0839b945e205b1a6eb 100644
+--- a/lib/urlapi.c
++++ b/lib/urlapi.c
+@@ -2056,10 +2056,46 @@ static CURLUcode url_sethost(CURLU *u, struct dynbuf *encp,
+     CURLcode result = Curl_urldecode(newp, n, &decoded, &dlen, REJECT_CTRL);
+     if(result || hostname_check6(u, decoded, dlen))
+       bad = TRUE;
++    else if(ISDIGIT(*decoded)) {
++      /* this can be a legacy numeric IPv4 address, which is stored
++         normalized like when it is parsed as part of a URL */
++      struct dynbuf host;
++      int type;
++      curlx_dyn_init(&host, CURL_MAX_INPUT_LENGTH);
++      result = curlx_dyn_addn(&host, decoded, dlen);
++      if(!result) {
++        type = ipv4_normalize(&host);
++        if(type == HOST_IPV4) {
++          if(memcmp(newp, curlx_dyn_ptr(&host), n) ||
++             (curlx_dyn_len(&host) != n)) {
++            /* replace the provided host with the normalized address */
++            curlx_dyn_reset(encp);
++            result = curlx_dyn_addn(encp, curlx_dyn_ptr(&host),
++                                    curlx_dyn_len(&host));
++          }
++        }
++        else if(type == HOST_ERROR)
++          result = CURLE_OUT_OF_MEMORY;
++      }
++      curlx_dyn_free(&host);
++      if(result) {
++        curlx_free(decoded);
++        curlx_dyn_free(encp);
++        return cc2cu(result);
++      }
++    }
+     curlx_free(decoded);
+   }
+   else if(hostname_check6(u, newp, n))
+     bad = TRUE;
++  else if(ISDIGIT(*newp)) {
++    /* this can be a legacy numeric IPv4 address, which is stored normalized
++       like when it is parsed as part of a URL */
++    if(ipv4_normalize(encp) == HOST_ERROR) {
++      curlx_dyn_free(encp);
++      return CURLUE_OUT_OF_MEMORY;
++    }
++  }
+   if(bad) {
+     curlx_dyn_free(encp);
+     return CURLUE_BAD_HOSTNAME;
+@@ -2143,7 +2179,9 @@ CURLUcode curl_url_set(CURLU *u, CURLUPart what,
+     const char *newp = NULL;
+     struct dynbuf enc;
+     CURLUcode status;
+-    curlx_dyn_init(&enc, (nalloc * 3) + 1 + leadingslash);
++    /* a normalized IPv4 address can be longer than the provided host */
++    curlx_dyn_init(&enc, (nalloc * 3) + 1 + leadingslash +
++                  ((what == CURLUPART_HOST) ? 16 : 0));
+ 
+     if(leadingslash && (part[0] != '/')) {
+       CURLcode result = curlx_dyn_addn(&enc, "/", 1);
+diff --git a/tests/libtest/lib1560.c b/tests/libtest/lib1560.c
+index 03d99ccbbf3b9444aa6e316eeeeea7fb5c50476d..cc19657128c7cdcff4d42cc1860ef51a862228cc 100644
+--- a/tests/libtest/lib1560.c
++++ b/tests/libtest/lib1560.c
+@@ -1295,9 +1295,38 @@ static const struct setcase set_parts_list[] = {
+    0, /* set */
+    CURLUE_OK, CURLUE_BAD_HOSTNAME},
+   {"https://example.com/",
+-   "host=0xff,", /* '++' there is no automatic URL decode when setting this
+-                  part */
+-   "https://0xff/",
++   "host=0xff,", /* legacy IPv4 numbers are normalized */
++   "https://0.0.0.255/",
++   0, /* get */
++   0, /* set */
++   CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=2130706433,",
++   "https://127.0.0.1/",
++   0, /* get */
++   0, /* set */
++   CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=0177.1,",
++   "https://127.0.0.1/",
++   0, /* get */
++   0, /* set */
++   CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=0x7f.1,",
++   "https://127.0.0.1/",
++   0, /* get */
++   0, /* set */
++   CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=2130706433,",
++   "https://127.0.0.1/",
++   0, /* get */
++   CURLU_URLENCODE, /* encode on set */
++   CURLUE_OK, CURLUE_OK},
++  {"https://example.com/",
++   "host=0,",
++   "https://0.0.0.0/",
+    0, /* get */
+    0, /* set */
+    CURLUE_OK, CURLUE_OK},

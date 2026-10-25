@@ -1,0 +1,32 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..b88d673 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -422,7 +422,7 @@ static int knownhost_parse_ipv4(const char *src, const char *end,
+ static int knownhost_parse_ipv6(const char *src, size_t len,
+                                 unsigned char result[16])
+ {
+-    unsigned short words[8];
++    unsigned short words[9];
+     const char *p = src;
+     const char *end = src + len;
+     size_t count = 0;
+@@ -468,7 +468,7 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+             break;
+         }
+ 
+-        if(!digits || count >= 8)
++        if(!digits || count > 8)
+             return 0;
+ 
+         words[count++] = (unsigned short)value;
+@@ -495,9 +495,6 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+         size_t position = (size_t)compressed;
+         size_t zeros;
+ 
+-        if(count >= 8)
+-            return 0;
+-
+         zeros = 8 - count;
+         memmove(&words[position + zeros], &words[position],
+                 (count - position) * sizeof(words[0]));

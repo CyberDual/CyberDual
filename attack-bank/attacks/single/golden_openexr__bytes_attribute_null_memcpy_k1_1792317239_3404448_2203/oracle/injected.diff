@@ -1,0 +1,44 @@
+diff --git a/src/lib/OpenEXR/ImfBytesAttribute.cpp b/src/lib/OpenEXR/ImfBytesAttribute.cpp
+index ee6a6f5755528de870b2b75de0e20a2030273493..ae2d0c2c0e83aae8df2558da53be02826a239c7b 100644
+--- a/src/lib/OpenEXR/ImfBytesAttribute.cpp
++++ b/src/lib/OpenEXR/ImfBytesAttribute.cpp
+@@ -34,19 +34,21 @@ BytesAttribute::BytesAttribute (
+     {
+         THROW (IEX_NAMESPACE::ArgExc, "Invalid data pointer.");
+     }
+-    memcpy (
+-        (unsigned char*) _data,
+-        (const unsigned char*) data,
+-        size);
++    if (size > 0)
++        memcpy (
++            (unsigned char*) _data,
++            (const unsigned char*) data,
++            size);
+ }
+ 
+ BytesAttribute::BytesAttribute (const BytesAttribute& other)
+     : typeHint (other.typeHint), _data (other._data.size ())
+ {
+-    memcpy (
+-        (unsigned char*) _data,
+-        (const unsigned char*) other._data,
+-        other._data.size ());
++    if (other._data.size () > 0)
++        memcpy (
++            (unsigned char*) _data,
++            (const unsigned char*) other._data,
++            other._data.size ());
+ }
+ 
+ // Note the destructor is defined here and not in the header file to
+@@ -133,7 +135,8 @@ BytesAttribute::readValueFrom (
+     // implementations in the OpenEXR library. An error in the underlying
+     // stream read is very rare, it's much more likely that an exception
+     // will be thrown.
+-    Xdr::readUnsignedChars<StreamIO> (is, _data, dataSize);
++    if (dataSize > 0)
++        Xdr::readUnsignedChars<StreamIO> (is, _data, size - hintLength);
+ }
+ 
+ void

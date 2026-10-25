@@ -1,0 +1,39 @@
+diff --git a/src/pcre2posix.c b/src/pcre2posix.c
+index 401ad0ab..e0a0835e 100644
+--- a/src/pcre2posix.c
++++ b/src/pcre2posix.c
+@@ -101,6 +101,9 @@ changed. This #define is a copy of the one in pcre2_internal.h. */
+ 
+ #define COMPILE_ERROR_BASE 100
+ 
++/* Match slots include the whole match in addition to capturing groups. */
++#define POSIX_MATCH_SLOTS(captures) ((captures) + 1)
++
+ 
+ /* Standard C headers */
+ 
+@@ -448,9 +451,13 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t
+   if (rc >= 0)
+   {
+     size_t i;
++    size_t match_count = POSIX_MATCH_SLOTS((size_t)preg->re_nsub);
++    size_t output_count = POSIX_MATCH_SLOTS(nmatch);
+     PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(md);
+-    if ((size_t)rc > nmatch)
+-      rc = (int)nmatch;
++    if ((size_t)rc > match_count)
++      rc = (int)match_count;
++    if ((size_t)rc > output_count)
++      rc = (int)output_count;
+     for (i = 0; i < (size_t)rc; i++)
+     {
+       if (ovector[i * 2] == PCRE2_UNSET || ovector[i * 2] + so > (PCRE2_SIZE)INT_MAX ||
+@@ -466,7 +473,7 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t
+       }
+     }
+ 
+-    for (; i < nmatch; i++)
++    for (; i < output_count; i++)
+       pmatch[i].rm_so = pmatch[i].rm_eo = -1;
+     return 0;
+   }

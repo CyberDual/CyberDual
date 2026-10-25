@@ -1,0 +1,48 @@
+diff --git a/src/pcre2posix.c b/src/pcre2posix.c
+index 401ad0ab..19bc30c3 100644
+--- a/src/pcre2posix.c
++++ b/src/pcre2posix.c
+@@ -406,20 +406,6 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t
+ 
+   md = (pcre2_match_data *)preg->re_match_data;
+ 
+-  if ((eflags & REG_NOTBOL) != 0)
+-    options |= PCRE2_NOTBOL;
+-  if ((eflags & REG_NOTEOL) != 0)
+-    options |= PCRE2_NOTEOL;
+-  if ((eflags & REG_NOTEMPTY) != 0)
+-    options |= PCRE2_NOTEMPTY;
+-
+-  /* When REG_NOSUB was specified, or if no vector has been passed in which to
+-  put captured strings, ensure that nmatch is zero. This will stop any attempt to
+-  write to pmatch. */
+-
+-  if ((preg->re_cflags & REG_NOSUB) != 0 || pmatch == NULL)
+-    nmatch = 0;
+-
+   /* REG_STARTEND is a BSD extension, to allow for non-NUL-terminated strings.
+   The man page from OS X says "REG_STARTEND affects only the location of the
+   string, not how it is matched". That is why the "so" value is used to bump the
+@@ -440,7 +426,21 @@ pcre2_regexec(const regex_t *preg, const char *string, size_t nmatch, regmatch_t
+     eo = strlen(string);
+   }
+ 
+-  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, (eo - so), 0,
++  if ((eflags & REG_NOTBOL) != 0)
++    options |= PCRE2_NOTBOL;
++  if ((eflags & REG_NOTEOL) != 0)
++    options |= PCRE2_NOTEOL;
++  if ((eflags & REG_NOTEMPTY) != 0)
++    options |= PCRE2_NOTEMPTY;
++
++  /* When REG_NOSUB was specified, or if no vector has been passed in which to
++  put captured strings, ensure that nmatch is zero. This will stop any attempt to
++  write to pmatch. */
++
++  if ((preg->re_cflags & REG_NOSUB) != 0 || pmatch == NULL)
++    nmatch = 0;
++
++  rc = pcre2_match((const pcre2_code *)preg->re_pcre2_code, (PCRE2_SPTR)string + so, eo, 0,
+                    options, md, NULL);
+ 
+   /* Successful match */

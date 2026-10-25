@@ -1,0 +1,122 @@
+diff --git a/js/src/jit/MacroAssembler.cpp b/js/src/jit/MacroAssembler.cpp
+index 2919aa9e39..f4769b68c1 100644
+--- a/js/src/jit/MacroAssembler.cpp
++++ b/js/src/jit/MacroAssembler.cpp
+@@ -7142,7 +7142,8 @@ void MacroAssembler::wasmReturnCallIndirect(
+ void MacroAssembler::wasmCallRef(const wasm::CallSiteDesc& desc,
+                                  const wasm::CalleeDesc& callee,
+                                  CodeOffset* fastCallOffset,
+-                                 CodeOffset* slowCallOffset) {
++                                 CodeOffset* slowCallOffset,
++                                 CodeOffset* nullTrapOffset) {
+   MOZ_ASSERT(callee.which() == wasm::CalleeDesc::FuncRef);
+   const Register calleeScratch = WasmCallRefCallScratchReg0;
+   const Register calleeFnObj = WasmCallRefReg;
+@@ -7162,6 +7163,9 @@ void MacroAssembler::wasmCallRef(const wasm::CallSiteDesc& desc,
+   appendAndVerify(wasm::Trap::NullPointerDereference,
+                   wasm::TrapMachineInsnForLoadWord(), fcr,
+                   desc.toTrapSiteDesc());
++  if (nullTrapOffset) {
++    *nullTrapOffset = CodeOffset(fcr.resumeOffset());
++  }
+   branchPtr(Assembler::Equal, InstanceReg, newInstanceTemp, &fastCall);
+ 
+   storePtr(InstanceReg,
+diff --git a/js/src/jit/MacroAssembler.h b/js/src/jit/MacroAssembler.h
+index ac9c7162cd..30869a853e 100644
+--- a/js/src/jit/MacroAssembler.h
++++ b/js/src/jit/MacroAssembler.h
+@@ -4055,7 +4055,8 @@ class MacroAssembler : public MacroAssemblerSpecific {
+   // pinned reg.
+   void wasmCallRef(const wasm::CallSiteDesc& desc,
+                    const wasm::CalleeDesc& callee, CodeOffset* fastCallOffset,
+-                   CodeOffset* slowCallOffset);
++                   CodeOffset* slowCallOffset,
++                   CodeOffset* nullTrapOffset = nullptr);
+ 
+   void wasmReturnCallRef(const wasm::CallSiteDesc& desc,
+                          const wasm::CalleeDesc& callee,
+diff --git a/js/src/wasm/WasmBCClass.h b/js/src/wasm/WasmBCClass.h
+index 6eee58bf3a..3758287d76 100644
+--- a/js/src/wasm/WasmBCClass.h
++++ b/js/src/wasm/WasmBCClass.h
+@@ -1063,7 +1063,7 @@ struct BaseCompiler final {
+   bool updateCallRefMetrics(size_t callRefIndex);
+   bool callRef(const Stk& calleeRef, const FunctionCall& call,
+                mozilla::Maybe<size_t> callRefIndex, CodeOffset* fastCallOffset,
+-               CodeOffset* slowCallOffset);
++               CodeOffset* slowCallOffset, CodeOffset* nullTrapOffset);
+   void returnCallRef(const Stk& calleeRef, const FunctionCall& call,
+                      const FuncType& funcType);
+   CodeOffset builtinCall(SymbolicAddress builtin, const FunctionCall& call);
+diff --git a/js/src/wasm/WasmBaselineCompile.cpp b/js/src/wasm/WasmBaselineCompile.cpp
+index dd49556efc..33965e4ee2 100644
+--- a/js/src/wasm/WasmBaselineCompile.cpp
++++ b/js/src/wasm/WasmBaselineCompile.cpp
+@@ -2246,7 +2246,8 @@ bool BaseCompiler::updateCallRefMetrics(size_t callRefIndex) {
+ bool BaseCompiler::callRef(const Stk& calleeRef, const FunctionCall& call,
+                            mozilla::Maybe<size_t> callRefIndex,
+                            CodeOffset* fastCallOffset,
+-                           CodeOffset* slowCallOffset) {
++                           CodeOffset* slowCallOffset,
++                           CodeOffset* nullTrapOffset) {
+   CallSiteDesc desc(bytecodeOffset(), CallSiteKind::FuncRef);
+   CalleeDesc callee = CalleeDesc::wasmFuncRef();
+ 
+@@ -2259,7 +2260,8 @@ bool BaseCompiler::callRef(const Stk& calleeRef, const FunctionCall& call,
+     MOZ_ASSERT(callRefIndex.isNothing());
+   }
+ 
+-  masm.wasmCallRef(desc, callee, fastCallOffset, slowCallOffset);
++  masm.wasmCallRef(desc, callee, fastCallOffset, slowCallOffset,
++                   nullTrapOffset);
+   return true;
+ }
+ 
+@@ -5816,19 +5818,25 @@ bool BaseCompiler::emitCallRef() {
+   const Stk& callee = peek(results.count());
+   CodeOffset fastCallOffset;
+   CodeOffset slowCallOffset;
++  CodeOffset nullTrapOffset;
+   if (!callRef(callee, baselineCall, callRefIndex, &fastCallOffset,
+-               &slowCallOffset)) {
++               &slowCallOffset, &nullTrapOffset)) {
+     return false;
+   }
+-  // stackmap for: emitCallRef (fast)
+-  if (!createStackMap(Nothing() /* stackmap pertains to a call */,
+-                      fastCallOffset)) {
+-    return false;
++  CodeOffset stackMapKeys[2] = {fastCallOffset, slowCallOffset};
++  size_t numStackMapKeys = 2;
++  if (compilerEnv_.debugEnabled()) {
++    stackMapKeys[numStackMapKeys++] = nullTrapOffset;
+   }
+-  // stackmap for: emitCallRef (slow)
+-  if (!createStackMap(Nothing() /* stackmap pertains to a call */,
+-                      slowCallOffset)) {
+-    return false;
++  for (size_t i = 0; i < numStackMapKeys; i++) {
++    if (i == 2) {
++      if (!createStackMap(Some(Trap::NullPointerDereference),
++                          stackMapKeys[i])) {
++        return false;
++      }
++    } else if (!createStackMap(Nothing(), stackMapKeys[i])) {
++      return false;
++    }
+   }
+ 
+   popStackResultsAfterWasmCall(results, stackArgBytes);
+@@ -7818,6 +7826,11 @@ void BaseCompiler::SignalNullCheck::emitTrapSite(BaseCompiler* bc,
+   MacroAssembler& masm = bc->masm;
+   masm.appendAndVerify(wasm::Trap::NullPointerDereference, tmi, fcr,
+                        bc->trapSiteDesc());
++  if (bc->compilerEnv_.debugEnabled()) {
++    masm.propagateOOM(bc->createStackMap(
++        Some(Trap::NullPointerDereference), fcr,
++        HasDebugFrameWithLiveRefs::Maybe));
++  }
+ }
+ 
+ template <typename NullCheckPolicy>

@@ -1,0 +1,25 @@
+diff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp
+index 98e89d68844d3..24db214ea3b8c 100644
+--- a/js/src/vm/RegExpObject.cpp
++++ b/js/src/vm/RegExpObject.cpp
+@@ -736,7 +736,7 @@ bool RegExpShared::quickCheckRejects(const JS::Latin1Char* chars, size_t length,
+   }
+ 
+   // If there are at least 4 characters remaining in the string, test the mask.
+-  if (index + sizeof(uint32_t) <= length) {
++  if (index + sizeof(RegExpShared::Kind) <= length) {
+     // We use memcpy here because this load may not be aligned. It will generate
+     // a regular load on every platform we care about.
+     uint32_t word;
+diff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h
+index a574e7482d24f..6831c9155b189 100644
+--- a/js/src/vm/RegExpShared.h
++++ b/js/src/vm/RegExpShared.h
+@@ -72,6 +72,7 @@ class RegExpShared
+ 
+  public:
+   enum class Kind : uint8_t { Unparsed, Atom, RegExp };
++  static_assert(sizeof(Kind) == 1);
+   enum class CodeKind { Bytecode, Jitcode, Any };
+   enum class InternalFlag {
+     HasQuickCheck = 1 << 0,

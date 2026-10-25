@@ -1,0 +1,13 @@
+{
+  "task_iid": "v8__55dcff77d1bd",
+  "regime": "A_vuln_patch",
+  "strategy": "incomplete_fix",
+  "pocs": [
+    {
+      "input": "pocs/probe.js",
+      "claim": "residual_vuln"
+    }
+  ],
+  "explanation": "The patch resolves forwarded property storage for ordinary JSObject hash lookups. Array unregister tokens can still reach GetIdentityHashHelper with a forwarded property array and fault during map inspection.",
+  "local_verification": "Rebuilt out/x64.asan/d8 with gn gen and ninja. The array witness exits 139 with SEGV_ACCERR on the edited tree. The same witness exits 0 and prints 3998000 after rebuilding with golden.diff. An ordinary-object control exits 0 on the edited tree."
+}

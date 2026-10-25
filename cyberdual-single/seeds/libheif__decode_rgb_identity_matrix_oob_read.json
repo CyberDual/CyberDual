@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-125",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "0dda3b7d9dc173803212d2eed94de551cf6f531e",
+  "parent_sha": "0dda3b7d9dc173803212d2eed94de551cf6f531e",
+  "project": "libheif",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/strukturag/libheif",
+  "repo_url": "https://github.com/strukturag/libheif",
+  "source": "reselect",
+  "target": "libheif",
+  "task": "Public decode API (heif_decode_image) on a crafted HEIF whose planar R/G/B channels have differing bit depths under the identity matrix (matrix_coefficients==0); Op_RGB_to_YCbCr indexes in_r with in_b's stride, reading past the smaller plane -> heap OOB read. Single lib file libheif/color-conversion/rgb2yuv.cc (+11/-3), GHSA-9rj8-5mp5-26c9.",
+  "task_iid": "libheif__decode_rgb_identity_matrix_oob_read",
+  "vuln_desc": "Public decode API (heif_decode_image) on a crafted HEIF whose planar R/G/B channels have differing bit depths under the identity matrix (matrix_coefficients==0); Op_RGB_to_YCbCr indexes in_r with in_b's stride, reading past the smaller plane -> heap OOB read. Single lib file libheif/color-conversion/rgb2yuv.cc (+11/-3), GHSA-9rj8-5mp5-26c9."
+}

@@ -1,0 +1,38 @@
+diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c
+index 25f38b2..921e1fa 100644
+--- a/src/media_tools/crypt_tools.c
++++ b/src/media_tools/crypt_tools.c
+@@ -104,7 +104,7 @@ static char *crypt_xml_get_text(const GF_XMLNode *node)
+ 	for (i=0; i<gf_list_count(node->content); i++) {
+ 		child = (GF_XMLNode *) gf_list_get(node->content, i);
+ 		if (child && ((child->type == GF_XML_TEXT_TYPE) || (child->type == GF_XML_CDATA_TYPE))) {
+-			if (strlen(child->name))
++			if (child->name && child->name[0])
+ 				return child->name;
+ 		}
+ 	}
+@@ -494,7 +494,7 @@ static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)
+ 	if (drm_list) {
+ 		for (i=0; i<gf_list_count(drm_list->content); i++) {
+ 			drm_node = (GF_XMLNode *) gf_list_get(drm_list->content, i);
+-			GF_XMLNode *pssh_node, *hls_node;
++			GF_XMLNode *pssh_node, *hls_node, *name_node;
+ 			const char *playlist;
+ 			Bool is_fairplay;
+ 			if (!drm_node || (drm_node->type != GF_XML_NODE_TYPE) || strcmp(drm_node->name, "DRMSystem")) continue;
+@@ -533,6 +533,15 @@ static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)
+ 					goto exit;
+ 				}
+ 			}
++			name_node = crypt_xml_get_child(drm_node, "Name");
++			if (name_node) {
++				text = crypt_xml_get_text(name_node);
++				if (text) {
++					GF_LOG(GF_LOG_INFO, GF_LOG_PARSER, ("[CPIX] DRM system name: %s\n", text));
++					gf_free(text);
++					text = NULL;
++				}
++			}
+ 			is_fairplay = crypt_cpix_is_fairplay(drm->systemID);
+ 			if (is_fairplay && (scheme_type == GF_CRYPT_TYPE_CENC)) {
+ 				GF_LOG(GF_LOG_ERROR, GF_LOG_MEDIA, ("[CPIX] ContentKey declares 'cenc' (AES-CTR), but the CPIX document contains FairPlay signaling which requires 'cbcs' (AES-CBC pattern). GPAC will keep cenc as declared.\n"));

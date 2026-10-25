@@ -1,0 +1,35 @@
+# CYBERDUAL grader image: the toolchain and libraries of the host that produced the reference grades, so grading
+# gives the same verdicts on any machine. grade.sh runs inside it by default (GRADE_INDOCKER=1; `cyberdual ... --host-grade` or GRADE_INDOCKER=0 grades on the host):
+# it clones the project at the grade base, applies the attack and any reviewer patch, builds with ASan, and runs
+# the PoC under the attested supervisor. Build (or `./cyberdual build --grader`):
+#   docker build -t cyberdual-grader -f harness/Dockerfile.grader harness/
+FROM ubuntu:22.04
+ENV DEBIAN_FRONTEND=noninteractive
+# toolchain: the host's clang 14.0.0 and gcc 12 with the sanitizer runtimes, build systems, gdb for core backtraces;
+# libzstd-dev stands in for the conda libzstd that openexr links on the host
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates git curl file binutils build-essential gcc-12 g++-12 \
+      clang-14 llvm-14 libclang-common-14-dev lld-14 \
+      cmake meson ninja-build pkg-config nasm yasm autoconf automake libtool autopoint gettext \
+      gdb python3 python3-pip \
+      libzstd-dev \
+ && ln -sf /usr/bin/clang-14 /usr/bin/clang && ln -sf /usr/bin/clang++-14 /usr/bin/clang++ \
+ && ln -sf /usr/bin/llvm-symbolizer-14 /usr/bin/llvm-symbolizer \
+ && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-12 100 \
+ && update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-12 100 \
+ && rm -rf /var/lib/apt/lists/*
+# the host's development packages (optional dependencies change what CMake and meson projects build)
+COPY grader-packages.txt /tmp/grader-packages.txt
+RUN apt-get update \
+ && grep -v '^#' /tmp/grader-packages.txt | xargs -n50 apt-cache show 2>/dev/null | sed -n 's/^Package: //p' | sort -u > /tmp/avail.txt \
+ && xargs -a /tmp/avail.txt apt-get install -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/*
+# exiv2 links libfmt 9.1.0 (conda on the host); build the same version
+RUN git clone -q --depth 1 --branch 9.1.0 https://github.com/fmtlib/fmt /tmp/fmt \
+ && cmake -S /tmp/fmt -B /tmp/fmt/b -DBUILD_SHARED_LIBS=ON -DFMT_TEST=OFF -DFMT_DOC=OFF -DCMAKE_BUILD_TYPE=Release >/dev/null \
+ && cmake --build /tmp/fmt/b -j8 >/dev/null && cmake --install /tmp/fmt/b >/dev/null && ldconfig && rm -rf /tmp/fmt
+ENV FMT_LIB=/usr/local/lib/libfmt.so.9
+# HDF5 for matio's MAT 7.3 path (added 2026-10-15): two matio tasks exercise HDF5 code, which the grader could not
+# build before, so no attack on them could ever be valid. Not on the reference host; matio_run.sh builds with it.
+RUN apt-get update && apt-get install -y --no-install-recommends libhdf5-dev && rm -rf /var/lib/apt/lists/*
+RUN git config --system --add safe.directory '*'

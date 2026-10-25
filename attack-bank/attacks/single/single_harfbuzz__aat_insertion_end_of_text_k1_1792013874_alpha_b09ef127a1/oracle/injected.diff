@@ -1,0 +1,22 @@
+diff --git a/src/hb-aat-layout-morx-table.hh b/src/hb-aat-layout-morx-table.hh
+index 4811f12be5a597f85d6fca88e416f58043fa3700..4d706b893933e7b275a5961f875736958af46b0a 100644
+--- a/src/hb-aat-layout-morx-table.hh
++++ b/src/hb-aat-layout-morx-table.hh
+@@ -843,6 +843,17 @@ struct InsertionSubtable
+ 	/* TODO We ignore KashidaLike setting. */
+ 	if (unlikely (!c->output_glyphs (count, glyphs))) return;
+ 	ret = true;
++	if (buffer->idx >= buffer->len)
++	{
++	  /* End of text: there is no current glyph for a deleted-glyph
++	   * sentinel in the insertion list to delete, so mark the sentinel
++	   * inserted by the list itself as deleted instead of letting it
++	   * appear in the output. */
++	  unsigned int first = buffer->out_len - count;
++	  for (unsigned int i = 0; i <= count; i++)
++	    if (glyphs[i] == DELETED_GLYPH)
++	      _hb_glyph_info_set_aat_deleted (&buffer->out_info[first + i]);
++	}
+ 	if (buffer->idx < buffer->len && !before)
+ 	  buffer->skip_glyph ();
+ 

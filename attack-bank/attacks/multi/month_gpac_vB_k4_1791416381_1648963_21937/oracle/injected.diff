@@ -1,0 +1,54 @@
+diff --git a/src/media_tools/crypt_tools.c b/src/media_tools/crypt_tools.c
+index 25f38b2..f37e8cf 100644
+--- a/src/media_tools/crypt_tools.c
++++ b/src/media_tools/crypt_tools.c
+@@ -326,7 +326,7 @@ static void crypt_cpix_drm_del(GF_CryptDRMInfo *drm)
+ static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)
+ {
+ 	GF_DOMParser *parser = NULL;
+-	GF_XMLNode *root, *key_list, *key_node, *data_node, *plain_node, *drm_list, *drm_node, *rule_list, *rule_node;
++	GF_XMLNode *root, *key_list, *key_node, *data_node, *plain_node = NULL, *drm_list, *drm_node, *rule_list, *rule_node;
+ 	GF_CryptInfo *info = NULL;
+ 	GF_TrackCryptInfo *tci = NULL;
+ 	GF_TrackCryptInfo *loaded_tci = NULL;
+@@ -431,17 +431,6 @@ static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)
+ 		goto exit;
+ 	}
+ 
+-	text = crypt_xml_get_text(plain_node);
+-	e = crypt_cpix_decode_b64(text, &decoded, &decoded_size);
+-	if (e || (decoded_size != 16)) {
+-		GF_LOG(GF_LOG_ERROR, GF_LOG_PARSER, ("[CPIX] ContentKey PlainValue must decode to 16 bytes\n"));
+-		if (!e) e = GF_BAD_PARAM;
+-		goto exit;
+-	}
+-	memcpy(tci->keys[0].key, decoded, 16);
+-	gf_free(decoded);
+-	decoded = NULL;
+-
+ 	e = crypt_cpix_decode_b64(iv_value, &decoded, &decoded_size);
+ 	if (e || ((decoded_size != 8) && (decoded_size != 16))) {
+ 		GF_LOG(GF_LOG_ERROR, GF_LOG_PARSER, ("[CPIX] explicitIV must decode to 8 or 16 bytes\n"));
+@@ -570,8 +559,22 @@ static GF_Err cryptinfo_load_cpix(const char *file, GF_CryptInfo **out_info)
+ 			}
+ 		}
+ 	}
++	if (!drm_list && parser) {
++		gf_xml_dom_del(parser);
++		parser = NULL;
++	}
+ 
+ exit:
++	if (!e && plain_node) {
++		text = crypt_xml_get_text(plain_node);
++		e = crypt_cpix_decode_b64(text, &decoded, &decoded_size);
++		if (e || (decoded_size != 16)) {
++			GF_LOG(GF_LOG_ERROR, GF_LOG_PARSER, ("[CPIX] ContentKey PlainValue must decode to 16 bytes\n"));
++			if (!e) e = GF_BAD_PARAM;
++		} else {
++			memcpy(loaded_tci->keys[0].key, decoded, 16);
++		}
++	}
+ 	if (hls) gf_free(hls);
+ 	if (decoded) gf_free(decoded);
+ 	if (tci) {

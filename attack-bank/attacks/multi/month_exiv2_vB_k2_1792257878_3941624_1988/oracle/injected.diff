@@ -1,0 +1,35 @@
+diff --git a/src/quicktimevideo.cpp b/src/quicktimevideo.cpp
+index 513f94bf..e053c2f0 100644
+--- a/src/quicktimevideo.cpp
++++ b/src/quicktimevideo.cpp
+@@ -575,8 +575,7 @@ void QuickTimeVideo::readMetadata() {
+ void QuickTimeVideo::decodeBlock(size_t recursion_depth, std::string const& entered_from) {
+   enforce(recursion_depth < max_recursion_depth_, Exiv2::ErrorCode::kerCorruptedMetadata);
+ 
+-  const long bufMinSize = 4;
+-  DataBuf buf(bufMinSize + 1);
++  DataBuf buf(5);
+   uint64_t size = 0;
+   buf.data()[4] = '\0';
+ 
+@@ -699,9 +698,8 @@ void QuickTimeVideo::tagDecoder(Exiv2::DataBuf& buf, size_t size, size_t recursi
+   }
+ 
+   else if (equalsQTimeTag(buf, "smhd")) {
+-    io_->readOrThrow(buf.data(), 4);
+-    io_->readOrThrow(buf.data(), 4);
+-    xmpData_["Xmp.audio.Balance"] = buf.read_uint16(0, bigEndian);
++    io_->readOrThrow(buf.data(), size);
++    xmpData_["Xmp.audio.Balance"] = buf.read_uint16(4, bigEndian);
+   }
+ 
+   else {
+@@ -1629,7 +1627,7 @@ bool isQTimeType(BasicIo& iIo, bool advance) {
+       // we only match if we actually know the video type. This is done
+       // to avoid matching just on ftyp because bmffimage also has that
+       // header.
+-      if (Exiv2::find(qTimeFileType, Exiv2::toString(buf.data(8)))) {
++      if (Exiv2::find(qTimeFileType, std::string{buf.c_str(8), 4})) {
+         matched = true;
+       }
+       break;

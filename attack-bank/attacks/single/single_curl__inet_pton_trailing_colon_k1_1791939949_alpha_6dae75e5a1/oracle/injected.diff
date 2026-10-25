@@ -1,0 +1,17 @@
+diff --git a/lib/curlx/inet_pton.c b/lib/curlx/inet_pton.c
+index 3b611890f9c7b4f98bcbb5e390170604464c1208..f4c870bb3fb4b5bb21e7bf273bd3b36b2517d9b7 100644
+--- a/lib/curlx/inet_pton.c
++++ b/lib/curlx/inet_pton.c
+@@ -142,7 +142,11 @@ static int inet_pton6(const char *src, unsigned char *dst)
+         colonp = tp;
+         continue;
+       }
+-      if(tp + INT16SZ > endp)
++      /* A colon that ends the string is not a separator. "::" is handled
++         above, where saw_xdigit is still clear. */
++      if(*src == '\0')
++        return 0;
++      if(tp > endp)
+         return 0;
+       *tp++ = (unsigned char)((val >> 8) & 0xff);
+       *tp++ = (unsigned char)(val & 0xff);

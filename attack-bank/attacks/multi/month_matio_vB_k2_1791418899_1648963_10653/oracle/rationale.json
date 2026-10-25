@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "fd564beb1f22297d74d0c6335ea6ad73e9a3b8f3",
+      "edited_message": null,
+      "patch": "diff --git a/src/read_data.c b/src/read_data.c\nindex fde2dc4..782cfdc 100644\n--- a/src/read_data.c\n+++ b/src/read_data.c\n@@ -551,6 +551,8 @@ CheckSlabOverflow(int rank, const size_t *dims, const int *start, const int *str\n     return 0;\n }\n \n+#define MATIO_SLAB_RANK_LIMIT 11\n+\n /** @brief Reads data of type @c data_type by user-defined dimensions\n  *\n  * @ingroup mat_internal\n@@ -767,15 +769,15 @@ ReadCompressedDataSlabN(mat_t *mat, z_streamp z, void *data, enum matio_classes\n                         const int *stride, const int *edge)\n {\n     int nBytes = 0, i, j, N, I = 0, err;\n-    int inc[10] =\n+    int inc[MATIO_SLAB_RANK_LIMIT] =\n         {\n             0,\n         },\n-        cnt[10] =\n+        cnt[MATIO_SLAB_RANK_LIMIT] =\n             {\n                 0,\n             },\n-        dimp[10] = {\n+        dimp[MATIO_SLAB_RANK_LIMIT] = {\n             0,\n         };\n     z_stream z_copy = {\n@@ -785,7 +787,7 @@ ReadCompressedDataSlabN(mat_t *mat, z_streamp z, void *data, enum matio_classes\n     if ( (mat == NULL) || (data == NULL) || (mat->fp == NULL) || (start == NULL) ||\n          (stride == NULL) || (edge == NULL) ) {\n         return -1;\n-    } else if ( rank > 10 ) {\n+    } else if ( rank > MATIO_SLAB_RANK_LIMIT ) {\n         return -1;\n     }\n \n"
+    },
+    {
+      "sha": "b2275cbdc4b0347b6b2c72c666745e93f59347c9",
+      "edited_message": null,
+      "patch": "diff --git a/src/read_data.c b/src/read_data.c\n--- a/src/read_data.c\n+++ b/src/read_data.c\n@@ -611,7 +611,7 @@\n     if ( (mat == NULL) || (data == NULL) || (mat->fp == NULL) || (start == NULL) ||\n          (stride == NULL) || (edge == NULL) ) {\n         return MATIO_E_BAD_ARGUMENT;\n-    } else if ( rank > 10 ) {\n+    } else if ( rank > MATIO_SLAB_RANK_LIMIT ) {\n         return MATIO_E_BAD_ARGUMENT;\n     }\n \n@@ -792,14 +792,14 @@\n {\n     int nBytes = 0, i, j, err;\n     size_t N, I = 0;\n-    size_t inc[10] =\n+    size_t inc[MATIO_SLAB_RANK_LIMIT] =\n         {\n             0,\n         },\n-           dimp[10] = {\n+           dimp[MATIO_SLAB_RANK_LIMIT] = {\n                0,\n            };\n-    int cnt[10] = {\n+    int cnt[MATIO_SLAB_RANK_LIMIT] = {\n         0,\n     };\n     z_stream z_copy = {\n@@ -809,7 +809,7 @@\n     if ( (mat == NULL) || (data == NULL) || (mat->fp == NULL) || (start == NULL) ||\n          (stride == NULL) || (edge == NULL) ) {\n         return -1;\n-    } else if ( rank > 10 ) {\n+    } else if ( rank > MATIO_SLAB_RANK_LIMIT ) {\n         return -1;\n     }\n \n"
+    }
+  ],
+  "coupling": "The fixed-rank validation commit safely extends the compressed rank-N slab reader to eleven dimensions and defines MATIO_SLAB_RANK_LIMIT for its scratch arrays and guard. The later integer-overflow refactor uses that shared limit for the uncompressed rank-N guard, while its inc, dimp, and cnt arrays still have ten entries. Thus a valid rank-eleven uncompressed MAT5 slab passes validation and writes beyond inc[10]. A correct repair must carry the earlier supported-rank change through the later refactor by sizing every uncompressed scratch array for the same limit; changing only the compressed reader or the widened arithmetic leaves the mismatch.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "Mat_Open + Mat_VarReadInfo + Mat_VarReadData (MAT5 rank-11 slab)",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

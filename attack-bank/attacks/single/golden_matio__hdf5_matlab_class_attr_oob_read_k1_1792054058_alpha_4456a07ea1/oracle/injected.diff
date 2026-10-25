@@ -1,0 +1,74 @@
+diff --git a/src/mat73.c b/src/mat73.c
+index f9dbfc414f02aad863100456eb614f10d2897ee7..b7f145a8a3fe0a8f5c7c39cd89fde97cecd694ee 100644
+--- a/src/mat73.c
++++ b/src/mat73.c
+@@ -72,6 +72,11 @@ struct ReadGroupInfoIterData
+ #define MAX_RANK (3)
+ #endif
+ 
++#if !defined(MAX_CLASS_NAME)
++/* Maximal length of the MATLAB_class attribute value */
++#define MAX_CLASS_NAME (256)
++#endif
++
+ /*===========================================================================
+  *  Private functions
+  *===========================================================================
+@@ -573,6 +578,39 @@ Mat_H5ReadVarInfo(matvar_t *matvar, hid_t dset_id)
+         return MATIO_E_FAIL_TO_IDENTIFY;
+     }
+     class_len = H5Tget_size(type_id);
++    /* MATLAB_class must be a fixed-length string of bounded size on a scalar
++     * or simple dataspace. H5Tget_size on a variable-length string returns
++     * sizeof(char *), which would truncate the class name, and class_len + 1
++     * must not wrap on 32-bit platforms.
++     */
++    if ( H5T_STRING != H5Tget_class(type_id) || 0 < H5Tis_variable_str(type_id) ) {
++        H5Tclose(type_id);
++        H5Aclose(attr_id);
++        return MATIO_E_FILE_FORMAT_VIOLATION;
++    }
++    if ( 0 == class_len || class_len > MAX_CLASS_NAME ) {
++        H5Tclose(type_id);
++        H5Aclose(attr_id);
++        return MATIO_E_FILE_FORMAT_VIOLATION;
++    }
++    {
++        hid_t space_id;
++        H5S_class_t space_class;
++
++        space_id = H5Aget_space(attr_id);
++        if ( space_id < 0 ) {
++            H5Tclose(type_id);
++            H5Aclose(attr_id);
++            return MATIO_E_FAIL_TO_IDENTIFY;
++        }
++        space_class = H5Sget_simple_extent_type(space_id);
++        H5Sclose(space_id);
++        if ( (H5S_SCALAR != space_class) && (H5S_SIMPLE != space_class) ) {
++            H5Tclose(type_id);
++            H5Aclose(attr_id);
++            return MATIO_E_FILE_FORMAT_VIOLATION;
++        }
++    }
+     mem_type_id = H5Tcopy(H5T_C_S1);
+     if ( mem_type_id == H5I_INVALID_HID ) {
+         H5Tclose(type_id);
+@@ -1116,15 +1154,13 @@ Mat_H5ReadGroupInfo(mat_t *mat, matvar_t *matvar, hid_t dset_id)
+ 
+     /* Check if the variable is sparse */
+     if ( H5Aexists_by_name(dset_id, ".", "MATLAB_sparse", H5P_DEFAULT) ) {
+-        herr_t herr;
+         hid_t sparse_dset_id;
+         unsigned nrows = 0;
+ 
+         attr_id = H5Aopen_by_name(dset_id, ".", "MATLAB_sparse", H5P_DEFAULT, H5P_DEFAULT);
+-        herr = H5Aread(attr_id, H5T_NATIVE_UINT, &nrows);
++        err = Mat_H5ReadScalarAttribute(attr_id, H5T_NATIVE_UINT, &nrows);
+         H5Aclose(attr_id);
+-        if ( herr < 0 ) {
+-            err = MATIO_E_GENERIC_READ_ERROR;
++        if ( err ) {
+             goto done_group;
+         }
+ 

@@ -1,0 +1,15 @@
+diff --git a/libarchive/archive_read_support_format_rar5.c b/libarchive/archive_read_support_format_rar5.c
+index 9210216..70e93a2 100644
+--- a/libarchive/archive_read_support_format_rar5.c
++++ b/libarchive/archive_read_support_format_rar5.c
+@@ -97,8 +97,8 @@ static const size_t g_unpack_window_size = 0x20000;
+ 
+ /* These could have been static const's, but they aren't, because of
+  * Visual Studio. */
+-#define MAX_NAME_IN_CHARS 2048
+-#define MAX_NAME_IN_BYTES (4 * MAX_NAME_IN_CHARS)
++#define MAX_NAME_IN_CHARS 4096
++#define MAX_NAME_IN_BYTES 2048
+ 
+ struct file_header {
+ 	ssize_t bytes_remaining;

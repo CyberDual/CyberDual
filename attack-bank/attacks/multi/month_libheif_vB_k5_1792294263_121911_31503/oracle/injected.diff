@@ -1,0 +1,55 @@
+diff --git a/libheif/color-conversion/alpha.cc b/libheif/color-conversion/alpha.cc
+index b585a7e3..7e6fc735 100644
+--- a/libheif/color-conversion/alpha.cc
++++ b/libheif/color-conversion/alpha.cc
+@@ -263,7 +263,7 @@ Op_flatten_alpha_plane<Pixel>::convert_colorspace(const std::shared_ptr<const He
+   // The colour planes are converted at, and the alpha plane is composited at, one common depth
+   // through the 'Pixel' type of this instance.
+   int color_bpp = input_state.get_uniform_color_bits_per_pixel();
+-  int bpp_alpha = input_raw->get_bits_per_pixel(heif_channel_Alpha);
++  int bpp_alpha = input_state.bits_per_pixel_alpha;
+ 
+   if (color_bpp == 0 ||
+       bpp_alpha != color_bpp ||
+@@ -509,28 +509,32 @@ Op_adjust_alpha_bit_depth::convert_colorspace(const std::shared_ptr<const HeifPi
+   uint32_t alpha_width = input->get_width(heif_channel_Alpha);
+   uint32_t alpha_height = input->get_height(heif_channel_Alpha);
+ 
+-  if (auto err = outimg->add_channel(heif_channel_Alpha, alpha_width, alpha_height, target_bpp, limits)) {
+-    return err;
+-  }
+-
+   int input_bytes = bytes_per_sample_for_bit_depth(input_alpha_bpp);
+   int target_bytes = bytes_per_sample_for_bit_depth(target_bpp);
+ 
++  // An 8-bit alpha plane composited against a wider colour depth keeps its one-byte
++  // storage: the sample values are rescaled onto the colour depth within the decoded
++  // width instead of rewriting the plane with two bytes per sample.
++  int out_bpp = (input_bytes == 1 && target_bytes == 2) ? input_alpha_bpp : target_bpp;
++
++  if (auto err = outimg->add_channel(heif_channel_Alpha, alpha_width, alpha_height, out_bpp, limits)) {
++    return err;
++  }
++
+   if (input_bytes == 1 && target_bytes == 2) {
+-    // Upscale: 8-bit alpha -> HDR using bit replication
++    // Upscale: 8-bit alpha -> HDR using bit replication, within the decoded width
+     const uint8_t* p_in;
+     size_t stride_in;
+     p_in = input->get_channel_memory(heif_channel_Alpha, &stride_in);
+ 
+-    uint16_t* p_out;
++    uint8_t* p_out;
+     size_t stride_out;
+-    p_out = (uint16_t*) outimg->get_channel_memory(heif_channel_Alpha, &stride_out);
+-    stride_out /= 2;
++    p_out = outimg->get_channel_memory(heif_channel_Alpha, &stride_out);
+ 
+     for (uint32_t y = 0; y < alpha_height; y++)
+       for (uint32_t x = 0; x < alpha_width; x++) {
+         int in = p_in[y * stride_in + x];
+-        p_out[y * stride_out + x] = (uint16_t) replicate_sample_bits(in, input_alpha_bpp, target_bpp);
++        p_out[y * stride_out + x] = (uint8_t) replicate_sample_bits(in, input_alpha_bpp, out_bpp);
+       }
+   }
+   else if (input_bytes == 2 && target_bytes == 1) {

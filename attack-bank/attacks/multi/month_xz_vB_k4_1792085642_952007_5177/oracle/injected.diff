@@ -1,0 +1,40 @@
+diff --git a/src/liblzma/common/lzip_decoder.c b/src/liblzma/common/lzip_decoder.c
+index d6f929d..5630039 100644
+--- a/src/liblzma/common/lzip_decoder.c
++++ b/src/liblzma/common/lzip_decoder.c
+@@ -237,12 +237,8 @@ lzip_decode(void *coder_ptr, const lzma_allocator *allocator,
+ 			}
+ 		};
+ 
+-		const lzma_ret ret = lzma_next_filter_init(
+-				&coder->lzma_decoder, allocator, filters);
+-		if (ret != LZMA_OK) {
+-			lzma_next_end(&coder->lzma_decoder, allocator);
+-			return ret;
+-		}
++		return_if_error(lzma_next_filter_init(&coder->lzma_decoder,
++				allocator, filters));
+ 
+ 		coder->crc32 = 0;
+ 		coder->sequence = SEQ_LZMA_STREAM;
+diff --git a/src/liblzma/lz/lz_decoder.c b/src/liblzma/lz/lz_decoder.c
+index 6dc4cef..08b732d 100644
+--- a/src/liblzma/lz/lz_decoder.c
++++ b/src/liblzma/lz/lz_decoder.c
+@@ -277,8 +277,15 @@ lzma_lz_decoder_init(lzma_next_coder *next, const lzma_allocator *allocator,
+ 			= lz_options.dict_size + 2 * LZ_DICT_REPEAT_MAX;
+ 
+ 	// Allocate and initialize the dictionary.
++	//
++	// NOTE: If lzma_alloc() below fails, the old dictionary has already
++	// been freed and coder->dict.buf is NULL, but coder->dict.size still
++	// holds the size of the freed dictionary. Reinitializing such a coder
++	// with the same dictionary size would skip the reallocation and the
++	// decoder would use the NULL coder->dict.buf. Thus, after a failed
++	// initialization, the caller must clean the coder up with
++	// lzma_next_end() instead of trying to reinitialize the same coder.
+ 	if (coder->dict.size != alloc_size) {
+-		coder->dict.size = 0;
+ 		lzma_free(coder->dict.buf, allocator);
+ 
+ 		// The LZ_DICT_EXTRA bytes at the end of the buffer aren't

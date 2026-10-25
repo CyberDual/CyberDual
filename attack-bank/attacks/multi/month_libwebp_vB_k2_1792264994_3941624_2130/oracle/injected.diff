@@ -1,0 +1,35 @@
+diff --git a/src/dec/vp8l_dec.c b/src/dec/vp8l_dec.c
+index b3bdb731..044d00bd 100644
+--- a/src/dec/vp8l_dec.c
++++ b/src/dec/vp8l_dec.c
+@@ -506,15 +506,9 @@ int ReadHuffmanCodesHelper(int color_cache_bits, int num_htree_groups,
+       (int*)WebPSafeCalloc((uint64_t)max_alphabet_size, sizeof(*code_lengths));
+   *htree_groups = VP8LHtreeGroupsNew(num_htree_groups);
+ 
+-  // Cap the segment chunk size to ~320 KB (16 * table_size) for a small number
+-  // of groups, or ~1 MB (52 * table_size) when there are many groups.
+-  {
+-    const int max_groups_per_chunk = (num_htree_groups > 256) ? 52 : 16;
+-    total_huffman_table_size =
+-        (num_htree_groups > max_groups_per_chunk ? max_groups_per_chunk
+-                                                 : num_htree_groups) *
+-        table_size;
+-  }
++  // Start with one group; VP8LBuildHuffmanTable() extends the segment list as
++  // more groups are read.
++  total_huffman_table_size = table_size;
+   if (*htree_groups == NULL || code_lengths == NULL ||
+       !VP8LHuffmanTablesAllocate(total_huffman_table_size, huffman_tables)) {
+     VP8LSetError(dec, VP8_STATUS_OUT_OF_MEMORY);
+diff --git a/src/utils/huffman_utils.c b/src/utils/huffman_utils.c
+index 2cc5ca63..cb733cc6 100644
+--- a/src/utils/huffman_utils.c
++++ b/src/utils/huffman_utils.c
+@@ -234,6 +234,7 @@ static int BuildHuffmanTable(HuffmanCode* const WEBP_BIDI_INDEXABLE root_table,
+ #define SORTED_SIZE_CUTOFF 512
+ int VP8LHuffmanTablesEnsureCapacity(int size,
+                                     HuffmanTables* const huffman_tables) {
++  if (huffman_tables->curr_segment == &huffman_tables->root) return 1;
+   if (huffman_tables->curr_segment->curr_table + size >
+       huffman_tables->curr_segment->start +
+           huffman_tables->curr_segment->size) {

@@ -1,0 +1,21 @@
+diff --git a/src/lib/OpenEXRCore/internal_zstd.c b/src/lib/OpenEXRCore/internal_zstd.c
+index 670b92a73c768ebf3b5cc4cec26d92c90fe23b79..897d46b1d483ce6b04fd2dbaf1749638d7c6e4be 100644
+--- a/src/lib/OpenEXRCore/internal_zstd.c
++++ b/src/lib/OpenEXRCore/internal_zstd.c
+@@ -1308,6 +1308,16 @@ exr_undo_zstd_v1 (
+         pack_channel_count,
+         sorting_lookup);
+ 
++    /* split is derived from the (separately validated) sample-count
++     * table, while uncompressed_size comes straight from the file's
++     * chunk leader, and the two are never validated against each other
++     * before this point. A corrupt file could declare a split beyond
++     * what the chunk's data can actually hold, which
++     * exr_zstd_segment_layout() would then use as the length of the
++     * first inner segment. Reject anything outside the bound the
++     * unpacked payload itself is held to above. */
++    if (split > max_dst) return EXR_ERR_CORRUPT_CHUNK;
++
+     uint64_t  inner_lens[2];
+     uint64_t  inner_els[2];
+     int const n_inner =

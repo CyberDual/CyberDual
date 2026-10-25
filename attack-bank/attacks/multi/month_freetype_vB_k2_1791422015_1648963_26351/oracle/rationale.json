@@ -1,0 +1,25 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "5c3132a097560691d50e8eedcd178ffb65bb59f0",
+      "edited_message": null,
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 6947b3d..d6083d2 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -273,6 +273,7 @@\n       FT_UShort  tag;\n       FT_Byte*   priv_dict = NULL;\n       FT_ULong   priv_len  = 0;\n+      FT_Bool    merged    = 0;\n \n \n       for (;;)\n@@ -284,10 +285,13 @@\n         if ( tag != 0x8002U )\n           break;\n \n-        if ( FT_QREALLOC( priv_dict, priv_len, priv_len + size ) ||\n-             FT_STREAM_READ( priv_dict + priv_len, size )        )\n+        if ( FT_QREALLOC( priv_dict, priv_len,\n+                         priv_len + size + ( priv_len != 0 ) ) ||\n+             FT_STREAM_READ( priv_dict + priv_len, size ) )\n           goto Fail;\n \n+        if ( priv_len )\n+          merged = 1;\n         priv_len += size;\n       }\n \n@@ -300,6 +304,9 @@\n         goto Fail;\n       }\n \n+      if ( merged )\n+        priv_dict[priv_len] = '\\0';\n+\n       parser->private_dict = priv_dict;\n       parser->private_len  = priv_len;\n     }\n"
+    },
+    {
+      "sha": "f6aebb85c7c359be17761da56bd3fea0975ad24b",
+      "edited_message": null,
+      "patch": "diff --git a/src/type1/t1parse.c b/src/type1/t1parse.c\nindex 151aeac..f909fda 100644\n--- a/src/type1/t1parse.c\n+++ b/src/type1/t1parse.c\n@@ -273,6 +273,7 @@\n       FT_UShort  tag;\n       FT_Byte*   priv_dict = NULL;\n       FT_ULong   priv_len  = 0;\n+      FT_Bool    merged    = 0;\n \n \n       for (;;)\n@@ -288,6 +289,8 @@\n              FT_STREAM_READ( priv_dict + priv_len, size )        )\n           break;\n \n+        if ( priv_len )\n+          merged = 1;\n         priv_len += size;\n       }\n \n@@ -300,6 +303,9 @@\n         goto Fail;\n       }\n \n+      if ( merged )\n+        priv_dict[priv_len] = '\\0';\n+\n       parser->private_dict = priv_dict;\n       parser->private_len  = priv_len;\n     }\n"
+    }
+  ],
+  "coupling": "The segment-merging commit reserves one trailing byte when a second private-dictionary segment is appended and terminates the joined buffer after the scan. The later size-check commit changes that growth back to the exact payload length while retaining the terminator write. The first edited commit is safe by itself; the later commit breaks its allocation contract, so a repair must trace the allocation in the later commit to the post-scan write introduced earlier.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "FT_New_Memory_Face",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

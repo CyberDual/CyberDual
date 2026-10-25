@@ -1,0 +1,33 @@
+diff --git a/src/OT/Var/VARC/VARC.cc b/src/OT/Var/VARC/VARC.cc
+index e0d370f..9d3ee1d 100644
+--- a/src/OT/Var/VARC/VARC.cc
++++ b/src/OT/Var/VARC/VARC.cc
+@@ -96,12 +96,18 @@ VarComponent::decompile_record (const VARC &varc,
+       axis_count = hb_len ((&varc+varc.axisIndicesList)[decoded->axis_indices_index]);
+     if (axis_values)
+     {
+-      if (unlikely (!axis_values->resize (axis_count))) return false;
++      /* Only the first HB_VAR_COMPOSITE_MAX_AXES values are consumable;
++       * skip the rest instead of growing the vector to hold them. */
++      unsigned value_count = hb_min (axis_count, (unsigned) HB_VAR_COMPOSITE_MAX_AXES);
++      if (unlikely (!axis_values->resize (value_count))) return false;
+       const HBUINT8 *p = (const HBUINT8 *) record;
+       if (unlikely (!TupleValues::decompile (p, *axis_values,
+ 					    (const HBUINT8 *) end)))
+ 	return false;
+       record = (const unsigned char *) p;
++      if (value_count < axis_count &&
++	  unlikely (!TupleValues::skip (record, end, axis_count - value_count)))
++	return false;
+     }
+     else if (unlikely (!TupleValues::skip (record, end, axis_count)))
+       return false;
+@@ -378,7 +384,7 @@ VarComponent::get_path_at (const hb_varc_context_t &c,
+     // Only use coord_setter if there's actually any axis overrides.
+     coord_setter_t coord_setter (axisIndices ? component_coords : hb_array<int> ());
+     for (unsigned i = 0; i < axisIndices.length; i++)
+-      coord_setter[axisIndices[i]] = hb_clamp_to<int> (roundf (axisValues[i]));
++      coord_setter[axisIndices[i]] = hb_clamp_to<int> (roundf (axisValues.arrayZ[i]));
+     if (axisIndices)
+       component_coords = coord_setter.get_coords ();
+ 

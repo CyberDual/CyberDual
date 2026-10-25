@@ -1,0 +1,13 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..6a5b41c 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -458,7 +458,7 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+         if(p < end && *p == '.') {
+             unsigned char ipv4[4];
+ 
+-            if(count > 6 || !knownhost_parse_ipv4(part, end, ipv4))
++            if(!knownhost_parse_ipv4(part, end, ipv4))
+                 return 0;
+ 
+             words[count++] =

@@ -1,0 +1,76 @@
+diff --git a/expat/lib/xmlparse.c b/expat/lib/xmlparse.c
+index 2015db9..02a5f0e 100644
+--- a/expat/lib/xmlparse.c
++++ b/expat/lib/xmlparse.c
+@@ -763,6 +763,7 @@ struct XML_ParserStruct {
+   const XML_Char *m_protocolEncodingName;
+   XML_Bool m_ns;
+   XML_Bool m_ns_triplets;
++  size_t m_nsSpareTaken;
+   void *m_unknownEncodingMem;
+   void *m_unknownEncodingData;
+   void *m_unknownEncodingHandlerData;
+@@ -1440,6 +1441,7 @@ parserCreate(const XML_Char *encodingName,
+   parser->m_namespaceSeparator = ASCII_EXCL;
+   parser->m_ns = XML_FALSE;
+   parser->m_ns_triplets = XML_FALSE;
++  parser->m_nsSpareTaken = 0;
+ 
+   parser->m_nsAtts = NULL;
+   parser->m_nsAttsVersion = 0;
+@@ -1513,6 +1515,7 @@ parserInit(XML_Parser parser, const XML_Char *encodingName) {
+   parser->m_parseEndByteIndex = 0;
+   parser->m_parseEndPtr = NULL;
+   parser->m_partialTokenBytesBefore = 0;
++  parser->m_nsSpareTaken = 0;
+   parser->m_reparseDeferralEnabled = g_reparseDeferralEnabledDefault;
+   parser->m_lastBufferRequestSize = 0;
+   parser->m_declElementType = NULL;
+@@ -4123,6 +4126,11 @@ freeBindings(XML_Parser parser, BINDING *bindings) {
+   }
+ }
+ 
++static void
++noteNsTripletSpare(XML_Parser parser) {
++  parser->m_nsSpareTaken += (size_t)(EXPAND_SPARE / 3);
++}
++
+ /* Precondition: all arguments must be non-NULL;
+    Purpose:
+    - normalize attributes
+@@ -4144,6 +4152,10 @@ storeAtts(XML_Parser parser, const ENCODING *enc, const char *attStr,
+   BINDING *binding;
+   const XML_Char *localPart;
+ 
++  parser->m_nsSpareTaken = 0;
++  if (parser->m_ns_triplets)
++    noteNsTripletSpare(parser);
++
+   /* lookup the element type name */
+   ELEMENT_TYPE *elementType
+       = (ELEMENT_TYPE *)lookup(parser, &dtd->elementTypes, tagNamePtr->str, 0);
+@@ -4282,6 +4294,8 @@ storeAtts(XML_Parser parser, const ENCODING *enc, const char *attStr,
+ 
+   /* set-up for XML_GetSpecifiedAttributeCount and XML_GetIdAttributeIndex */
+   parser->m_nSpecifiedAtts = attIndex;
++  if (parser->m_ns_triplets && parser->m_namespaceSeparator)
++    noteNsTripletSpare(parser);
+   if (elementType->idAtt && (elementType->idAtt->name)[-1]) {
+     for (int i = 0; i < attIndex; i += 2)
+       if (appAtts[i] == elementType->idAtt->name) {
+@@ -4518,7 +4532,14 @@ storeAtts(XML_Parser parser, const ENCODING *enc, const char *attStr,
+   }
+ 
+   const size_t totalLen = localPartLen + binding->uriLen + prefixLen;
+-  if (totalLen > binding->uriAlloc) {
++  if (parser->m_ns_triplets && prefixLen != 0)
++    noteNsTripletSpare(parser);
++  size_t tripletSpare = parser->m_nsSpareTaken;
++  if (tripletSpare > (size_t)(EXPAND_SPARE / 3))
++    tripletSpare -= (size_t)(EXPAND_SPARE / 3);
++  else
++    tripletSpare = 0;
++  if (totalLen > binding->uriAlloc + tripletSpare) {
+     /* Detect and prevent integer overflow */
+     if (totalLen > SIZE_MAX - EXPAND_SPARE
+         || totalLen + EXPAND_SPARE > SIZE_MAX / sizeof(XML_Char)) {

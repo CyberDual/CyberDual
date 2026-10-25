@@ -1,0 +1,44 @@
+diff --git a/libarchive/archive_read_support_format_tar.c b/libarchive/archive_read_support_format_tar.c
+index a51ba298ed88ce41ee05ec5e3a598e00e9adc089..e52e1c3776462949501f47026f5dc97a943ceda5 100644
+--- a/libarchive/archive_read_support_format_tar.c
++++ b/libarchive/archive_read_support_format_tar.c
+@@ -3027,6 +3027,7 @@ header_gnutar(struct archive_read *a, struct tar *tar,
+ 	const struct archive_entry_header_gnutar *header;
+ 	int64_t t;
+ 	int err = ARCHIVE_OK;
++	struct archive_entry_header_gnutar header_copy;
+ 
+ 	/*
+ 	 * GNU header is like POSIX ustar, except 'prefix' is
+@@ -3104,6 +3105,14 @@ header_gnutar(struct archive_read *a, struct tar *tar,
+ 	}
+ 
+ 	if (header->sparse[0].offset[0] != 0) {
++		/*
++		 * The sparse entries may continue in additional header
++		 * blocks; reading those advances the read-ahead window
++		 * and can invalidate the buffer that 'header' points
++		 * into.  Work from a private copy of the fixed header.
++		 */
++		memcpy(&header_copy, header, sizeof(header_copy));
++		header = &header_copy;
+ 		if (gnu_sparse_old_read(a, tar, header, unconsumed)
+ 		    != ARCHIVE_OK)
+ 			return (ARCHIVE_FATAL);
+@@ -3114,7 +3123,7 @@ header_gnutar(struct archive_read *a, struct tar *tar,
+ 	}
+ 
+ 	/* Grab fields common to all tar variants. */
+-	err = header_common(a, tar, entry, h);
++	err = header_common(a, tar, entry, header);
+ 	if (err == ARCHIVE_FATAL)
+ 		return (err);
+ 
+@@ -3141,6 +3150,7 @@ gnu_add_sparse_entry(struct archive_read *a, struct tar *tar,
+ 	tar->sparse_last = p;
+ 	if (remaining < 0 || offset < 0 || offset > INT64_MAX - remaining) {
+ 		archive_set_error(&a->archive, ARCHIVE_ERRNO_MISC, "Malformed sparse map data");
++		free(p);
+ 		return (ARCHIVE_FATAL);
+ 	}
+ 	p->offset = offset;

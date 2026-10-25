@@ -1,0 +1,66 @@
+diff --git a/js/src/jit/MacroAssembler.cpp b/js/src/jit/MacroAssembler.cpp
+index aefd492e4eedd..26cd427e64a6d 100644
+--- a/js/src/jit/MacroAssembler.cpp
++++ b/js/src/jit/MacroAssembler.cpp
+@@ -5956,9 +5956,9 @@ void MacroAssembler::loadParsedRegExpShared(Register regexp, Register result,
+   branchTestUndefined(Assembler::Equal, sharedSlot, unparsed);
+   unboxNonDouble(sharedSlot, result, JSVAL_TYPE_PRIVATE_GCTHING);
+ 
+-  static_assert(sizeof(RegExpShared::Kind) == sizeof(uint8_t));
+-  branch8(Assembler::Equal, Address(result, RegExpShared::offsetOfKind()),
+-          Imm32(int32_t(RegExpShared::Kind::Unparsed)), unparsed);
++  static_assert(sizeof(RegExpShared::Kind) == sizeof(uint16_t));
++  branch16(Assembler::Equal, Address(result, RegExpShared::offsetOfKind()),
++           Imm32(int32_t(RegExpShared::Kind::Unparsed)), unparsed);
+ }
+ 
+ // ===============================================================
+diff --git a/js/src/vm/RegExpObject.cpp b/js/src/vm/RegExpObject.cpp
+index 98e89d68844d3..bec22a8791595 100644
+--- a/js/src/vm/RegExpObject.cpp
++++ b/js/src/vm/RegExpObject.cpp
+@@ -739,8 +739,18 @@ bool RegExpShared::quickCheckRejects(const JS::Latin1Char* chars, size_t length,
+   if (index + sizeof(uint32_t) <= length) {
+     // We use memcpy here because this load may not be aligned. It will generate
+     // a regular load on every platform we care about.
+-    uint32_t word;
+-    memcpy(&word, chars + index, sizeof(word));
++    uint64_t word = 0;
++    size_t readSize = global() ? sizeof(uint32_t)
++                               : sizeof(uint32_t) * sizeof(Kind);
++    if (index == 0) {
++      memcpy(&word, chars, sizeof(uint32_t));
++    } else if (index + sizeof(word) <= length) {
++      memcpy(&word, chars + index, readSize);
++    } else {
++      uint32_t tail;
++      memcpy(&tail, chars + index, sizeof(tail));
++      memcpy(&word, &tail, readSize);
++    }
+     if ((word & quickCheckMask_) != quickCheckValue_) {
+       return true;
+     }
+diff --git a/js/src/vm/RegExpShared.h b/js/src/vm/RegExpShared.h
+index a574e7482d24f..15e3d6e2a26d4 100644
+--- a/js/src/vm/RegExpShared.h
++++ b/js/src/vm/RegExpShared.h
+@@ -71,7 +71,7 @@ class RegExpShared
+   friend class js::gc::CellAllocator;
+ 
+  public:
+-  enum class Kind : uint8_t { Unparsed, Atom, RegExp };
++  enum class Kind : uint16_t { Unparsed, Atom, RegExp };
+   enum class CodeKind { Bytecode, Jitcode, Any };
+   enum class InternalFlag {
+     HasQuickCheck = 1 << 0,
+@@ -142,8 +142,8 @@ class RegExpShared
+   // produce any quick-check data, then the initial zero values will never
+   // reject anything: (x & 0) == 0 for all x, and the bitset only rejects
+   // if it finds a non-zero bit.
+-  uint32_t quickCheckMask_ = 0;
+-  uint32_t quickCheckValue_ = 0;
++  uint64_t quickCheckMask_ = 0;
++  uint64_t quickCheckValue_ = 0;
+   uint32_t quickCheckRejectBitset_[QuickCheckBitsetWords] = {};
+ 
+   uint32_t maxRegisters_ = 0;

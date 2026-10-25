@@ -1,0 +1,30 @@
+{
+  "regime": "new_defect",
+  "arm": "multi",
+  "commits": [
+    {
+      "sha": "3cf1c637f58312d3f771e991929a477a6e69536d",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\nindex c39583d..48c380a 100644\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1353,7 +1353,7 @@ edge_sweep_row (int32_t                *area,\n      * exact: the increment is constant and the running sums are bounded,\n      * so k steps equal one k\u00b7delta_fy jump. */\n     int64_t col_min = (int64_t) x_org;\n-    int64_t col_max = (int64_t) x_org + (int64_t) width - 1;\n+    int64_t col_max = (int64_t) x_org + (int64_t) width;\n \n     if (unlikely (cx1 < col_min))\n     {\n@@ -1361,7 +1361,7 @@ edge_sweep_row (int32_t                *area,\n       cell_add (area, cover, width, -1, 0, fy0, 0, fy1, wind, x_min, x_max);\n       return;\n     }\n-    if (unlikely (cx0 > col_max))\n+    if (unlikely (cx0 >= col_max))\n       return; /* Entirely right of the surface. */\n \n     int32_t x_b = (int32_t) hb_clamp (((int64_t) cx0 + 1) * HB_RASTER_ONE_PIXEL,\n@@ -1382,7 +1382,7 @@ edge_sweep_row (int32_t                *area,\n       cx = cx_skip;\n     }\n \n-    int32_t cx_end = (int32_t) hb_min ((int64_t) cx1, col_max + 1);\n+    int32_t cx_end = (int32_t) hb_min ((int64_t) cx1, col_max);\n     for (; cx < cx_end; cx++)\n     {\n       fy_b = fy_prev + delta_fy;\n@@ -1425,7 +1425,7 @@ edge_sweep_row (int32_t                *area,\n       cell_add (area, cover, width, -1, 0, fy0, 0, fy1, wind, x_min, x_max);\n       return;\n     }\n-    if (unlikely (cx1 > col_max))\n+    if (unlikely (cx1 > col_max + 1))\n       return; /* Entirely right of the surface. */\n \n     int32_t x_b = (int32_t) hb_clamp ((int64_t) cx0 * HB_RASTER_ONE_PIXEL,\n"
+    },
+    {
+      "sha": "8d1d10b12db4df1c385ac83377dc8e4c9cd93789",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\nindex cdabc35..968f991 100644\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1352,7 +1352,7 @@ edge_sweep_row (Area                   *area,\n \tfy_prev = fy_b;\n       }\n \n-      cell_add (area, cover, width, cx1 - x_org, 0, fy_prev, fx1, fy1, wind, x_min, x_max);\n+      cell_add (area, cover, width + 1, cx1 - x_org, 0, fy_prev, fx1, fy1, wind, x_min, x_max);\n       return;\n     }\n \n@@ -1401,7 +1401,7 @@ edge_sweep_row (Area                   *area,\n     }\n \n     if (likely (cx1 <= col_max))\n-      cell_add (area, cover, width, cx1 - x_org, 0, fy_prev, fx1, fy1, wind, x_min, x_max);\n+      cell_add (area, cover, width + 1, cx1 - x_org, 0, fy_prev, fx1, fy1, wind, x_min, x_max);\n   }\n   else\n   {\n"
+    },
+    {
+      "sha": "f6383565303c8e4b4bceb4a3e3ce9375bbd6cdd5",
+      "edited_message": null,
+      "patch": "diff --git a/src/hb-raster-draw.cc b/src/hb-raster-draw.cc\nindex 968f991..3791564 100644\n--- a/src/hb-raster-draw.cc\n+++ b/src/hb-raster-draw.cc\n@@ -1336,7 +1336,7 @@ edge_sweep_row (Area                   *area,\n   if (total_dx > 0)\n   {\n     /* Left-to-right edge. */\n-    if (likely ((unsigned) (cx0 - x_org) < width && (unsigned) (cx1 - x_org) < width))\n+    if (likely ((unsigned) (cx0 - x_org) < width && (unsigned) (cx1 - x_org) <= width))\n     {\n       /* Entirely inside the surface: unclipped walk. */\n       int32_t x_b = (int32_t) hb_clamp (((int64_t) cx0 + 1) * HB_RASTER_ONE_PIXEL,\n@@ -1462,7 +1462,7 @@ edge_sweep_row (Area                   *area,\n     }\n \n     if (likely (cx1 >= col_min))\n-      cell_add (area, cover, width, cx1 - x_org, HB_RASTER_ONE_PIXEL, fy_prev, fx1, fy1, wind, x_min, x_max);\n+      cell_add (area, cover, width + 1, cx1 - x_org, HB_RASTER_ONE_PIXEL, fy_prev, fx1, fy1, wind, x_min, x_max);\n     else\n       /* Fold the mid columns left of the surface and the last cell\n        * into one column-0 cover update. */\n"
+    }
+  ],
+  "coupling": "The overflow is a heap store one past the scanline area buffer (width columns, allocated by hb_raster_draw_render). cell_add still rejects col >= width, so a column equal to width is stored only when some call site passes a limit of width+1 AND some other edit makes that call site reachable for an edge that ends on column width. Commit 3cf1c63 (A) only retargets the clipped walk: the LTR window becomes the half-open range ending at x_org+width, and the RTL early-out moves one column right. Both still call cell_add with limit width, so the extra column is dropped and output is unchanged. Commit 8d1d10b (B) passes width+1 only on the two LTR closing cells (fast path and clipped path). With the original exclusive window and the original fast-path test cx1-x_org < width, neither call is reached with col == width. Commit f638356 (C) admits an LTR edge whose end column is exactly width onto the fast path, and passes width+1 only on the RTL clipped closing cell. The fast-path closing cell still uses limit width, and the RTL width+1 call is still skipped by the original cx1 > col_max return. Any one edit therefore cannot store column width. A+B stores it from the clipped LTR closing cell (A makes cx1 <= col_max true for that column; B passes width+1). A+C stores it from the RTL closing cell (A no longer returns when the end column is width; C passes width+1). B+C stores it from the fast-path LTR closing cell (C takes the fast path for end column width; B passes width+1). The same public draw (one LTR edge and one RTL edge, both ending on column width) hits all three paths, so reverting any single edited diff leaves a live overflow and reverting any two makes the input clean.",
+  "pocs": [
+    {
+      "input": "pocs/probe.c",
+      "entry_point": "hb_raster_draw_render",
+      "fires_on": "modified_tree",
+      "credited": true
+    }
+  ]
+}

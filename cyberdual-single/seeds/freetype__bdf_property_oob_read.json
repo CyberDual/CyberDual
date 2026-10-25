@@ -1,0 +1,17 @@
+{
+  "cwe": "CWE-125",
+  "family": "secb",
+  "information_state": "vuln_desc_only",
+  "parent_commit": "0d6de69ca85a9b97e933e5c3b1e53b0349026560",
+  "parent_sha": "0d6de69ca85a9b97e933e5c3b1e53b0349026560",
+  "project": "freetype",
+  "regime": "A",
+  "regime_full": "A_vuln_patch",
+  "repo": "https://github.com/freetype/freetype",
+  "repo_url": "https://github.com/freetype/freetype",
+  "source": "reuse",
+  "target": "freetype",
+  "task": "FT_New_Face on a crafted SFNT/TrueType font carrying a 'BDF ' table + FT_Get_BDF_Property; tt_face_find_bdf_prop (src/sfnt/ttbdf.c) reads out of bounds past the BDF property array. Admitted task; fix_sha recovered as the single-parent commit whose first-parent==parent_commit with matching committer date.",
+  "task_iid": "freetype__bdf_property_oob_read",
+  "vuln_desc": "FT_New_Face on a crafted SFNT/TrueType font carrying a 'BDF ' table + FT_Get_BDF_Property; tt_face_find_bdf_prop (src/sfnt/ttbdf.c) reads out of bounds past the BDF property array. Admitted task; fix_sha recovered as the single-parent commit whose first-parent==parent_commit with matching committer date."
+}

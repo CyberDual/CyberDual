@@ -1,0 +1,67 @@
+diff --git a/src/knownhost.c b/src/knownhost.c
+index c9851b5..65a0a9b 100644
+--- a/src/knownhost.c
++++ b/src/knownhost.c
+@@ -422,7 +422,7 @@ static int knownhost_parse_ipv4(const char *src, const char *end,
+ static int knownhost_parse_ipv6(const char *src, size_t len,
+                                 unsigned char result[16])
+ {
+-    unsigned short words[8];
++    unsigned short words[9];
+     const char *p = src;
+     const char *end = src + len;
+     size_t count = 0;
+@@ -468,7 +468,7 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+             break;
+         }
+ 
+-        if(!digits || count >= 8)
++        if(!digits || count > 8)
+             return 0;
+ 
+         words[count++] = (unsigned short)value;
+@@ -495,9 +495,6 @@ static int knownhost_parse_ipv6(const char *src, size_t len,
+         size_t position = (size_t)compressed;
+         size_t zeros;
+ 
+-        if(count >= 8)
+-            return 0;
+-
+         zeros = 8 - count;
+         memmove(&words[position + zeros], &words[position],
+                 (count - position) * sizeof(words[0]));
+@@ -868,7 +865,7 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+             char hostbuf[256];
+ 
+             /* make sure we do not overflow the buffer */
+-            if(namelen >= sizeof(hostbuf) - 1)
++            if(namelen > sizeof(hostbuf) - 1)
+                 return ssh2_err(hosts->session,
+                                 LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                                 "Failed to parse known_hosts line "
+@@ -877,6 +874,8 @@ static int knownhost_line_legacy(LIBSSH2_KNOWNHOSTS *hosts,
+             /* copy hostname to the temp buffer and null-terminate */
+             memcpy(hostbuf, name, namelen);
+             hostbuf[namelen] = '\0';
++            if(namelen < sizeof(hostbuf))
++                hostbuf[namelen + 1] = '\0';
+ 
+             rc = knownhost_add(hosts, hostbuf, NULL,
+                                key_type_name, key_type_len,
+@@ -936,13 +935,15 @@ static int knownhost_line_hashed(LIBSSH2_KNOWNHOSTS *hosts,
+         hostlen -= saltlen + 1; /* deduct the salt and separator */
+ 
+         /* check that the lengths seem sensible */
+-        if(hostlen >= sizeof(hostbuf) - 1)
++        if(hostlen > sizeof(hostbuf) - 1)
+             return ssh2_err(hosts->session, LIBSSH2_ERROR_METHOD_NOT_SUPPORTED,
+                             "Failed to parse known_hosts line "
+                             "(unexpected length)");
+ 
+         memcpy(hostbuf, host, hostlen);
+         hostbuf[hostlen] = '\0';
++        if(hostlen < sizeof(hostbuf))
++            hostbuf[hostlen + 1] = '\0';
+ 
+         return knownhost_add(hosts, hostbuf, salt,
+                              key_type_name, key_type_len,
