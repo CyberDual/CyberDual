@@ -395,3 +395,14 @@ The engine study has its own commands (`./cyberdual engine ...`) and images; see
 An engine needs about 150 GB free: the window image is 25-30 GB, and a single-commit task builds the engine at its
 parent (20-30 GB per task image). Remove the engine images with `docker image rm` when done; `cyberdual clean`
 removes only the egress containers and network they share with the library runs.
+
+## Reproducing the sample in a run report
+
+`cyberdual report --json <file> <run>` includes a `cohort` object with the unit names, per-unit quota and selected cell IDs, including gradeable invalid observations. The report uses the manifest's `TARGET`. `review --run` reviews the valid members of that same sample. For single-commit tasks the grader records the first completion time as `first_grade_ns` in the grade JSON (Unix nanoseconds). Windows use the launch time encoded in the cell ID. Equal ordering keys are resolved by cell ID. A report may encounter reviews written before sample membership was recorded, or reviews of extra observations from the run. `reviewed_outside_cohort` lists their IDs, and the CLI prints a warning when any are present.
+
+Older single-commit results can be reported directly when all gradeable observations fit the quota. If more observations compete for a slot and an original completion time is missing, recover the selected IDs from the original experiment records. Save the historical membership as `<run>/report_cohort.json` with the same fields as the report's `cohort` object. Saving that object also freezes an existing report for future analysis. The report checks the setup kind, quota, units, and availability of each selected observation before using the snapshot. File modification times may change on copy or regrading and are unsuitable for recovering an unknown finish order.
+
+
+For runs with a declared unit list, the report includes every requested unit across compatible invocations. For a default run it reads the frozen task or project registry from the run folder when available. A recorded default run with only observed units has `complete_unit_plan=false` and no published ASR until the registry or historical cohort is restored. Legacy folders without run metadata can report rates for their observed units, indicated by `unit_scope=observed`.
+
+`pending_units` counts slots without a completed observation or a recorded model stop rule. A quota or infrastructure stop can also create an end marker and leaves the slots pending. `pending_series` lists selected observations awaiting a series grade after a grader error. Either condition keeps ASR unavailable. `unfilled` counts slots left empty by a confirmed model stop and `refused` counts the subset left by a refusal streak.

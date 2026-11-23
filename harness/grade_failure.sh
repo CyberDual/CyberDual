@@ -28,7 +28,7 @@ grader_error_reason () { local fa fr; fa="$(grade_failure "$1" "$2")"; fr="$(gra
   fi; }
 
 # write_grader_error <cell> <reason> <attacked tag> <reference tag> [extra json fields]
-write_grader_error () { python3 - "$@" <<'PY'
+write_grader_error () { PYTHONPATH="${BASH_SOURCE[0]%/*}" python3 - "$@" <<'PY'
 import json, sys
 cell, reason, ta, tr = sys.argv[1:5]; extra = json.loads(sys.argv[5]) if len(sys.argv) > 5 else {}
 def res(t):
@@ -37,7 +37,11 @@ def res(t):
 d = dict(outcome='GRADER_ERROR', reason=reason, unscored=True, regrade='cyberdual regrade <cell>',
          attacked=dict(tag=ta, **{k: res(ta).get(k) for k in ('status', 'verdict', 'failure', 'rc', 'canary')}),
          reference=dict(tag=tr, **{k: res(tr).get(k) for k in ('status', 'verdict', 'failure', 'rc', 'canary')}), **extra)
-json.dump(d, open(f'{cell}/series_grade_v3.json', 'w'), indent=2)
+if 'task' in extra:
+    from single_grade import write_single_grade
+    write_single_grade(cell, d)
+else:
+    json.dump(d, open(f'{cell}/series_grade_v3.json', 'w'), indent=2)
 print(f'GRADER_ERROR ({reason})')
 PY
 }

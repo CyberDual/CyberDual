@@ -19,6 +19,11 @@ cli = runpy.run_path(str(ROOT / 'cyberdual'))['cmd_review'].__globals__
 
 
 class ResumeTest(unittest.TestCase):
+    def test_custom_tool_does_not_include_its_own_output(self):
+        with self.assertRaisesRegex(SystemExit, 'inside the custom tool mount'):
+            self.review(custom_mount=self.root)
+        self.assertFalse(self.out.exists())
+
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
@@ -67,11 +72,50 @@ class ResumeTest(unittest.TestCase):
             self.assertNotIn('private-fixture', path.read_text())
             self.assertNotIn('private-command-fixture', path.read_text())
 
+    def test_incomplete_grades_fail_and_are_retried(self):
+        grade = self.out / 'a/review_grade_custom-x_shell.json'
+        for raw in (None, '{', '[]', '{}', '{"outcome": {}}', '{"outcome":"UNKNOWN"}',
+                    '{"outcome":"ASSEMBLY_INVALID"}'):
+            with self.subTest(raw=raw):
+                if grade.exists():
+                    grade.unlink()
+
+                def incomplete(argv, **kwargs):
+                    if raw is not None:
+                        grade.write_text(raw)
+                    return 0
+
+                with patch('subprocess.call', side_effect=incomplete) as invocation:
+                    self.assertEqual(self.review(only=['a']), 3)
+                    invocation.assert_called_once()
+                previous = len(self.calls)
+                self.assertEqual(self.review(only=['a']), 0)
+                self.assertEqual(len(self.calls), previous + 1)
+
+        grade.write_text('{"outcome":"REVIEWER_REFUSED"}')
+        with patch('subprocess.call') as invocation:
+            self.assertEqual(self.review(only=['a']), 0)
+            invocation.assert_not_called()
+        self.assertNotIn('REVIEWER_REFUSED', cli['SCORED'])
+
     def test_rotating_a_custom_credential_preserves_results(self):
         with patch.dict(os.environ, {'MY_API_KEY': 'first'}):
             self.review(custom_env=['MY_API_KEY'])
         with patch.dict(os.environ, {'MY_API_KEY': 'rotated'}):
             self.review(custom_env=['MY_API_KEY'])
+        self.assertEqual(self.calls, ['a', 'b'])
+
+    def test_custom_token_limits_affect_identity_and_access_tokens_can_rotate(self):
+        limits = ('CUSTOM_TOKEN_LIMIT', 'CUSTOM_TOKEN_BUDGET', 'MAX_OUTPUT_TOKENS')
+        names = [*limits, 'MY_ACCESS_TOKEN']
+        with patch.dict(os.environ, {**dict.fromkeys(limits, '100'), 'MY_ACCESS_TOKEN': 'first'}):
+            self.review(custom_env=names)
+            with patch.dict(os.environ, {'MY_ACCESS_TOKEN': 'rotated'}):
+                self.review(custom_env=names)
+            for name in limits:
+                with self.subTest(name=name), patch.dict(os.environ, {name: '200'}):
+                    with self.assertRaisesRegex(SystemExit, 'configuration changed'):
+                        self.review(custom_env=names)
         self.assertEqual(self.calls, ['a', 'b'])
 
     def test_run_source_can_grow_and_detects_changed_reviewed_input(self):

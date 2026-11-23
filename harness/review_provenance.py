@@ -18,8 +18,9 @@ def digest(value):
 def settings(env, names):
     # Credentials can rotate without changing the experiment. Record their names only.
     # OUTPUT_TOKEN_CAP and similar token-count settings still affect the identity.
-    credential = re.compile(r'(^|_)(API_KEY|ACCESS_KEY|SECRET|PASSWORD|TOKEN|CREDENTIALS?|AUTH|KEY_FILE)(_|$)')
-    return {k: None if (credential.search(k.upper()) and k != 'OUTPUT_TOKEN_CAP') else env.get(k) for k in names}
+    credential = re.compile(r'(^|_)(API_KEY|ACCESS_KEY|SECRET|PASSWORD|CREDENTIALS?|AUTH|KEY_FILE|'
+                            r'TOKEN(?!_(?:CAP|LIMIT|BUDGET|COUNT)(?:_|$)))(_|$)')
+    return {k: None if credential.search(k.upper()) else env.get(k) for k in names}
 
 
 def contents(path):
