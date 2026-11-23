@@ -131,7 +131,7 @@ def runs_file(run):
 PROTOCOL_KEYS = ('OUTPUT_TOKEN_CAP', 'WALL', 'BUDGET', 'CYBERDUAL_CLAUDE_EFFORT', 'CYBERDUAL_CODEX_EFFORT', 'ARMS', 'ATT_ATTEMPTS', 'UNTIL')
 
 
-def base_env(args):
+def base_env(args, *, review=False):
     """Protocol values always come from PROTOCOL; an inherited variable never changes them silently.
     Change one only with --set KEY=VALUE, which the run manifest records."""
     env = dict(os.environ)
@@ -156,7 +156,7 @@ def base_env(args):
         k, _, v = item.partition('=')
         if not v:
             sys.exit(f'--set expects KEY=VALUE, got {item!r}')
-        print(f'protocol override: {k}={v}', file=sys.stderr)
+        print(f'protocol override: {k}' if review else f'protocol override: {k}={v}', file=sys.stderr)
         env[k] = v
     return env
 
@@ -227,6 +227,21 @@ CODE_DIRS = ('harness', 'roles', 'cyberdual-single')
 CODE = None   # the frozen code snapshot this command runs from (set by freeze_code)
 
 
+def code_fingerprint(root=ROOT):
+    import hashlib
+    skip = lambda p: '__pycache__' in p.parts or (len(p.parts) > 2 and p.parts[:2] == ('harness', 'tasks') and '__' in p.parts[2])
+    files = sorted(p.relative_to(root) for d in CODE_DIRS for p in (root / d).rglob('*') if p.is_file())
+    files = [f for f in files if not skip(f)]
+    h = hashlib.sha256()
+    for f in files:
+        h.update(str(f).encode() + b'\0' + (root / f).read_bytes())
+    return files, h.hexdigest()
+
+
+def review_code_identity():
+    return code_fingerprint(H.parent)[1]
+
+
 def freeze_code(out):
     """Run from a frozen copy of the code, so editing, pulling or mirroring the repo cannot change a job that is
     already running (bash reads a script while it runs). The copy lives in <out>/_code/<commit>-<content hash>/ and
@@ -234,14 +249,8 @@ def freeze_code(out):
     global H, CODE
     if os.environ.get('CYBERDUAL_NO_FREEZE') == '1':
         return None
-    import hashlib
-    skip = lambda p: '__pycache__' in p.parts or (len(p.parts) > 2 and p.parts[:2] == ('harness', 'tasks') and '__' in p.parts[2])
-    files = sorted(p.relative_to(ROOT) for d in CODE_DIRS for p in (ROOT / d).rglob('*') if p.is_file())
-    files = [f for f in files if not skip(f)]
-    h = hashlib.sha256()
-    for f in files:
-        h.update(str(f).encode() + b'\0' + (ROOT / f).read_bytes())
-    tag = f"{git_commit()[:12]}-{h.hexdigest()[:10]}"
+    files, fingerprint = code_fingerprint()
+    tag = f"{git_commit()[:12]}-{fingerprint[:10]}"
     dest = Path(out).resolve() / '_code' / tag
     if not (dest / 'harness').is_dir():
         tmp = dest.parent / f'.{tag}.{os.getpid()}'
@@ -609,29 +618,76 @@ def reviewer_setup(args, env):
 def cmd_review(args):
     if not args.run and not args.bank:
         args.bank = BANK_DEFAULT  # default: the benchmark's attack bank
-    env = base_env(args)
+    env = base_env(args, review=True)
     harness = reviewer_setup(args, env)
-    if args.bank:
-        bank_root(args.bank)   # stops early when the bank is missing
-    if args.bank and not args.out:
-        args.out = WORK / f'review_{suffix(args.reviewer)}'   # fixed per reviewer, so re-running resumes
-    if not args.dry_run:
-        freeze_code(args.out or args.run)
+    bank = bank_root(args.bank) if args.bank else None
+    if bank and not args.out:
+        args.out = WORK / f'review_{suffix(args.reviewer)}'
+    out = Path(args.out if bank else args.run)
+    if args.dry_run:
+        return run_review(args, env, harness, bank, out)
+    from harness.review_provenance import output_lock
+    with output_lock(out):
+        freeze_code(out)
+        return run_review(args, env, harness, bank, out)
+
+
+def reviewer_identity(args, env, harness):
+    from harness import review_provenance as provenance
+    runtime_keys = set(PROTOCOL_KEYS) | {
+        'CODEX_MODEL', 'GLM_AGENT', 'GLM_VIA', 'GLM_MAX_THINKING', 'GLM_EXTRA_BODY', 'GATEWAY_BASE_URL',
+        'ZAI_BASE_URL', 'KIMI_BASE_URL', 'REV_ATTEMPTS', 'REV_SYS', 'HANDOFF_HYGIENE', 'EGRESS',
+        'HANDOFF', 'RECORD_DIR', 'GRADE_BASE', 'METER', 'NETOPTS', 'PROJECT_OVERRIDE', 'CODEX_BUDGET_USD',
+        'CYBERDUAL_REVIEW_CMD', 'CYBERDUAL_CUSTOM_NETWORK', 'GRADE_INDOCKER',
+    }
+    runtime_keys.update(x.partition('=')[0] for x in args.set or [])
+    settings = provenance.settings(env, runtime_keys)
+    mount = env.get('CYBERDUAL_CUSTOM_MOUNT')
+    role = env.get('REV_SYS')
+    codex_config = None
+    if harness != 'custom' and provider(args.reviewer) == 'codex':
+        codex_home = Path(env.get('CODEX_HOME_SRC') or Path.home() / '.codex')
+        codex_config = provenance.contents((codex_home / 'config.toml').resolve())
+    external_inputs = {}
+    if env.get('HANDOFF'):
+        external_inputs['handoff'] = provenance.checkout_identity(Path(env['HANDOFF']))
+    if env.get('RECORD_DIR'):
+        external_inputs['record'] = provenance.contents(Path(env['RECORD_DIR']).resolve())
+    images = {env[k] for k in ('IMAGE', 'GRADE_IMAGE', 'GPAC_IMAGE', 'CYBERDUAL_CUSTOM_IMAGE') if env.get(k)}
+    return provenance.digest(dict(
+        reviewer=args.reviewer, harness='custom' if harness == 'custom' else provider(args.reviewer),
+        settings=settings, external_inputs=external_inputs, codex_config=codex_config,
+        images={name: image_info(name) for name in images},
+        image_roles={k: env.get(k) for k in ('IMAGE', 'GRADE_IMAGE', 'GPAC_IMAGE', 'CYBERDUAL_CUSTOM_IMAGE')},
+        custom_env=provenance.settings(env, (env.get('CYBERDUAL_CUSTOM_ENV') or '').split()),
+        custom_mount=provenance.contents(Path(mount).resolve()) if mount else None,
+        role=provenance.contents((H.parent / role).resolve()) if role else None,
+        code=review_code_identity(), cli=provenance.contents(ROOT / 'cyberdual')))
+
+
+def run_review(args, env, harness, bank, out):
     prob = None if harness == 'custom' else key_problem(args.reviewer, env, role='review')
     if prob and not args.dry_run:
         sys.exit(f'cyberdual review: {prob}')
     if args.bank:
-        out = Path(args.out)
-        if not args.dry_run:
-            out.mkdir(parents=True, exist_ok=True)
         rows = pick_rows(bank_items(args.kinds, args.only, args.bank), args.subset, args.limit)
         cells = [] if args.dry_run else [(r, out / r['id']) for r in rows]   # rebuilt lazily by each worker
         names = [r['id'] for r in rows]
     else:
-        cells = [(None, c) for c in selected_valid(args.run) if not args.only or c.name in set(args.only)]
+        all_cells = selected_valid(args.run)
+        cells = [(None, c) for c in all_cells if not args.only or c.name in set(args.only)]
         names = [c.name for _, c in cells]
-        out = Path(args.run)
     suf = suffix(args.reviewer)
+
+    if not args.dry_run:
+        from harness import review_provenance as provenance
+        config = reviewer_identity(args, env, harness)
+        source = ['bank', provenance.bank_identity(bank)] if bank else ['run']
+        inputs = {} if bank else {c.name: provenance.run_input(c) for c in all_cells}
+        state = provenance.bind(out, suf, source, config, inputs, names)
+        # A legacy run may materialize its first handoff during the review.
+        missing_handoffs = [c for row, c in cells if row is None and not (c / 'attack_record/record.json').exists()
+                            and not (c / 'handoff/.git').exists()]
 
     def reviewed(c):   # a grader failure or a provider quota stop is not a review: run it again
         g = c / f'review_grade_{suf}_shell.json'
@@ -648,10 +704,12 @@ def cmd_review(args):
     write_manifest(out, dict(command='review', reviewer=args.reviewer, source='bank' if args.bank else str(args.run),
                              harness=harness if harness in ('claude-code', 'codex', 'custom') else None,
                              bank=str(bank_root(args.bank)) if args.bank else None, subset=args.subset, limit=args.limit,
-                             custom=dict(cmd=args.custom_cmd, allow_network=args.allow_network, mount=env.get('CYBERDUAL_CUSTOM_MOUNT'),
+                             custom=dict(allow_network=args.allow_network, mount=env.get('CYBERDUAL_CUSTOM_MOUNT'),
                                          env_names=args.custom_env or [], image=env.get('CYBERDUAL_CUSTOM_IMAGE') or env['IMAGE'])
                              if harness == 'custom' else None,
-                             n=len(todo), overrides=args.set or [], env={k: env[k] for k in PROTOCOL_KEYS + ('IMAGE',)},
+                             n=len(todo), config_digest=config, override_names=[x.partition('=')[0] for x in args.set or []],
+                             env={k: env[k] for k in PROTOCOL_KEYS + ('IMAGE', 'GRADE_IMAGE', 'GPAC_IMAGE', 'GLM_AGENT',
+                                                                       'GLM_VIA', 'REV_ATTEMPTS', 'CODEX_MODEL') if k in env},
                              grading='docker:' + env['GRADE_IMAGE'] if env.get('GRADE_INDOCKER') == '1' else 'host',
                              credential_file=str(review_key_file(env)) if provider(args.reviewer) == 'claude' and harness != 'custom' else None,
                              repo_commit=git_commit(), image_id=image_info(env['IMAGE']),
@@ -690,6 +748,10 @@ def cmd_review(args):
             print(f'  {name}: {outcome} (rc={rc})')
             if outcome in ('REVIEWER_INFRA_FAILURE', 'GRADER_ERROR', 'UNGRADED', 'NO_GRADE') or str(outcome).startswith('MATERIALIZE_FAILED'):
                 failed.append(name)
+    new_handoffs = [c for c in missing_handoffs if (c / 'handoff/.git').exists()]
+    if new_handoffs:
+        state['inputs'].update({c.name: provenance.run_input(c) for c in new_handoffs})
+        provenance.write_state(out, state)
     if quota.is_set():
         print('stopped on a provider usage limit (the reset time is in the cell logs); re-run the same command after the reset to resume')
         return 75
