@@ -10,6 +10,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -317,7 +318,8 @@ class WindowTests(unittest.TestCase):
                 self.assertEqual(len(meta["skips"]), skips)
                 self.assertEqual(meta["upstream"], [c for c in meta["candidates"] if c not in meta["skips"]])
 
-    @unittest.skipUnless(ec.docker_image("revbench-engine-maint:v8_20260924_20261001"), "maint image not present")
+    @unittest.skipUnless(shutil.which("docker") and ec.docker_image("revbench-engine-maint:v8_20260924_20261001"),
+                         "Docker or maint image not present")
     def test_verify_real_image(self):
         self.assertEqual(engine_window.verify("v8", "revbench-engine-maint:v8_20260924_20261001",
                                               engine_window.window_file("v8")), [])

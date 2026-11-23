@@ -21,5 +21,9 @@ if not meter.get('capped') or grade.get('outcome') != 'VALID_SERIES':
     sys.exit(1)
 new = dict(outcome='INVALID_SERIES', reason='output_cap', output_tokens=meter.get('output_tokens'), cap=meter.get('cap'),
            graded_before_cap=grade)
-json.dump(new, open(g_path, 'w'), indent=2)
+if 'first_grade_ns' in grade:
+    from single_grade import write_single_grade
+    write_single_grade(cell, new)
+else:
+    json.dump(new, open(g_path, 'w'), indent=2)
 sys.exit(0)

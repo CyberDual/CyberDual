@@ -284,10 +284,10 @@ else INV_REASON="residual_already_fires_on_parent"
 fi
 STRATEGY="new_vuln"
 if [ "$VALID" = 1 ]; then
-  python3 -c "import json;json.dump({'outcome':'VALID_SERIES','regime':'${REGIME_FULL:-$REGIME}','strategy':'$STRATEGY','residual_parent':'$RES_PARENT','residual_patched':'$RES_PATCHED','input_poc_parent':'$IN_PARENT','input_poc_patched':'$IN_PATCHED','base':'$BASE_COMMIT','parent':'$PARENT','task':'$TASK_IID'},open('$CELL/series_grade_v3.json','w'),indent=2)"
+  PYTHONPATH="$HERE" python3 -c "from single_grade import write_single_grade;write_single_grade('$CELL',{'outcome':'VALID_SERIES','regime':'${REGIME_FULL:-$REGIME}','strategy':'$STRATEGY','residual_parent':'$RES_PARENT','residual_patched':'$RES_PATCHED','input_poc_parent':'$IN_PARENT','input_poc_patched':'$IN_PATCHED','base':'$BASE_COMMIT','parent':'$PARENT','task':'$TASK_IID'})"
   echo "   VALID_SERIES ($STRATEGY)"
 else
-  python3 -c "import json;json.dump({'outcome':'INVALID_SERIES','reason':'$INV_REASON','regime':'${REGIME_FULL:-$REGIME}','residual_parent':'$RES_PARENT','residual_patched':'$RES_PATCHED','input_poc_parent':'$IN_PARENT','input_poc_patched':'$IN_PATCHED','base':'$BASE_COMMIT','parent':'$PARENT','task':'$TASK_IID'},open('$CELL/series_grade_v3.json','w'),indent=2)"
+  PYTHONPATH="$HERE" python3 -c "from single_grade import write_single_grade;write_single_grade('$CELL',{'outcome':'INVALID_SERIES','reason':'$INV_REASON','regime':'${REGIME_FULL:-$REGIME}','residual_parent':'$RES_PARENT','residual_patched':'$RES_PATCHED','input_poc_parent':'$IN_PARENT','input_poc_patched':'$IN_PATCHED','base':'$BASE_COMMIT','parent':'$PARENT','task':'$TASK_IID'})"
   echo "INVALID_SERIES ($INV_REASON)"; exit 0
 fi
 python3 "$HERE/attacker_cap.py" "$CELL" && { echo "INVALID_SERIES (attacker call over the output-token cap)"; exit 0; }
