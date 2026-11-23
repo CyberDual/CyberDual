@@ -286,11 +286,16 @@ def cmd_doctor(args):
     iid = image_info(image)
     check(image, iid, iid[:19] if iid else 'run ./cyberdual build')
     if iid:
-        v = subprocess.run(['docker', 'run', '--rm', '--network', 'none', image, 'sh', '-c',
-                            'claude --version; codex --version'], capture_output=True, text=True).stdout.split('\n')
-        cc = v[0].split()[0] if v and v[0] else '?'
-        check(f'Claude Code {cc}', cc == PROTOCOL['PINNED_CLAUDE_CODE'],
-              '' if cc == PROTOCOL['PINNED_CLAUDE_CODE'] else f"the protocol pins {PROTOCOL['PINNED_CLAUDE_CODE']}")
+        for cli, label, pinned in (('claude', 'Claude Code', PROTOCOL['PINNED_CLAUDE_CODE']),
+                                   ('codex', 'Codex', PROTOCOL['PINNED_CODEX'])):
+            result = subprocess.run(['docker', 'run', '--rm', '--network', 'none', image, cli, '--version'],
+                                    capture_output=True, text=True)
+            # Claude prints "X.Y.Z (Claude Code)" and Codex prints "codex-cli X.Y.Z".
+            words = result.stdout.strip().removeprefix('codex-cli ').split()
+            version = words[0] if words else '?'
+            good = result.returncode == 0 and version == pinned
+            detail = f'version command exited {result.returncode}' if result.returncode else f'expected {pinned}'
+            check(f'{label} {version}', good, '' if good else detail)
     gimg = os.environ.get('GRADE_IMAGE') or local_image(GRADER_IMAGE)
     gid = image_info(gimg)
     print('grader image (grading runs in it unless --host-grade):')
@@ -311,9 +316,9 @@ def cmd_doctor(args):
             r = subprocess.run([sys.executable, *selftest], capture_output=True, text=True)
         tail = (r.stdout.strip().splitlines() or ['no output'])[-1]
         check('attested crash channel', r.returncode == 0 and 'passed' in tail, tail.strip())
-        for where, tests in ((H, ['test_refusal', 'test_reviewer_diff_audit', 'test_agent_run_argv', 'test_cell_info', 'test_provider_quota']),
-                             (H / 'engine', ['test_engine_protocol', 'test_engine_verdicts'])):
-            r = subprocess.run([sys.executable, '-m', 'unittest', '-q', *tests], cwd=where, capture_output=True, text=True)
+        for where in (H, H / 'engine'):
+            r = subprocess.run([sys.executable, '-m', 'unittest', 'discover', '-s', str(where)],
+                               capture_output=True, text=True)
             last = (r.stderr.strip().splitlines() or ['no output'])[-1]
             check(f'unit tests in {where.relative_to(ROOT)}', r.returncode == 0, last)
     print('ready' if ok else 'fix the MISSING items above')
@@ -558,7 +563,7 @@ def pick_rows(rows, subset, limit):
     alternating setups (each setup's projects in name order), so a small N still covers every setup and library."""
     if subset and subset != 'all':
         rows = [r for r in rows if r.get('setup') == SUBSETS[subset]]
-    if not limit:
+    if limit is None:
         return rows
     groups = {}
     for r in sorted(rows, key=lambda r: r['id']):
@@ -1127,7 +1132,7 @@ def main():
                           "benchmark's attack bank (attack-bank/attacks, or $CYBERDUAL_BANK)")
     r.add_argument('--subset', choices=['windows', 'fix-in-hand', 'task-only', 'all'], default='all',
                    help='bank attacks of one setup: windows=multi_required, fix-in-hand=single_golden_given, task-only=single_from_scratch')
-    r.add_argument('--limit', type=int, help='review N bank attacks: deterministic, stratified over (setup, project), sorted by id')
+    r.add_argument('--limit', type=int, help='review at most N bank entries (zero selects none), stratified over (setup, project), sorted by id')
     r.add_argument('--kinds', nargs='*', default=['multi', 'single'], choices=['multi', 'single'])
     r.add_argument('--only', nargs='*'); r.add_argument('--out', type=Path)
     r.add_argument('--par', type=int, default=4); r.add_argument('--dry-run', action='store_true')
@@ -1192,6 +1197,11 @@ def main():
     e5.add_argument('--attacker', required=True); e5.add_argument('--target', type=int, default=10)
     e5.add_argument('--out'); e5.add_argument('--dry-run', action='store_true')
     args = ap.parse_args()
+    if args.cmd == 'review' and args.limit is not None:
+        if args.limit < 0:
+            r.error('--limit must be nonnegative')
+        if args.run:
+            r.error('--limit applies to bank reviews and cannot be used with --run')
     if args.cmd == 'window':
         return subprocess.run([sys.executable, str(ROOT / 'harness' / 'window_snapshot.py'),
                                'ensure' if args.window_cmd == 'fetch' else args.window_cmd, *args.projects]).returncode

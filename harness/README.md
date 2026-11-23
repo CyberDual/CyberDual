@@ -44,4 +44,11 @@ the quota is met or the stop rule fires; `cyberdual attack` sets their inputs.
 | `egress_up.sh`, `egress_proxy.py` | egress firewall: agents reach only the model endpoints |
 | `export_attack_bank.py`, `bank_manifest.py` | bank export and the bank's sha256 manifest |
 | `Dockerfile.agent`, `Dockerfile.grader`, `grader-packages.txt`, `Dockerfile.runner` | agent, grader and runner images |
-| `test_refusal.py`, `test_reviewer_diff_audit.py`, `test_agent_run_argv.py`, `test_cell_info.py`, `testdata/` | unit tests (`python3 -m unittest`) |
+| `test_*.py`, `engine/test_*.py`, `testdata/` | unit tests and fixtures |
+
+Run both unit test suites from the repository root.
+
+```bash
+python3 -m unittest discover -s harness
+python3 -m unittest discover -s harness/engine
+```
